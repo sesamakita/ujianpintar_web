@@ -1,0 +1,6 @@
+"NO","TIPE_SOAL","PERTANYAAN","RUMUS_LATEX","OPSI_A","OPSI_B","OPSI_C","OPSI_D","OPSI_E","KUNCI_JAWABAN","BOBOT_POIN","URL_GAMBAR"
+"1","PG","Tentukan himpunan penyelesaian dari persamaan kuadrat berikut:","x^2 - 5x + 6 = 0","{2, 3}","{-2, -3}","{1, 6}","{-1, -6}","{0, 6}","A","10",""
+"2","PG","Nilai turunan pertama dari fungsi f(x) = 3x^2 - 4x pada x = 2 adalah...","f'(x) = 6x - 4","8","12","16","4","0","A","10",""
+"3","BS","Grafik fungsi f(x) = ax^2 + bx + c selalu terbuka ke atas jika koefisien a > 0.","a > 0","","","","","","BENAR","10",""
+"4","ISIAN","Tentukan titik potong grafik fungsi y = x^2 - 9 dengan sumbu Y!","y = 0 - 9","","","","","","-9","15",""
+"5","PG","Jika matriks A = [[2, 1], [4, 3]], maka nilai determinan matriks A adalah...","\det(A) = (2)(3) - (1)(4)","2","4","-2","6","10","A","10",""
