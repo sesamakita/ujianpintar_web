@@ -10,6 +10,7 @@ import { SuperAdminPortal } from './components/super-admin/SuperAdminPortal';
 import { MobilePreviewModal } from './components/question-builder/MobilePreviewModal';
 import { UpgradePromptModal } from './components/subscription/UpgradePromptModal';
 import { AuthPage } from './components/auth/AuthPage';
+import { LandingPage } from './components/landing/LandingPage';
 import { authService } from './services/authService';
 import { examService, generateUUID } from './services/examService';
 import { subscriptionService } from './services/subscriptionService';
@@ -37,16 +38,47 @@ export function App() {
     );
   });
 
+  // Top-level Navigation View ('landing' | 'auth' | 'portal')
+  const [currentView, setCurrentView] = useState<'landing' | 'auth' | 'portal'>(() => {
+    if (typeof window === 'undefined') return 'landing';
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    if (path.startsWith('/login') || path.startsWith('/auth') || path.startsWith('/register') || path.startsWith('/signup') || hash.includes('login') || hash.includes('auth')) {
+      return 'auth';
+    }
+    if (path.startsWith('/portal') || path.startsWith('/dashboard') || path.startsWith('/app') || hash.includes('portal') || hash.includes('dashboard')) {
+      return 'portal';
+    }
+    return 'landing';
+  });
+
+  const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
+
   useEffect(() => {
     const checkRoute = () => {
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
+      
       setIsSuperAdminRoute(
         path.startsWith('/super-admin') ||
         path.startsWith('/admin') ||
         hash.includes('super-admin') ||
         hash.includes('admin')
       );
+
+      if (path.startsWith('/login') || path.startsWith('/auth') || hash.includes('login') || hash.includes('auth')) {
+        setCurrentView('auth');
+        setAuthInitialMode('login');
+      } else if (path.startsWith('/register') || path.startsWith('/signup') || hash.includes('register') || hash.includes('signup')) {
+        setCurrentView('auth');
+        setAuthInitialMode('signup');
+      } else if (path.startsWith('/portal') || path.startsWith('/dashboard') || path.startsWith('/app') || hash.includes('portal') || hash.includes('dashboard')) {
+        setCurrentView('portal');
+      } else if (path === '/' || path === '') {
+        if (!hash || hash === '#home' || hash === '#ekosistem' || hash === '#fitur' || hash === '#keamanan' || hash === '#harga' || hash === '#faq') {
+          setCurrentView('landing');
+        }
+      }
     };
 
     window.addEventListener('popstate', checkRoute);
@@ -348,6 +380,8 @@ export function App() {
   const handleLoginSuccess = async (userData: { name: string; email: string; school: string; subject: string }) => {
     setCurrentUser(userData);
     setIsAuthenticated(true);
+    setCurrentView('portal');
+    window.history.pushState(null, '', '/portal');
     // Clear previous memory telemetry
     setStudents([]);
     setGrades([]);
@@ -390,6 +424,8 @@ export function App() {
   const handleLogout = async () => {
     await authService.signOut();
     setIsAuthenticated(false);
+    setCurrentView('landing');
+    window.history.pushState(null, '', '/');
     // Reset state completely to prevent any memory leaking between accounts
     setAllExams([]);
     setQuestions([]);
@@ -416,6 +452,7 @@ export function App() {
         onExit={() => {
           window.history.pushState(null, '', '/');
           setIsSuperAdminRoute(false);
+          setCurrentView('landing');
         }}
       />
     );
@@ -424,18 +461,66 @@ export function App() {
   // Tampilkan layar loading saat cek sesi Supabase (mencegah flash ke login page)
   if (isSessionLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-slate-500 font-sans font-medium">Memverifikasi sesi...</span>
+          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm text-slate-400 font-sans font-medium">Memverifikasi sesi...</span>
         </div>
       </div>
     );
   }
 
-  // If not logged in, render the AuthPage (Login / Signup)
-  if (!isAuthenticated) {
-    return <AuthPage onLoginSuccess={handleLoginSuccess} />;
+  // 1. Landing Page View (Default untuk domain utama https://ujianpintar.online)
+  if (currentView === 'landing') {
+    return (
+      <>
+        <LandingPage
+          isAuthenticated={isAuthenticated}
+          currentUser={currentUser}
+          onNavigateToAuth={(mode) => {
+            setAuthInitialMode(mode);
+            setCurrentView('auth');
+            window.history.pushState(null, '', mode === 'signup' ? '/register' : '/login');
+          }}
+          onNavigateToPortal={() => {
+            if (isAuthenticated) {
+              setCurrentView('portal');
+              window.history.pushState(null, '', '/portal');
+            } else {
+              setAuthInitialMode('login');
+              setCurrentView('auth');
+              window.history.pushState(null, '', '/login');
+            }
+          }}
+          onOpenMobileSimulation={() => {
+            setIsMobilePreviewOpen(true);
+          }}
+        />
+
+        {/* Modal Simulasi Ujian Mobile Siswa yang bisa diakses langsung dari Landing Page */}
+        <MobilePreviewModal
+          isOpen={isMobilePreviewOpen}
+          onClose={() => setIsMobilePreviewOpen(false)}
+          examSettings={examSettings}
+          questions={questions}
+          onStudentSubmit={handleStudentSubmit}
+        />
+      </>
+    );
+  }
+
+  // 2. Auth Page (Login / Signup)
+  if (currentView === 'auth' || !isAuthenticated) {
+    return (
+      <AuthPage 
+        initialMode={authInitialMode}
+        onLoginSuccess={handleLoginSuccess} 
+        onBackToLanding={() => {
+          setCurrentView('landing');
+          window.history.pushState(null, '', '/');
+        }}
+      />
+    );
   }
 
   const handleSelectExamForProctoring = async (selected: ExamSettings) => {
@@ -490,6 +575,10 @@ export function App() {
         examSettings={examSettings}
         activeStudentCount={activeStudentsCount}
         onLogout={handleLogout}
+        onNavigateToLanding={() => {
+          setCurrentView('landing');
+          window.history.pushState(null, '', '/');
+        }}
         teacherName={currentUser.name}
         schoolName={currentUser.school}
         subjectName={currentUser.subject}

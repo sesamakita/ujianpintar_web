@@ -15,16 +15,29 @@ import {
   AlertCircle,
   Phone,
   CheckCircle2,
-  KeyRound
+  KeyRound,
+  ArrowLeft
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 
 interface AuthPageProps {
   onLoginSuccess: (userData: { name: string; email: string; school: string; subject: string }) => void;
+  onBackToLanding?: () => void;
+  initialMode?: 'login' | 'signup' | 'forgot';
 }
 
-export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
+export const AuthPage: React.FC<AuthPageProps> = ({ 
+  onLoginSuccess,
+  onBackToLanding,
+  initialMode = 'login',
+}) => {
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(initialMode);
+  
+  React.useEffect(() => {
+    if (initialMode) {
+      setMode(initialMode);
+    }
+  }, [initialMode]);
   
   // Form State
   const [email, setEmail] = useState('');
@@ -260,6 +273,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         <div className="lg:col-span-7 p-7 lg:p-10 flex flex-col justify-between bg-white">
           
           <div>
+            {/* Back to Landing Page Link */}
+            {onBackToLanding && (
+              <button
+                type="button"
+                onClick={onBackToLanding}
+                className="mb-5 inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition-colors font-medium group cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
+                <span>Kembali ke Website Utama</span>
+              </button>
+            )}
+
             {/* Mode Switcher Tabs */}
             <div className="flex items-center justify-between pb-5 border-b border-slate-100 gap-3">
               <div>

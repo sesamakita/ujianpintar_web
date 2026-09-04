@@ -7,7 +7,8 @@ import {
   GraduationCap, 
   LogOut,
   Sparkles,
-  Award
+  Award,
+  Globe
 } from 'lucide-react';
 import type { ExamSettings } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
@@ -18,6 +19,7 @@ interface SidebarProps {
   examSettings?: ExamSettings;
   activeStudentCount?: number;
   onLogout?: () => void;
+  onNavigateToLanding?: () => void;
   teacherName?: string;
   schoolName?: string;
   subjectName?: string;
@@ -29,6 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeTab,
   setActiveTab,
   onLogout,
+  onNavigateToLanding,
   teacherName = 'Bpk. Rahmat, S.Pd.',
   schoolName = 'SMA Negeri 1 Indonesia',
   subjectName = 'Matematika Wajib',
@@ -112,6 +115,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <p className="text-xs text-slate-500 font-sans mt-0.5">Portal Guru & Pengawas</p>
           </div>
         </div>
+
+        {onNavigateToLanding && (
+          <button
+            type="button"
+            onClick={onNavigateToLanding}
+            title="Lihat Website Produk / Landing Page"
+            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+          >
+            <Globe className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* 2. Scrollable Middle Area */}

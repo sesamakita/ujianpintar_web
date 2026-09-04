@@ -1,0 +1,32 @@
+# ==============================================================================
+# 1. Single Page Application (SPA) Rewrite Rule
+# Memastikan semua rute (seperti /admin, /super-admin) diarahkan ke index.html
+# tanpa menyebabkan pesan error 404 saat di-refresh di cPanel / Apache
+# ==============================================================================
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+
+# ==============================================================================
+# 2. Keamanan: Nonaktifkan Directory Listing
+# Mencegah publik melihat daftar isi folder jika file index tidak ada
+# ==============================================================================
+Options -Indexes
+
+# ==============================================================================
+# 3. Cache Control: Anti-Stuck Cache Saat Sering Revisi
+# - index.html TIDAK di-cache browser agar setiap deploy/revisi baru langsung muncul.
+# - File assets (JS/CSS ber-hash) tetap di-cache agar loading cepat.
+# ==============================================================================
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|htm)$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+    Header set Pragma "no-cache"
+    Header set Expires 0
+  </FilesMatch>
+</IfModule>

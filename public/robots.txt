@@ -1,0 +1,3 @@
+# Blokir semua bot mesin pencari selama masa pengerjaan / revisi
+User-agent: *
+Disallow: /
