@@ -219,7 +219,7 @@ export const authService = {
 
       const cleanEmail = (user.email || '').toLowerCase().trim();
       const meta = user.user_metadata || {};
-      let name = meta.full_name || '';
+      let name = meta.full_name || meta.name || '';
       let school = meta.school_name || '';
       let subject = meta.subject || '';
 
@@ -245,12 +245,13 @@ export const authService = {
         }
       }
 
+      const isDemoAccount = !user.id || cleanEmail.includes('demo');
       return {
         id: user.id,
-        name: name || 'Bpk. Rahmat, S.Pd.',
+        name: name || (isDemoAccount ? 'Bpk. Rahmat, S.Pd.' : (cleanEmail.split('@')[0] || 'Guru')),
         email: user.email || '',
-        school: school || 'SMA Negeri 1 Indonesia',
-        subject: subject || 'Matematika Wajib',
+        school: school || (isDemoAccount ? 'SMA Negeri 1 Indonesia' : ''),
+        subject: subject || (isDemoAccount ? 'Matematika Wajib' : ''),
         whatsapp: meta.whatsapp_number || '',
         nip: profile?.nip || meta.nip || '',
         npsn: profile?.npsn || meta.npsn || '',

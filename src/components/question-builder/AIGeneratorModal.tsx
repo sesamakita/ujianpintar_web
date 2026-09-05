@@ -21,6 +21,7 @@ import {
 import type { Question } from '../../types/exam';
 import { aiQuestionService, type AIGenerateParams } from '../../services/aiQuestionService';
 import { MathRenderer } from '../common/MathRenderer';
+import { ConfirmModal } from '../common/ConfirmModal';
 
 interface AIGeneratorModalProps {
   isOpen: boolean;
@@ -52,6 +53,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
   const [showApiKeySettings, setShowApiKeySettings] = useState(false);
   const [isTestingKey, setIsTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isConfirmRemoveKeyOpen, setIsConfirmRemoveKeyOpen] = useState(false);
 
   // States for generation lifecycle
   const [isGenerating, setIsGenerating] = useState(false);
@@ -111,14 +113,17 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
   };
 
   const handleRemoveApiKey = () => {
-    if (confirm('Hapus API Key pribadi dari browser ini? Anda perlu memasukkannya kembali untuk menggunakan AI Generator.')) {
-      aiQuestionService.setStoredApiKey('');
-      setStoredApiKey('');
-      setApiKeyInput('');
-      setIsApiKeySaved(false);
-      setShowApiKeySettings(true);
-      setTestResult(null);
-    }
+    setIsConfirmRemoveKeyOpen(true);
+  };
+
+  const handleExecuteRemoveApiKey = () => {
+    aiQuestionService.setStoredApiKey('');
+    setStoredApiKey('');
+    setApiKeyInput('');
+    setIsApiKeySaved(false);
+    setShowApiKeySettings(true);
+    setTestResult(null);
+    setIsConfirmRemoveKeyOpen(false);
   };
 
   const handleStartGenerate = async (e: React.FormEvent) => {
@@ -325,7 +330,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                       </div>
                     )}
 
-                    <div className="flex items-center justify-between text-[11px] pt-1">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] pt-1 gap-1">
                       <a
                         href="https://aistudio.google.com/app/apikey"
                         target="_blank"
@@ -335,6 +340,9 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                         <span>🔗 Buka Google AI Studio untuk Dapatkan Key Gratis</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
+                      <span className="text-amber-600 font-medium text-[10.5px]">
+                        *Gunakan Gmail pribadi (@gmail.com), akun belajar.id dibatasi
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -712,6 +720,19 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
           )}
         </div>
       </div>
+
+      {/* Modern API Key Removal Confirmation */}
+      <ConfirmModal
+        isOpen={isConfirmRemoveKeyOpen}
+        onClose={() => setIsConfirmRemoveKeyOpen(false)}
+        onConfirm={handleExecuteRemoveApiKey}
+        title="Hapus API Key Gemini Pribadi?"
+        message="API Key pribadi Anda akan dihapus dari memori browser lokal ini. Anda perlu memasukkannya kembali jika ingin menggunakan fitur AI Generator di masa mendatang."
+        confirmText="Ya, Hapus Key"
+        cancelText="Batal"
+        variant="danger"
+        iconType="trash"
+      />
     </div>
   );
 };

@@ -2,12 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   User, 
-  Database, 
   Save, 
   CheckCircle2, 
   Phone, 
-  AlertCircle,
-  ShieldCheck
+  AlertCircle
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 
@@ -93,7 +91,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             Pengaturan Sekolah & Profil Guru
           </h3>
           <p className="text-xs text-slate-500 font-sans mt-0.5">
-            Konfigurasi identitas penguji, satuan pendidikan, dan sinkronisasi database akun
+            Konfigurasi identitas penguji dan satuan pendidikan sekolah
           </p>
         </div>
         {saved && (
@@ -108,6 +106,23 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs font-sans font-medium flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
           <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {/* Peringatan Lengkapi Biodata jika belum terisi */}
+      {(!school || school.trim() === '') && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/90 text-amber-900 animate-in fade-in flex items-start gap-3.5 shadow-xs">
+          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0 mt-0.5">
+            <Building2 className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-xs font-display font-bold text-amber-900 uppercase tracking-wide">
+              Lengkapi Biodata Sekolah & Guru
+            </h4>
+            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+              Selamat datang! Akun Google Anda telah terhubung. Silakan lengkapi <strong>Nama Sekolah</strong>, <strong>Mata Pelajaran</strong>, dan nomor kontak Anda di bawah ini agar kop naskah ujian dan kartu peserta ujian siswa dapat terisi secara otomatis.
+            </p>
+          </div>
         </div>
       )}
 
@@ -221,82 +236,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           </div>
         </div>
 
-        {/* Card 3: PIN Keamanan Pengawas vs Token Ujian Siswa */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-          <div className="flex items-center gap-2.5 pb-2.5 border-b border-slate-100">
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
-              <ShieldCheck className="w-4 h-4" />
-            </div>
-            <div>
-              <h4 className="font-display font-bold text-slate-900 text-sm tracking-tight">
-                Keamanan PIN: Pengawas Ruang vs Token Siswa
-              </h4>
-              <p className="text-[11px] text-slate-400 font-sans">
-                Pemisahan hak akses keamanan antara Pengawas Guru dan Peserta Didik
-              </p>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="p-3.5 bg-blue-50/50 rounded-xl border border-blue-100 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-display font-bold text-blue-900">1. Token PIN Ujian Siswa</span>
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[10px] font-bold rounded-md">Publik ke Siswa</span>
-              </div>
-              <p className="text-[11.5px] text-slate-600 font-sans leading-relaxed">
-                Dibuat otomatis untuk setiap paket bank soal (misal: <span className="font-mono font-bold text-blue-700">849201</span>). Dibagikan kepada siswa hanya untuk membuka lembar soal CBT.
-              </p>
-            </div>
-
-            <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-1.5 text-white">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-display font-bold text-amber-400">2. PIN Keamanan Pengawas</span>
-                <span className="px-2 py-0.5 bg-amber-400/20 text-amber-300 text-[10px] font-bold rounded-md">Rahasia Guru</span>
-              </div>
-              <p className="text-[11.5px] text-slate-300 font-sans leading-relaxed">
-                PIN khusus (<span className="font-mono font-bold text-amber-400">123456</span>) untuk masuk ke Portal Pengawas & Rekap Nilai di HP/Tablet. Siswa yang mencoba masuk dengan Token Ujian akan <span className="text-rose-400 font-bold">otomatis diblokir</span>.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Database & Cloud Integration */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
-                <Database className="w-4 h-4" />
-              </div>
-              <div>
-                <h4 className="font-display font-bold text-slate-900 text-sm tracking-tight">
-                  Status Database & Cloud Storage
-                </h4>
-                <p className="text-[11px] text-slate-400 font-sans">
-                  Koneksi PostgreSQL Supabase Cloud & WebSockets
-                </p>
-              </div>
-            </div>
-
-            <span className="text-[11px] font-display font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-emerald-300">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Terhubung Aktif
-            </span>
-          </div>
-
-          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-display font-bold text-slate-700">Database Endpoint:</span>
-              <span className="font-mono text-[11px] text-slate-500">njwmmigqkvvuujdmtjes.supabase.co</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-display font-bold text-slate-700">Akun Terdaftar:</span>
-              <span className="font-mono text-[11px] text-blue-600 font-bold">{currentUser.email}</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-display font-bold text-slate-700">Realtime Protocol:</span>
-              <span className="text-[11px] font-mono text-emerald-700 font-bold">WebSocket wss:// (Active)</span>
-            </div>
-          </div>
-        </div>
 
         {/* Save Button */}
         <div className="pt-2">

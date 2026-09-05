@@ -19,6 +19,7 @@ import {
   Edit3
 } from 'lucide-react';
 import { schoolLicenseService } from '../../services/schoolLicenseService';
+import { ConfirmModal } from '../common/ConfirmModal';
 import type { ActiveSchoolMembership, SchoolLicense } from '../../types/schoolLicense';
 import type { TeacherSubscription } from '../../types/subscription';
 
@@ -48,6 +49,8 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
   const [operatorPinInput, setOperatorPinInput] = useState('');
   const [showResetCodeModal, setShowResetCodeModal] = useState(false);
   const [newCodeInput, setNewCodeInput] = useState('');
+  const [kickTeacherTarget, setKickTeacherTarget] = useState<{ email: string; name: string } | null>(null);
+  const [isLeaveSchoolConfirmOpen, setIsLeaveSchoolConfirmOpen] = useState(false);
 
   const loadMembershipData = () => {
     const active = schoolLicenseService.getActiveMembership();
@@ -150,26 +153,20 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
   };
 
   const handleKickTeacher = (teacherEmailToKick: string, teacherNameToKick: string) => {
-    if (!membership) return;
-    if (
-      confirm(
-        `Keluarkan "${teacherNameToKick}" (${teacherEmailToKick}) dari lisensi ${membership.schoolName}?\n\nAkun ini tidak akan lagi memiliki hak akses PRO dan 1 slot kuota guru akan kembali kosong.`
-      )
-    ) {
-      const res = schoolLicenseService.kickTeacherFromSchool(membership.schoolId, teacherEmailToKick);
-      if (res.success) {
-        setFeedback({
-          success: true,
-          message: res.message,
-        });
-        loadMembershipData();
-      } else {
-        setFeedback({
-          success: false,
-          message: res.message,
-        });
-      }
+    setKickTeacherTarget({ email: teacherEmailToKick, name: teacherNameToKick });
+  };
+
+  const handleExecuteKickTeacher = () => {
+    if (!membership || !kickTeacherTarget) return;
+    const res = schoolLicenseService.kickTeacherFromSchool(membership.schoolId, kickTeacherTarget.email);
+    setFeedback({
+      success: res.success,
+      message: res.message,
+    });
+    if (res.success) {
+      loadMembershipData();
     }
+    setKickTeacherTarget(null);
   };
 
   const handleResetCode = (e: React.FormEvent) => {
@@ -194,36 +191,35 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
   };
 
   const handleLeaveSchool = () => {
-    if (
-      confirm(
-        `Apakah Anda yakin ingin melepas akun dari lisensi "${membership?.schoolName}"? Akun Anda akan kembali ke Paket Guru Basic.`
-      )
-    ) {
-      schoolLicenseService.leaveSchoolMembership(currentUser.email);
-      setMembership(null);
-      setSchoolDetails(null);
-      setIsOperatorMode(false);
-      setFeedback({
-        success: true,
-        message: 'Akun berhasil dilepas dari lisensi sekolah. Status kembali ke paket Basic.',
-      });
+    setIsLeaveSchoolConfirmOpen(true);
+  };
 
-      const basicSub: TeacherSubscription = {
-        tier: 'free',
-        status: 'free',
-        planName: 'Paket Guru Basic',
-        startedAt: new Date().toISOString(),
-        expiresAt: new Date().toISOString(),
-        daysRemaining: 0,
-        isTrial: false,
-        maxExamsPerMonth: 3,
-        maxStudentsPerExam: 40,
-        canUseCustomLogo: false,
-        canExportAdvanced: false,
-        canUseFullscreenLock: false,
-      };
-      onSubscriptionUpdated(basicSub);
-    }
+  const handleExecuteLeaveSchool = () => {
+    schoolLicenseService.leaveSchoolMembership(currentUser.email);
+    setMembership(null);
+    setSchoolDetails(null);
+    setIsOperatorMode(false);
+    setFeedback({
+      success: true,
+      message: 'Akun berhasil dilepas dari lisensi sekolah. Status kembali ke paket Basic.',
+    });
+
+    const basicSub: TeacherSubscription = {
+      tier: 'free',
+      status: 'free',
+      planName: 'Paket Guru Basic',
+      startedAt: new Date().toISOString(),
+      expiresAt: new Date().toISOString(),
+      daysRemaining: 0,
+      isTrial: false,
+      maxExamsPerMonth: 3,
+      maxStudentsPerExam: 40,
+      canUseCustomLogo: false,
+      canExportAdvanced: false,
+      canUseFullscreenLock: false,
+    };
+    onSubscriptionUpdated(basicSub);
+    setIsLeaveSchoolConfirmOpen(false);
   };
 
   const demoCodes = ['SMAN1-JKT-2027', 'SMPN2-BDG-2027', 'SEKOLAH-JUARA-2027'];
@@ -734,6 +730,40 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
           </div>
         </div>
       )}
+
+      {/* Modern Kick Teacher Confirm Dialog */}
+      <ConfirmModal
+        isOpen={!!kickTeacherTarget}
+        onClose={() => setKickTeacherTarget(null)}
+        onConfirm={handleExecuteKickTeacher}
+        title="Keluarkan Guru dari Lisensi Sekolah?"
+        message={
+          <span>
+            Keluarkan <strong className="font-bold text-slate-900">&quot;{kickTeacherTarget?.name}&quot;</strong> ({kickTeacherTarget?.email}) dari lisensi {membership?.schoolName}? Akun ini tidak akan lagi memiliki hak akses PRO dan 1 slot kuota guru akan kembali kosong.
+          </span>
+        }
+        confirmText="Ya, Keluarkan Guru"
+        cancelText="Batal"
+        variant="danger"
+        iconType="trash"
+      />
+
+      {/* Modern Leave School Confirm Dialog */}
+      <ConfirmModal
+        isOpen={isLeaveSchoolConfirmOpen}
+        onClose={() => setIsLeaveSchoolConfirmOpen(false)}
+        onConfirm={handleExecuteLeaveSchool}
+        title="Lepas Akun dari Lisensi Sekolah?"
+        message={
+          <span>
+            Apakah Anda yakin ingin melepas akun Anda dari lisensi <strong className="font-bold text-slate-900">&quot;{membership?.schoolName}&quot;</strong>? Akun Anda akan kembali ke Paket Guru Basic.
+          </span>
+        }
+        confirmText="Ya, Lepas Akun"
+        cancelText="Batal"
+        variant="warning"
+        iconType="warning"
+      />
     </div>
   );
 };

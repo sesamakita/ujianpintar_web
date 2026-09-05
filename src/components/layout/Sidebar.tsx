@@ -131,7 +131,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* 2. Scrollable Middle Area */}
       <div className="flex-1 overflow-y-auto min-h-0 px-3.5 py-3 space-y-3 scrollbar-hover">
         {/* School Badge Pill */}
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setActiveTab('settings')}
+          title="Ubah identitas sekolah & profil penguji"
+          className="w-full p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-between transition-colors cursor-pointer text-left"
+        >
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shadow-xs font-display flex-shrink-0">
               SCH
@@ -141,7 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <p className="text-[11px] text-slate-500 font-sans truncate">{subjectName}</p>
             </div>
           </div>
-        </div>
+        </button>
 
         {/* Navigation Menu */}
         <nav className="space-y-1">
@@ -202,7 +207,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               onClick={() => {
-                setActiveTab('settings');
+                setActiveTab('subscription');
                 if (onOpenSubscription) onOpenSubscription();
               }}
               className="w-full py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-display font-bold shadow-xs transition-colors cursor-pointer text-center block"
@@ -215,7 +220,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* 3. User Footer with Logout (Fixed Bottom) */}
       <div className="p-3.5 border-t border-slate-200 flex items-center justify-between bg-slate-50/80 flex-shrink-0">
-        <div className="flex items-center gap-2.5 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setActiveTab('settings')}
+          title="Buka Pengaturan Profil Guru"
+          className="flex items-center gap-2.5 overflow-hidden p-1 -m-1 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer text-left"
+        >
           <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-display font-black flex items-center justify-center text-xs shadow-sm ring-2 ring-blue-100 flex-shrink-0">
             {getInitials(teacherName)}
           </div>
@@ -223,7 +233,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div className="text-sm font-display font-bold text-slate-900 truncate">{teacherName}</div>
             <div className="text-[11px] text-slate-500 font-medium font-sans truncate">{subjectName}</div>
           </div>
-        </div>
+        </button>
 
         {onLogout && (
           <button

@@ -16,9 +16,11 @@ import {
   FileText,
   ShieldCheck,
   Lock,
+  AlertCircle
 } from 'lucide-react';
 import type { ExamSettings } from '../../types/exam';
 import { examService, generateUUID } from '../../services/examService';
+import { ConfirmModal } from '../common/ConfirmModal';
 
 interface ExamBankListProps {
   exams: ExamSettings[];
@@ -64,6 +66,11 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
   const [duplicatePin, setDuplicatePin] = useState('');
   const [duplicateProctorPin, setDuplicateProctorPin] = useState('');
   const [isDuplicating, setIsDuplicating] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+
+  // Modern UI Delete Confirmation State
+  const [deleteTargetExam, setDeleteTargetExam] = useState<ExamSettings | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const handleCopyPin = (token: string, examId: string) => {
     navigator.clipboard.writeText(token);
@@ -113,12 +120,18 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
     setDuplicateGradeLevel(exam.gradeLevel || 'Kelas X (Fase E)');
     setDuplicatePin(examService.generateRandomToken());
     setDuplicateProctorPin(examService.generateRandomToken());
+    setDuplicateError(null);
     setIsDuplicateModalOpen(true);
   };
 
   const handleConfirmDuplicate = async () => {
-    if (!duplicateTargetExam || !duplicateTitle.trim()) return;
+    if (!duplicateTargetExam) return;
+    if (!duplicateTitle.trim()) {
+      setDuplicateError('Harap isi judul paket ujian duplikasi.');
+      return;
+    }
     setIsDuplicating(true);
+    setDuplicateError(null);
     const res = await examService.duplicateExam(
       duplicateTargetExam.id,
       duplicateTitle.trim(),
@@ -132,17 +145,21 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
       setIsDuplicateModalOpen(false);
       setDuplicateTargetExam(null);
     } else {
-      alert(res.error || 'Gagal menduplikasi paket ujian.');
+      setDuplicateError(res.error || 'Gagal menduplikasi paket ujian.');
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, exam: ExamSettings) => {
+  const handleDelete = (e: React.MouseEvent, exam: ExamSettings) => {
     e.stopPropagation();
-    if (confirm(`Hapus bank soal "${exam.title}"? Seluruh butir soal di dalamnya akan terhapus secara permanen.`)) {
-      setIsDeletingId(exam.id);
-      await onDeleteExam(exam.id);
-      setIsDeletingId(null);
-    }
+    setDeleteTargetExam(exam);
+  };
+
+  const handleConfirmDeleteTarget = async () => {
+    if (!deleteTargetExam) return;
+    setIsDeletingId(deleteTargetExam.id);
+    await onDeleteExam(deleteTargetExam.id);
+    setIsDeletingId(null);
+    setDeleteTargetExam(null);
   };
 
   const handleOpenCreateModal = () => {
@@ -152,12 +169,13 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
     setNewDuration('60');
     setNewPin(examService.generateRandomToken());
     setNewProctorPin(examService.generateRandomToken());
+    setCreateError(null);
     setIsCreateModalOpen(true);
   };
 
   const handleConfirmCreate = () => {
     if (!newTitle.trim()) {
-      alert('Harap isi judul bank soal.');
+      setCreateError('Harap isi judul bank soal.');
       return;
     }
 
@@ -573,6 +591,13 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
               </div>
             </div>
 
+            {createError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>{createError}</span>
+              </div>
+            )}
+
             <div className="space-y-3.5">
               <div>
                 <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
@@ -717,6 +742,13 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                 </p>
               </div>
             </div>
+
+            {duplicateError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2 font-medium">
+                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>{duplicateError}</span>
+              </div>
+            )}
 
             <div className="space-y-3 pt-2">
               <div>
@@ -971,6 +1003,24 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modern Delete Confirmation Dialog */}
+      <ConfirmModal
+        isOpen={!!deleteTargetExam}
+        onClose={() => setDeleteTargetExam(null)}
+        onConfirm={handleConfirmDeleteTarget}
+        title="Hapus Bank Soal?"
+        message={
+          <span>
+            Bank soal <strong className="font-bold text-slate-900">&quot;{deleteTargetExam?.title}&quot;</strong> dan seluruh butir soal di dalamnya akan dihapus secara permanen dari database. Tindakan ini tidak dapat dibatalkan.
+          </span>
+        }
+        confirmText="Ya, Hapus Bank Soal"
+        cancelText="Batal"
+        variant="danger"
+        iconType="trash"
+        isLoading={!!isDeletingId}
+      />
     </div>
   );
 };

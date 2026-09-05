@@ -12,6 +12,7 @@ import { ProctoringKPIHeader } from './ProctoringKPIHeader';
 import { StudentMonitoringTable } from './StudentMonitoringTable';
 import { ViolationFeed } from './ViolationFeed';
 import { StudentActionModal } from './StudentActionModal';
+import { ConfirmModal } from '../common/ConfirmModal';
 import { examService } from '../../services/examService';
 import type { StudentProctoring, ViolationLogItem, ExamSettings } from '../../types/exam';
 
@@ -41,6 +42,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
   const [copiedToken, setCopiedToken] = useState(false);
   const [copiedProctorPin, setCopiedProctorPin] = useState(false);
   const [showProjectorModal, setShowProjectorModal] = useState(false);
+  const [isLockAllConfirmOpen, setIsLockAllConfirmOpen] = useState(false);
 
   // Live Timer Countdown simulation
   useEffect(() => {
@@ -86,27 +88,30 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
 
   // Global Lock/Close All Exams
   const handleLockAllExams = () => {
-    if (confirm('Kunci seluruh pengerjaan ujian sekarang? Seluruh siswa akan otomatis disubmit.')) {
-      setStudents((prev) =>
-        prev.map((s) => ({
-          ...s,
-          remainingSeconds: 0,
-          status: 'submitted',
-        }))
-      );
+    setIsLockAllConfirmOpen(true);
+  };
 
-      examService.lockAllExams(activeExam?.id);
+  const handleExecuteLockAllExams = () => {
+    setStudents((prev) =>
+      prev.map((s) => ({
+        ...s,
+        remainingSeconds: 0,
+        status: 'submitted',
+      }))
+    );
 
-      const newLog: ViolationLogItem = {
-        id: `lock-${Date.now()}`,
-        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        studentName: 'Sistem Pengawas',
-        studentNisn: '-',
-        message: 'Ujian telah dikunci dan ditutup serentak oleh guru.',
-        severity: 'danger',
-      };
-      setViolationLogs([newLog, ...violationLogs]);
-    }
+    examService.lockAllExams(activeExam?.id);
+
+    const newLog: ViolationLogItem = {
+      id: `lock-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      studentName: 'Sistem Pengawas',
+      studentNisn: '-',
+      message: 'Ujian telah dikunci dan ditutup serentak oleh guru.',
+      severity: 'danger',
+    };
+    setViolationLogs([newLog, ...violationLogs]);
+    setIsLockAllConfirmOpen(false);
   };
 
   // Reset Individual Student Session
@@ -471,6 +476,19 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
           </div>
         </div>
       )}
+
+      {/* Modern Confirm Lock All Modal */}
+      <ConfirmModal
+        isOpen={isLockAllConfirmOpen}
+        onClose={() => setIsLockAllConfirmOpen(false)}
+        onConfirm={handleExecuteLockAllExams}
+        title="Kunci & Selesaikan Seluruh Ujian?"
+        message="Seluruh pengerjaan ujian siswa yang sedang berlangsung akan otomatis disubmit dan diselesaikan saat ini juga. Sesi pengerjaan siswa akan ditutup secara serentak."
+        confirmText="Ya, Kunci Ujian Sekarang"
+        cancelText="Batal"
+        variant="warning"
+        iconType="lock"
+      />
     </div>
   );
 };

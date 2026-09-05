@@ -6,6 +6,12 @@
   body {
     @apply bg-slate-50 text-slate-900 min-h-screen font-sans;
   }
+
+  /* Ensure all placeholders use regular font weight */
+  input::placeholder,
+  textarea::placeholder {
+    font-weight: 400 !important;
+  }
 }
 
 /* Global Subtle Scrollbar */

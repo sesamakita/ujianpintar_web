@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ShieldCheck,
   Smartphone,
@@ -19,7 +19,8 @@ import {
   Cpu,
   GraduationCap,
   Sun,
-  Moon
+  Moon,
+  User
 } from 'lucide-react';
 
 interface LandingPageProps {
@@ -43,10 +44,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   // Default to Light Mode (Mode Cerah)
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const toggleFaq = (index: number) => {
     setActiveFaq(activeFaq === index ? null : index);
   };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isUserMenuOpen]);
 
   return (
     <div className={`min-h-screen font-sans antialiased transition-colors duration-300 overflow-x-hidden ${
@@ -113,21 +130,59 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </button>
 
             {isAuthenticated ? (
-              <div className="flex items-center gap-3">
-                <div className="hidden sm:block text-right">
-                  <div className={`text-xs font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{currentUser?.name || 'Bpk. Guru'}</div>
-                  <div className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center justify-end gap-1 font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
-                    Sesi Aktif
-                  </div>
-                </div>
+              <div className="relative" ref={userMenuRef}>
+                {/* Person Icon Button */}
                 <button
-                  onClick={onNavigateToPortal}
-                  className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/25 transition-all flex items-center gap-2 cursor-pointer"
+                  type="button"
+                  onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center relative ${
+                    isUserMenuOpen
+                      ? 'bg-blue-50 border-blue-300 text-blue-600 ring-2 ring-blue-500/20'
+                      : isDarkMode
+                      ? 'bg-slate-900 border-slate-700 text-slate-200 hover:bg-slate-800'
+                      : 'bg-slate-100 border-slate-200 text-slate-700 hover:bg-slate-200'
+                  }`}
+                  title="Profil & Masuk Dashboard"
                 >
-                  <span>Buka Dashboard</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <User className="w-4 h-4" />
+                  {/* Active Green Dot Badge */}
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-950" />
                 </button>
+
+                {/* Vertical Dropdown Card */}
+                {isUserMenuOpen && (
+                  <div
+                    className={`absolute right-0 mt-2.5 w-56 rounded-2xl shadow-xl border p-3.5 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3 ${
+                      isDarkMode
+                        ? 'bg-slate-900 border-slate-700 text-white shadow-slate-950/70'
+                        : 'bg-white border-slate-200 text-slate-800 shadow-slate-200/90'
+                    }`}
+                  >
+                    {/* User Info (Minimalist) */}
+                    <div className="px-1 pt-0.5 border-b border-slate-100 dark:border-slate-800/80 pb-2.5">
+                      <div className={`text-sm font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                        {currentUser?.name || 'Bpk. Guru'}
+                      </div>
+                      <div className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-semibold mt-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                        <span>Sesi Aktif</span>
+                      </div>
+                    </div>
+
+                    {/* Button Masuk Dashboard */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        onNavigateToPortal();
+                      }}
+                      className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <span>Masuk Dashboard</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <>

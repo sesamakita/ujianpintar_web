@@ -5,7 +5,6 @@ import {
   Mail, 
   ShieldCheck, 
   ArrowRight, 
-  Sparkles, 
   AlertCircle, 
   ArrowLeft
 } from 'lucide-react';
@@ -50,14 +49,8 @@ export const SuperAdminLoginPage: React.FC<SuperAdminLoginPageProps> = ({
     }, 600);
   };
 
-  const handleFillDemo = () => {
-    setEmail('admin@ujianpintar.id');
-    setPassword('superadmin2026');
-    setErrorMsg('');
-  };
-
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between font-sans select-none p-4 sm:p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans select-none p-4 sm:p-6 relative overflow-hidden">
       
       {/* Background Glow effects */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
@@ -90,8 +83,8 @@ export const SuperAdminLoginPage: React.FC<SuperAdminLoginPageProps> = ({
       </div>
 
       {/* Main Login Card */}
-      <div className="max-w-md w-full mx-auto my-8 z-10 animate-in fade-in zoom-in-95 duration-200">
-        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
+      <div className="flex-1 flex items-center justify-center my-8 z-10 animate-in fade-in zoom-in-95 duration-200">
+        <div className="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl space-y-6">
           
           <div className="text-center space-y-1.5">
             <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 flex items-center justify-center mx-auto mb-3 shadow-inner">
@@ -100,9 +93,6 @@ export const SuperAdminLoginPage: React.FC<SuperAdminLoginPageProps> = ({
             <h2 className="text-xl font-display font-black text-white tracking-tight">
               Login Super Admin
             </h2>
-            <p className="text-xs text-slate-400 font-sans max-w-xs mx-auto">
-              Akses khusus pemilik platform untuk mengelola lisensi B2B sekolah dan PIN master operator.
-            </p>
           </div>
 
           {errorMsg && (
@@ -156,39 +146,13 @@ export const SuperAdminLoginPage: React.FC<SuperAdminLoginPageProps> = ({
                 <span>Memverifikasi Akses...</span>
               ) : (
                 <>
-                  <span>Masuk ke Dashboard Super Admin</span>
+                  <span>Masuk Dashboard</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
-
-          {/* Quick demo filler */}
-          <div className="p-3.5 bg-indigo-950/40 border border-indigo-800/40 rounded-2xl space-y-2 text-xs text-indigo-300">
-            <div className="flex items-center justify-between">
-              <span className="font-semibold text-[11px] flex items-center gap-1.5 text-indigo-200">
-                <Sparkles className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                Kredensial Demo Super Admin:
-              </span>
-              <button
-                type="button"
-                onClick={handleFillDemo}
-                className="text-[10px] font-bold text-indigo-400 hover:text-white hover:underline cursor-pointer"
-              >
-                Auto-Fill ➔
-              </button>
-            </div>
-            <div className="text-[11px] font-mono text-slate-400 space-y-0.5">
-              <div>Email: <strong className="text-slate-200">admin@ujianpintar.id</strong></div>
-              <div>Password: <strong className="text-slate-200">superadmin2026</strong></div>
-            </div>
-          </div>
         </div>
-      </div>
-
-      {/* Footer */}
-      <div className="text-center text-xs text-slate-600 font-sans z-10">
-        © {new Date().getFullYear()} UjianPintar Cloud Platform • Super Administrator Security Gateway
       </div>
     </div>
   );

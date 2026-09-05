@@ -14,11 +14,13 @@ interface HeaderProps {
   violationCount: number;
   subscription?: TeacherSubscription;
   onOpenUpgradeModal?: () => void;
+  onNavigateTab?: (tab: 'builder' | 'proctoring' | 'analytics' | 'settings' | 'subscription') => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   violationCount,
+  onNavigateTab,
 }) => {
   const [time, setTime] = useState<string>('');
   const schoolAccess = schoolLicenseService.checkAccess();
@@ -71,14 +73,19 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-2.5">
         {/* School Subscription Active Badge */}
         {schoolAccess.isSchoolActive && (
-          <div className="hidden lg:inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs shadow-2xs">
+          <button
+            type="button"
+            onClick={() => onNavigateTab?.('subscription')}
+            title="Lihat Detail Lisensi Sekolah & Info Paket"
+            className="hidden lg:inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 rounded-xl text-xs shadow-2xs transition-colors cursor-pointer text-left"
+          >
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
             <Building2 className="w-3.5 h-3.5 text-emerald-700 flex-shrink-0" />
             <span className="font-display font-bold text-emerald-950 truncate max-w-[180px]">{schoolAccess.schoolName}</span>
             <span className="text-[10px] font-mono font-bold text-emerald-700 bg-emerald-100/90 px-1.5 py-0.5 rounded">
               {schoolAccess.daysRemaining}h
             </span>
-          </div>
+          </button>
         )}
 
         {/* Clock Pill */}
@@ -91,8 +98,14 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Notification Button */}
         <div className="relative">
           <button 
-            className="w-9 h-9 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
-            title="Notifikasi Pelanggaran"
+            type="button"
+            onClick={() => onNavigateTab?.('proctoring')}
+            className={`w-9 h-9 rounded-xl border transition-all cursor-pointer flex items-center justify-center ${
+              violationCount > 0 
+                ? 'border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100' 
+                : 'border-slate-200 hover:bg-slate-50 text-slate-600'
+            }`}
+            title={violationCount > 0 ? `${violationCount} Peringatan Pelanggaran: Buka Live Proctoring` : 'Notifikasi & Live Proctoring'}
           >
             <Bell className="w-4 h-4" />
             {violationCount > 0 && (

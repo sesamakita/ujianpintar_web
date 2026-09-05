@@ -101,7 +101,7 @@ export function App() {
     npsn?: string;
   }>({
     name: 'Bpk. Rahmat, S.Pd.',
-    email: 'rahmat.guru@belajar.id',
+    email: 'rahmat.guru@gmail.com',
     school: 'SMA Negeri 1 Indonesia',
     subject: 'Matematika Wajib',
     whatsapp: '081234567890',
@@ -168,6 +168,11 @@ export function App() {
             setSubscription(userSub);
           }
           setIsAuthenticated(true);
+
+          // Jika biodata sekolah belum lengkap, otomatis arahkan ke Pengaturan Sekolah
+          if (!user.school || user.school.trim() === '') {
+            setActiveTab('settings');
+          }
 
           // Fetch all exams for this teacher
           const teacherExams = await examService.getAllTeacherExams(user.email);
@@ -382,6 +387,11 @@ export function App() {
     setIsAuthenticated(true);
     setCurrentView('portal');
     window.history.pushState(null, '', '/portal');
+
+    // Jika biodata sekolah belum diisi, otomatis buka tab settings
+    if (!userData.school || userData.school.trim() === '') {
+      setActiveTab('settings');
+    }
     // Clear previous memory telemetry
     setStudents([]);
     setGrades([]);
@@ -594,7 +604,26 @@ export function App() {
           violationCount={violationCount}
           subscription={subscription}
           onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
+          onNavigateTab={(tab) => setActiveTab(tab)}
         />
+
+        {/* Banner Pengingat Lengkapi Biodata Sekolah */}
+        {(!currentUser.school || currentUser.school.trim() === '') && activeTab !== 'settings' && (
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-2.5 flex items-center justify-between shadow-xs text-xs font-medium animate-in fade-in">
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">📢</span>
+              <span><strong>Biodata Sekolah Belum Lengkap:</strong> Harap lengkapi Nama Sekolah dan Mata Pelajaran Anda di Pengaturan Sekolah agar kop soal dan kartu ujian siswa terisi otomatis.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveTab('settings')}
+              className="px-3 py-1 bg-white text-amber-900 rounded-lg font-bold text-xs hover:bg-amber-50 transition-colors shadow-2xs whitespace-nowrap cursor-pointer flex items-center gap-1"
+            >
+              <span>Lengkapi Sekarang</span>
+              <span>→</span>
+            </button>
+          </div>
+        )}
 
         <main className="flex-1 overflow-y-auto">
           {activeTab === 'builder' && (

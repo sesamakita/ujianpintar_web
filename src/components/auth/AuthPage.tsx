@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   GraduationCap, 
   Lock, 
@@ -16,7 +16,8 @@ import {
   Phone,
   CheckCircle2,
   KeyRound,
-  ArrowLeft
+  ArrowLeft,
+  X
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 
@@ -58,6 +59,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [verifiedName, setVerifiedName] = useState<string>('');
+  const isBelajarId = mode === 'signup' && email.toLowerCase().includes('belajar.id');
+
+  // Floating Popover Card State for Email Field
+  const [showEmailTip, setShowEmailTip] = useState(false);
+  const emailContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emailContainerRef.current && !emailContainerRef.current.contains(event.target as Node)) {
+        setShowEmailTip(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,7 +142,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       }
       onLoginSuccess({
         name: res.profile?.name || fullName || 'Bpk. Rahmat, S.Pd.',
-        email: email || 'rahmat.guru@belajar.id',
+        email: email || 'rahmat.guru@gmail.com',
         school: res.profile?.school || schoolName || 'SMA Negeri 1 Indonesia',
         subject: res.profile?.subject || subject || 'Matematika Wajib',
       });
@@ -145,7 +161,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       }
       onLoginSuccess({
         name: res.profile?.name || 'Bpk. Rahmat, S.Pd.',
-        email: email || 'rahmat.guru@belajar.id',
+        email: email || 'rahmat.guru@gmail.com',
         school: res.profile?.school || 'SMA Negeri 1 Indonesia',
         subject: res.profile?.subject || 'Matematika Wajib',
       });
@@ -159,7 +175,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setIsLoading(false);
     onLoginSuccess({
       name: user?.name || 'Bpk. Rahmat, S.Pd.',
-      email: user?.email || 'rahmat@guru.sma.belajar.id',
+      email: user?.email || 'rahmat.guru@gmail.com',
       school: user?.school || 'SMA Negeri 1 Indonesia',
       subject: user?.subject || 'Matematika Wajib',
     });
@@ -264,7 +280,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
           {/* Security Bottom Pill */}
           <div className="relative z-10 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-            <span>🔐 Supabase Cloud Protected</span>
+            <div className="flex items-center gap-2">
+              <span>🔐 Supabase Cloud Protected</span>
+              <a
+                href="/super-admin"
+                onClick={(e) => {
+                  e.preventDefault();
+                  window.history.pushState(null, '', '/super-admin');
+                  window.dispatchEvent(new PopStateEvent('popstate'));
+                }}
+                title="Portal Super Admin"
+                className="p-1 rounded-md text-slate-500 hover:text-indigo-400 hover:bg-white/10 transition-colors inline-flex items-center justify-center cursor-pointer"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+              </a>
+            </div>
             <span>Rust Engine v2.4</span>
           </div>
         </div>
@@ -338,8 +368,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </div>
             )}
 
-            {/* Google / belajar.id SSO Button */}
-            {mode === 'login' && (
+            {/* Google SSO Button (Login & Signup) */}
+            {(mode === 'login' || mode === 'signup') && (
               <div className="mt-5 space-y-4">
                 <button
                   type="button"
@@ -365,13 +395,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
                     />
                   </svg>
-                  <span>Lanjutkan dengan Akun Google / belajar.id</span>
+                  <span>{mode === 'signup' ? 'Daftar dengan Akun Google' : 'Masuk dengan Akun Google'}</span>
                 </button>
 
                 <div className="relative flex items-center justify-center">
                   <div className="border-t border-slate-200 w-full" />
                   <span className="bg-white px-3 text-[10px] font-display font-bold text-slate-400 uppercase tracking-wider">
-                    atau gunakan email & kata sandi
+                    {mode === 'signup' ? 'atau daftar manual dengan formulir' : 'atau gunakan email & kata sandi'}
                   </span>
                 </div>
               </div>
@@ -396,7 +426,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                         placeholder="Bpk. Rahmat, S.Pd."
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       />
                     </div>
                   </div>
@@ -415,7 +445,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                           placeholder="SMA Negeri 1 Indonesia"
                           value={schoolName}
                           onChange={(e) => setSchoolName(e.target.value)}
-                          className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                          className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                         />
                       </div>
                     </div>
@@ -433,7 +463,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                           placeholder="Contoh: Matematika, Fisika, dll"
                           value={subject}
                           onChange={(e) => setSubject(e.target.value)}
-                          className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                          className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                         />
                       </div>
                     </div>
@@ -453,7 +483,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                         placeholder="Contoh: 081234567890"
                         value={whatsapp}
                         onChange={(e) => setWhatsapp(e.target.value)}
-                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       />
                     </div>
                     <span className="text-[11px] text-slate-400 font-sans mt-1 block">
@@ -465,7 +495,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
               {/* Email Field (for login, signup, and forgot step 1) */}
               {((mode === 'login' || mode === 'signup') || (mode === 'forgot' && forgotStep === 1)) && (
-                <div>
+                <div className="relative" ref={emailContainerRef}>
                   <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                     {mode === 'forgot' ? 'Alamat Email Terdaftar' : 'Alamat Email Guru'}
                   </label>
@@ -475,12 +505,86 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       type="email"
                       required
                       autoComplete="off"
-                      placeholder="nama.guru@belajar.id"
+                      placeholder={mode === 'signup' ? "nama.guru@gmail.com" : "nama.guru@gmail.com"}
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      onFocus={() => {
+                        if (mode === 'signup') setShowEmailTip(true);
+                      }}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (mode === 'signup' && !showEmailTip) {
+                          setShowEmailTip(true);
+                        }
+                      }}
+                      className={`w-full h-11 bg-slate-50 border rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-all ${
+                        isBelajarId
+                          ? 'border-amber-400 focus:ring-amber-500/20 focus:border-amber-500 bg-amber-50/20'
+                          : 'border-slate-200 focus:ring-blue-500/20 focus:border-blue-500'
+                      }`}
                     />
                   </div>
+
+                  {/* Floating Popover Card (Opsi 1: Melayang tanpa mendorong form / tidak sesak) */}
+                  {showEmailTip && mode === 'signup' && (
+                    <div className="absolute top-full left-0 right-0 mt-2.5 z-50 bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-2xl border border-slate-200/90 ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-150">
+                      {/* Triangle Pointer */}
+                      <div className="absolute -top-1.5 left-7 w-3 h-3 bg-white rotate-45 border-t border-l border-slate-200/90"></div>
+
+                      <div className="flex items-start justify-between gap-3 pb-2.5 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+                            isBelajarId ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'
+                          }`}>
+                            {isBelajarId ? <AlertCircle className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}
+                          </div>
+                          <span className="text-xs font-display font-bold text-slate-900">
+                            {isBelajarId ? 'Perhatian: Akun belajar.id' : 'Saran Penggunaan Email'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowEmailTip(false)}
+                          className="text-slate-400 hover:text-slate-600 p-0.5 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                          title="Tutup"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="pt-2.5 space-y-2 text-xs leading-relaxed">
+                        {isBelajarId ? (
+                          <>
+                            <p className="text-slate-600 text-[11.5px]">
+                              Domain <strong className="text-amber-700 font-semibold">belajar.id</strong> dikelola langsung oleh Kemendikbud sehingga hak akses ke <span className="font-semibold text-slate-800">Google AI Studio</span> untuk mengambil <strong className="text-slate-800 font-semibold">API Key Gemini</strong> dinonaktifkan/dibatasi.
+                            </p>
+                            <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200/80 text-amber-900 text-[11px] font-medium flex items-start gap-1.5">
+                              <span className="text-amber-600 font-bold flex-shrink-0">💡 Solusi:</span>
+                              <span>Gunakan <strong>Gmail pribadi (@gmail.com)</strong> agar fitur pembuat soal otomatis (AI Gemini) dapat berfungsi maksimal.</span>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-slate-700 text-[11.5px]">
+                              Sangat disarankan mendaftar dengan <strong className="text-blue-600">Gmail pribadi (@gmail.com)</strong>.
+                            </p>
+                            <p className="text-slate-500 text-[11px]">
+                              Akun dinas seperti <em>belajar.id</em> dibatasi oleh administrator dan umumnya tidak bisa mengakses Google AI Studio untuk mengaktifkan pembuat soal otomatis berbasis <strong>AI Gemini</strong>.
+                            </p>
+                          </>
+                        )}
+
+                        <div className="pt-1 flex items-center justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setShowEmailTip(false)}
+                            className="py-1 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-bold text-[11px] transition-all cursor-pointer shadow-sm"
+                          >
+                            Saya Mengerti
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -499,7 +603,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       placeholder="Contoh: 081234567890"
                       value={whatsapp}
                       onChange={(e) => setWhatsapp(e.target.value)}
-                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     />
                   </div>
                   <span className="text-[11px] text-slate-400 font-sans mt-1 block">
@@ -536,7 +640,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                         placeholder="Minimal 6 karakter"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       />
                       <button
                         type="button"
@@ -561,7 +665,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                         placeholder="Ketik ulang kata sandi baru"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       />
                       <button
                         type="button"
@@ -601,7 +705,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       placeholder="Minimal 6 karakter"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-10 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                     />
                     <button
                       type="button"
@@ -669,25 +773,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
             </form>
           </div>
-
-          {/* Footer Note */}
-          <div className="pt-5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 font-sans gap-2">
-            <span>Siswa tidak memerlukan akun guru. Siswa masuk via NISN & PIN.</span>
-            <a
-              href="/super-admin"
-              onClick={(e) => {
-                e.preventDefault();
-                window.history.pushState(null, '', '/super-admin');
-                window.dispatchEvent(new PopStateEvent('popstate'));
-              }}
-              className="text-slate-400 hover:text-indigo-600 font-semibold transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <span>Portal Super Admin →</span>
-            </a>
-          </div>
-
         </div>
-
       </div>
     </div>
   );

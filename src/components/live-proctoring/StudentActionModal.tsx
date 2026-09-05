@@ -7,6 +7,7 @@ import {
   Lock, 
   History
 } from 'lucide-react';
+import { ConfirmModal } from '../common/ConfirmModal';
 import type { StudentProctoring } from '../../types/exam';
 
 interface StudentActionModalProps {
@@ -26,6 +27,10 @@ export const StudentActionModal: React.FC<StudentActionModalProps> = ({
 }) => {
   const [warningText, setWarningText] = useState('Peringatan: Tetap berada di layar ujian dan jangan membuka tab lain!');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean; type: 'reset' | 'forceSubmit' }>({
+    isOpen: false,
+    type: 'reset',
+  });
 
   if (!student) return null;
 
@@ -39,25 +44,26 @@ export const StudentActionModal: React.FC<StudentActionModalProps> = ({
   };
 
   const handleResetClick = () => {
-    if (confirm(`Reset sesi ujian ${student.name}? Siswa dapat masuk kembali.`)) {
-      onResetSession(student.id);
-      setActionNotice(`Sesi ${student.name} telah di-reset.`);
-      setTimeout(() => {
-        setActionNotice(null);
-        onClose();
-      }, 1500);
-    }
+    setConfirmModal({ isOpen: true, type: 'reset' });
   };
 
   const handleForceSubmitClick = () => {
-    if (confirm(`Kunci dan kumpulkan paksa jawaban milik ${student.name}?`)) {
+    setConfirmModal({ isOpen: true, type: 'forceSubmit' });
+  };
+
+  const handleConfirmAction = () => {
+    if (confirmModal.type === 'reset') {
+      onResetSession(student.id);
+      setActionNotice(`Sesi ${student.name} telah di-reset.`);
+    } else {
       onForceSubmit(student.id);
       setActionNotice(`Ujian ${student.name} telah disubmit.`);
-      setTimeout(() => {
-        setActionNotice(null);
-        onClose();
-      }, 1500);
     }
+    setConfirmModal({ isOpen: false, type: 'reset' });
+    setTimeout(() => {
+      setActionNotice(null);
+      onClose();
+    }, 1500);
   };
 
   return (
@@ -194,6 +200,29 @@ export const StudentActionModal: React.FC<StudentActionModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Modern Student Action Confirmation */}
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, type: 'reset' })}
+        onConfirm={handleConfirmAction}
+        title={confirmModal.type === 'reset' ? 'Reset Sesi Ujian Siswa?' : 'Kunci & Kumpulkan Jawaban?'}
+        message={
+          confirmModal.type === 'reset' ? (
+            <span>
+              Sesi pengerjaan milik <strong className="font-bold text-slate-800">{student.name}</strong> akan di-reset. Siswa dapat login kembali menggunakan Token Ujian.
+            </span>
+          ) : (
+            <span>
+              Seluruh jawaban milik <strong className="font-bold text-slate-800">{student.name}</strong> akan dikunci dan dikumpulkan paksa ke server sekarang. Siswa tidak dapat melanjutkan ujian.
+            </span>
+          )
+        }
+        confirmText={confirmModal.type === 'reset' ? 'Ya, Reset Sesi' : 'Ya, Kunci & Kumpulkan'}
+        cancelText="Batal"
+        variant={confirmModal.type === 'reset' ? 'warning' : 'danger'}
+        iconType={confirmModal.type === 'reset' ? 'warning' : 'lock'}
+      />
     </div>
   );
 };

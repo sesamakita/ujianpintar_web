@@ -604,6 +604,23 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
                 <span className="text-slate-400 block font-medium">Lisensi Hak Cipta:</span>
                 <strong className="text-slate-900 text-sm">© 2026 UjianPintar Indonesia</strong>
               </div>
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-400 block font-medium">Portal Super Admin:</span>
+                  <span className="text-slate-600 text-xs font-sans">Akses operator lisensi sekolah</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.hash = 'super-admin';
+                    window.dispatchEvent(new HashChangeEvent('hashchange'));
+                  }}
+                  className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Key className="w-3.5 h-3.5" />
+                  <span>Akses Super Admin</span>
+                </button>
+              </div>
             </div>
 
             {/* Contact Support Hotline */}
