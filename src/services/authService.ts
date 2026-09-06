@@ -146,7 +146,7 @@ export const authService = {
       }
 
       const profileResult = {
-        name: name || 'Bpk. Rahmat, S.Pd.',
+        name: name || 'Rahmat, S.Pd.',
         school: school || 'SMA Negeri 1 Indonesia',
         subject: subject || 'Matematika Wajib',
       };
@@ -161,7 +161,7 @@ export const authService = {
       // Attempt to load from cache
       const cached = localStorage.getItem(`ujianpintar_profile_${cleanEmail}`) || localStorage.getItem(`smartexam_profile_${cleanEmail}`);
       let profileResult = {
-        name: 'Bpk. Rahmat, S.Pd.',
+        name: 'Rahmat, S.Pd.',
         school: 'SMA Negeri 1 Indonesia',
         subject: 'Matematika Wajib',
       };
@@ -191,6 +191,9 @@ export const authService = {
       });
 
       if (error) throw error;
+      if (data?.url && typeof window !== 'undefined') {
+        window.location.assign(data.url);
+      }
       return { data, error: null };
     } catch (err: any) {
       console.warn('Supabase Google OAuth warning:', err.message);
@@ -248,7 +251,7 @@ export const authService = {
       const isDemoAccount = !user.id || cleanEmail.includes('demo');
       return {
         id: user.id,
-        name: name || (isDemoAccount ? 'Bpk. Rahmat, S.Pd.' : (cleanEmail.split('@')[0] || 'Guru')),
+        name: name || (isDemoAccount ? 'Rahmat, S.Pd.' : (cleanEmail.split('@')[0] || 'Guru')),
         email: user.email || '',
         school: school || (isDemoAccount ? 'SMA Negeri 1 Indonesia' : ''),
         subject: subject || (isDemoAccount ? 'Matematika Wajib' : ''),
@@ -321,7 +324,7 @@ export const authService = {
           return {
             success: true,
             profile: {
-              name: profile?.name || 'Bpk. Rahmat, S.Pd.',
+              name: profile?.name || 'Rahmat, S.Pd.',
               email: cleanEmail,
               school: profile?.school || 'SMA Negeri 1 Indonesia',
               subject: profile?.subject || 'Matematika Wajib',
@@ -336,7 +339,7 @@ export const authService = {
         return {
           success: true,
           profile: {
-            name: 'Bpk. Rahmat, S.Pd.',
+            name: 'Rahmat, S.Pd.',
             email: cleanEmail,
             school: 'SMA Negeri 1 Indonesia',
             subject: 'Matematika Wajib',
@@ -395,6 +398,38 @@ export const authService = {
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err.message || 'Gagal memperbarui kata sandi.' };
+    }
+  },
+
+  /**
+   * Set or update password for currently authenticated user
+   */
+  async updatePassword(newPassword: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (!newPassword || newPassword.length < 6) {
+        return { success: false, error: 'Kata sandi minimal 6 karakter.' };
+      }
+
+      // 1. Try RPC set_user_password first (handles both password hashing and auth.identities link for OAuth users)
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('set_user_password', {
+          new_password: newPassword,
+        });
+        if (!rpcError && rpcData) {
+          return { success: true };
+        }
+      } catch {
+        // Fallback to standard Supabase auth updateUser if RPC is not yet created
+      }
+
+      // 2. Standard Supabase auth updateUser fallback
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (error) throw error;
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Gagal menyimpan kata sandi baru.' };
     }
   },
 

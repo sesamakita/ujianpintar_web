@@ -120,7 +120,7 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
         id: `trx-voucher-${Date.now()}`,
         invoiceNumber: `VOUCHER-${clean}`,
         planId: 'pro',
-        planName: 'Paket Guru PRO (Lisensi Voucher)',
+        planName: 'Guru PRO (Lisensi Voucher)',
         tier: 'pro',
         billingCycle: 'yearly',
         amount: 180000,
@@ -236,7 +236,7 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
                     {subscription.tier === 'pro' ? (
                       <>
                         <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
-                        {subscription.isTrial ? 'Trial 14 Hari PRO' : 'Paket Guru PRO Aktif'}
+                        {subscription.isTrial ? 'Trial 14 Hari PRO' : 'Guru PRO Aktif'}
                       </>
                     ) : subscription.tier === 'school' ? (
                       <>
@@ -369,7 +369,7 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
             </div>
 
             {/* Plans Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
               {SUBSCRIPTION_PLANS.map((plan) => (
                 <SubscriptionPlanCard
                   key={plan.id}

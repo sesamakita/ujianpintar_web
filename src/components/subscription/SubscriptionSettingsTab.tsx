@@ -83,7 +83,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                 {subscription.tier === 'pro' ? (
                   <>
                     <Zap className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
-                    {subscription.isTrial ? 'Trial 14 Hari PRO' : 'Paket Guru PRO Aktif'}
+                    {subscription.isTrial ? 'Trial 14 Hari PRO' : 'Guru PRO Aktif'}
                   </>
                 ) : subscription.tier === 'school' ? (
                   <>
@@ -216,7 +216,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
         </div>
 
         {/* Plans Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
           {SUBSCRIPTION_PLANS.map((plan) => (
             <SubscriptionPlanCard
               key={plan.id}

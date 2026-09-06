@@ -32,7 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   onLogout,
   onNavigateToLanding,
-  teacherName = 'Bpk. Rahmat, S.Pd.',
+  teacherName = 'Rahmat, S.Pd.',
   schoolName = 'SMA Negeri 1 Indonesia',
   subjectName = 'Matematika Wajib',
   subscription,

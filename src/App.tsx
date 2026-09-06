@@ -14,6 +14,7 @@ import { LandingPage } from './components/landing/LandingPage';
 import { authService } from './services/authService';
 import { examService, generateUUID } from './services/examService';
 import { subscriptionService } from './services/subscriptionService';
+import { supabase } from './lib/supabase';
 import { 
   initialExamSettings, 
   initialQuestions, 
@@ -43,6 +44,10 @@ export function App() {
     if (typeof window === 'undefined') return 'landing';
     const path = window.location.pathname.toLowerCase();
     const hash = window.location.hash.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    if (hash.includes('access_token') || search.includes('code')) {
+      return 'portal';
+    }
     if (path.startsWith('/login') || path.startsWith('/auth') || path.startsWith('/register') || path.startsWith('/signup') || hash.includes('login') || hash.includes('auth')) {
       return 'auth';
     }
@@ -100,7 +105,7 @@ export function App() {
     nip?: string;
     npsn?: string;
   }>({
-    name: 'Bpk. Rahmat, S.Pd.',
+    name: 'Rahmat, S.Pd.',
     email: 'rahmat.guru@gmail.com',
     school: 'SMA Negeri 1 Indonesia',
     subject: 'Matematika Wajib',
@@ -122,7 +127,7 @@ export function App() {
   const [subscription, setSubscription] = useState<TeacherSubscription>({
     tier: 'free',
     status: 'free',
-    planName: 'Paket Guru Basic',
+    planName: 'Guru Basic',
     startedAt: new Date().toISOString(),
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     daysRemaining: 30,
@@ -147,12 +152,16 @@ export function App() {
 
   // Restore authenticated session, user profile & all exam sessions on mount
   useEffect(() => {
+    let isMounted = true;
+
     const restoreSession = async () => {
       try {
         const [user, userSub] = await Promise.all([
           authService.getCurrentUser(),
           subscriptionService.getTeacherSubscription(),
         ]);
+
+        if (!isMounted) return;
 
         if (user) {
           setCurrentUser({
@@ -169,6 +178,16 @@ export function App() {
           }
           setIsAuthenticated(true);
 
+          // Jika kembali dari redirect Google OAuth (ada access_token di hash atau code di search)
+          const isOAuthCallback = typeof window !== 'undefined' && (
+            window.location.hash.includes('access_token') || 
+            window.location.search.includes('code')
+          );
+          if (isOAuthCallback) {
+            setCurrentView('portal');
+            window.history.replaceState(null, '', '/portal');
+          }
+
           // Jika biodata sekolah belum lengkap, otomatis arahkan ke Pengaturan Sekolah
           if (!user.school || user.school.trim() === '') {
             setActiveTab('settings');
@@ -176,11 +195,13 @@ export function App() {
 
           // Fetch all exams for this teacher
           const teacherExams = await examService.getAllTeacherExams(user.email);
+          if (!isMounted) return;
           setAllExams(teacherExams);
 
           if (teacherExams && teacherExams.length > 0) {
             const firstExam = teacherExams[0];
             const examData = await examService.getExamById(firstExam.id);
+            if (!isMounted) return;
             if (examData.exam) {
               setExamSettings(examData.exam);
             }
@@ -189,6 +210,7 @@ export function App() {
             }
           } else {
             const latestExamData = await examService.getLatestExam(user.email);
+            if (!isMounted) return;
             if (latestExamData.exam) {
               setExamSettings(latestExamData.exam);
               setQuestions(latestExamData.questions || []);
@@ -209,10 +231,28 @@ export function App() {
       } catch (err) {
         console.warn('Session & exam restore warning:', err);
       } finally {
-        setIsSessionLoading(false);
+        if (isMounted) {
+          setIsSessionLoading(false);
+        }
       }
     };
+
     restoreSession();
+
+    // Listen for Supabase OAuth login events (e.g. after selecting Google account)
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        restoreSession();
+      } else if (event === 'SIGNED_OUT') {
+        setIsAuthenticated(false);
+        setCurrentView('landing');
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
   }, []);
 
   // Fetch initial telemetry from Supabase & Subscribe to Real-Time Proctoring updates with polling heartbeat
@@ -684,6 +724,12 @@ export function App() {
               currentUser={currentUser}
               onProfileUpdated={(updated) => {
                 setCurrentUser((prev) => ({ ...prev, ...updated }));
+                if (updated.subject) {
+                  setExamSettings((prev) => ({
+                    ...prev,
+                    subject: updated.subject || prev.subject,
+                  }));
+                }
               }}
             />
           )}

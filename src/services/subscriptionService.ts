@@ -12,7 +12,7 @@ import type {
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'free',
-    name: 'Paket Guru Basic',
+    name: 'Guru Basic',
     badge: 'Gratis',
     tier: 'free',
     priceMonthly: 0,
@@ -33,7 +33,7 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'pro',
-    name: 'Paket Guru PRO',
+    name: 'Guru PRO',
     badge: 'Paling Populer',
     isPopular: true,
     tier: 'pro',
@@ -41,9 +41,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceYearly: 180000, // Rp 15.000 / bulan (Hemat 25%)
     description: 'Solusi lengkap untuk guru mandiri dengan ujian tanpa batas dan pengawasan ketat.',
     features: [
-      'Unlimited (Tanpa Batas) sesi ujian aktif',
-      'Unlimited (Tanpa Batas) kapasitas siswa',
-      'Penguncian layar penuh (Fullscreen Lock) & deteksi tab ketat',
+      '**Unlimited (Tanpa Batas)** sesi ujian aktif',
+      '**Unlimited (Tanpa Batas)** kapasitas siswa',
+      'Penguncian layar penuh (**Fullscreen Lock**) & deteksi tab ketat',
       'Editor rumus matematika LaTeX KaTeX tak terbatas',
       'Ekspor nilai lengkap format Excel (.xlsx) & CSV',
       'Lencana akun PRO resmi & prioritas grading',
@@ -53,15 +53,15 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   },
   {
     id: 'school',
-    name: 'Paket Lisensi Sekolah',
+    name: 'Lisensi Sekolah',
     badge: 'Institusi',
     tier: 'school',
     priceMonthly: 0,
     priceYearly: 1500000, // Rp 1.500.000 / tahun per NPSN
     description: 'Lisensi resmi untuk seluruh dewan guru dalam satu satuan pendidikan (NPSN).',
     features: [
-      'Semua akun guru dalam 1 NPSN otomatis berstatus PRO',
-      'Unlimited siswa, kelas, dan ujian seluruh sekolah',
+      '**Semua akun guru dalam 1 NPSN** otomatis berstatus PRO',
+      '**Unlimited** siswa, kelas, dan ujian seluruh sekolah',
       'Kustom logo resmi & kop surat sekolah pada ujian siswa',
       'Bank soal kolektif antar guru satu sekolah',
       'Rekap analitik kelulusan per tingkat kelas & mata pelajaran',
@@ -238,7 +238,7 @@ export const subscriptionService = {
       return {
         tier: 'free',
         status: 'free',
-        planName: 'Paket Guru Basic',
+        planName: 'Guru Basic',
         startedAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         daysRemaining: 30,
@@ -289,7 +289,7 @@ export const subscriptionService = {
     const sub: TeacherSubscription = {
       tier: 'pro',
       status: 'trial',
-      planName: 'Paket Guru PRO (Trial 14 Hari)',
+      planName: 'Guru PRO (Trial 14 Hari)',
       billingCycle: 'monthly',
       startedAt: started.toISOString(),
       expiresAt: expiry.toISOString(),
@@ -318,7 +318,8 @@ export const subscriptionService = {
     paymentChannel: PaymentChannel,
     customer: { email: string; name: string }
   ): TransactionRecord {
-    const isYearly = billingCycle === 'yearly';
+    const effectiveCycle: BillingCycle = plan.tier === 'school' ? 'yearly' : billingCycle;
+    const isYearly = effectiveCycle === 'yearly';
     const rawPrice = isYearly ? plan.priceYearly : plan.priceMonthly;
     const paymentMeta = PAYMENT_METHODS.find((p) => p.id === paymentChannel) || PAYMENT_METHODS[0];
 
@@ -332,7 +333,7 @@ export const subscriptionService = {
       planId: plan.id,
       planName: plan.name,
       tier: plan.tier,
-      billingCycle,
+      billingCycle: effectiveCycle,
       amount: rawPrice,
       fee,
       totalAmount,

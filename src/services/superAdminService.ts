@@ -462,4 +462,48 @@ export const superAdminService = {
       };
     }
   },
+
+  /**
+   * Fetch all APK download leads from VPS Supabase
+   */
+  async fetchApkDownloads(): Promise<{ downloads: ApkDownloadLead[]; error?: string }> {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('apk_downloads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return { downloads: data || [] };
+    } catch (err: any) {
+      console.warn('SuperAdmin fetchApkDownloads error:', err.message);
+      return { downloads: [], error: err.message };
+    }
+  },
+
+  /**
+   * Delete an APK download lead entry
+   */
+  async deleteApkDownload(id: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const { error } = await supabaseAdmin
+        .from('apk_downloads')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      return { success: true, message: 'Data unduhan berhasil dihapus.' };
+    } catch (err: any) {
+      return { success: false, message: `Gagal menghapus data: ${err.message}` };
+    }
+  },
 };
+
+export interface ApkDownloadLead {
+  id: string;
+  email: string;
+  whatsapp: string;
+  user_agent?: string;
+  created_at: string;
+}
+
