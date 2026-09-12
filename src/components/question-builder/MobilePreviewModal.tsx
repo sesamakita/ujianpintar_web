@@ -17,7 +17,9 @@ import {
   ShieldCheck,
   UserCheck,
   Sparkles,
-  Award
+  Award,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import type { ExamSettings, Question, StudentProctoring, GradeRecord, ViolationLogItem } from '../../types/exam';
 import { MathRenderer } from '../common/MathRenderer';
@@ -121,6 +123,14 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
   const [finalScore, setFinalScore] = useState<number | null>(null);
   const [showQuestionGrid, setShowQuestionGrid] = useState(false);
   const [copiedNotification, setCopiedNotification] = useState(false);
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const [simulatedStatus, setSimulatedStatus] = useState<'published' | 'closed'>(
+    examSettings.status === 'closed' ? 'closed' : 'published'
+  );
+
+  useEffect(() => {
+    setSimulatedStatus(examSettings.status === 'closed' ? 'closed' : 'published');
+  }, [examSettings.status, isOpen]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -173,14 +183,29 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
     setIsSubmitted(false);
     setFinalScore(null);
     setShowQuestionGrid(false);
+    setTokenError(null);
   };
 
   const handleAutoFill = () => {
     setNisn('0082391024');
     setName('Budi Santoso');
     setTokenInput(effectiveToken);
+    setTokenError(null);
     setCopiedNotification(true);
     setTimeout(() => setCopiedNotification(false), 2000);
+  };
+
+  const handleProceedToStep2 = () => {
+    if (!tokenInput.trim()) {
+      setTokenError('Harap masukkan 6 digit Token PIN ujian.');
+      return;
+    }
+    if (simulatedStatus === 'closed') {
+      setTokenError('Akses ujian sedang DITUTUP oleh guru pengawas. Siswa tidak dapat masuk sebelum sesi ujian dibuka.');
+      return;
+    }
+    setTokenError(null);
+    setStep(2);
   };
 
   const handleFinalSubmit = async () => {
@@ -372,6 +397,42 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                     <Check className="w-3 h-3" /> Terisi ke HP!
                   </span>
                 )}
+              </div>
+
+              {/* Simulasi Akses Ujian (Buka / Tutup) */}
+              <div className="mt-3 p-3 bg-slate-900/90 rounded-xl border border-slate-700/80 flex items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-1.5">
+                    {simulatedStatus === 'closed' ? (
+                      <Lock className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+                    ) : (
+                      <Unlock className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+                    )}
+                    <span className="text-xs font-bold text-slate-200">
+                      Status Akses: {simulatedStatus === 'closed' ? 'DITUTUP' : 'DIBUKA'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    {simulatedStatus === 'closed'
+                      ? 'Siswa akan dicegah masuk jika di luar jam ujian.'
+                      : 'Siswa dapat mengakses dan memulai ujian.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSimulatedStatus(prev => prev === 'closed' ? 'published' : 'closed');
+                    setTokenError(null);
+                  }}
+                  className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer flex-shrink-0 ${
+                    simulatedStatus === 'closed'
+                      ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/30'
+                  }`}
+                  title="Ganti status untuk menguji pencegahan siswa"
+                >
+                  {simulatedStatus === 'closed' ? 'Uji Buka Akses' : 'Uji Tutup Akses'}
+                </button>
               </div>
             </div>
 
@@ -578,17 +639,27 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                                   type="text"
                                   maxLength={6}
                                   value={tokenInput}
-                                  onChange={(e) => setTokenInput(e.target.value.toUpperCase())}
+                                  onChange={(e) => {
+                                    setTokenInput(e.target.value.toUpperCase());
+                                    if (tokenError) setTokenError(null);
+                                  }}
                                   className="w-full bg-white border-2 border-blue-500 rounded-xl px-3 py-2 text-center text-base font-mono font-black text-blue-700 tracking-widest shadow-xs"
                                   placeholder="TOKEN"
                                 />
+
+                                {tokenError && (
+                                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-medium flex items-start gap-2 animate-in fade-in mt-2">
+                                    <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                                    <span className="leading-snug">{tokenError}</span>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
 
                           <div className="pt-4">
                             <button
-                              onClick={() => setStep(2)}
+                              onClick={handleProceedToStep2}
                               className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 cursor-pointer transition-colors"
                             >
                               Lanjutkan ke Konfirmasi <ArrowRight className="w-3.5 h-3.5" />

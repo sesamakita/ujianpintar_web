@@ -16,7 +16,8 @@ import {
   FileText,
   ShieldCheck,
   Lock,
-  AlertCircle
+  AlertCircle,
+  Loader2
 } from 'lucide-react';
 import type { ExamSettings } from '../../types/exam';
 import { examService, generateUUID } from '../../services/examService';
@@ -30,6 +31,7 @@ interface ExamBankListProps {
   onRefreshExams: () => Promise<void>;
   onCreateNewExam: (newExam: ExamSettings) => void;
   onDeleteExam: (examId: string) => Promise<void>;
+  onToggleExamAccess?: (examId: string, newStatus: 'published' | 'closed') => Promise<void>;
 }
 
 export const ExamBankList: React.FC<ExamBankListProps> = ({
@@ -40,6 +42,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
   onRefreshExams,
   onCreateNewExam,
   onDeleteExam,
+  onToggleExamAccess,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
@@ -162,6 +165,27 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
     setDeleteTargetExam(null);
   };
 
+  const [togglingAccessId, setTogglingAccessId] = useState<string | null>(null);
+
+  const handleToggleAccess = async (e: React.MouseEvent, exam: ExamSettings) => {
+    e.stopPropagation();
+    const currentIsAccessible = exam.status !== 'closed';
+    const newStatus: 'published' | 'closed' = currentIsAccessible ? 'closed' : 'published';
+    setTogglingAccessId(exam.id);
+    try {
+      if (onToggleExamAccess) {
+        await onToggleExamAccess(exam.id, newStatus);
+      } else {
+        await examService.updateExamStatus(exam.id, newStatus);
+        await onRefreshExams();
+      }
+    } catch (err) {
+      console.warn('handleToggleAccess error:', err);
+    } finally {
+      setTogglingAccessId(null);
+    }
+  };
+
   const handleOpenCreateModal = () => {
     setNewTitle('');
     setNewSubject('');
@@ -273,13 +297,13 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
           </div>
         ) : (
           <div className="p-3.5 space-y-3.5">
-            {/* 1. Multi-Class Active Status Banner (Full Width) */}
-            <div className="p-3 bg-emerald-50/90 border border-emerald-200/80 rounded-2xl flex items-start gap-2.5 text-emerald-950 text-xs">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+            {/* 1. Multi-Class Access Control Banner (Full Width) */}
+            <div className="p-3 bg-blue-50/90 border border-blue-200/80 rounded-2xl flex items-start gap-2.5 text-blue-950 text-xs">
+              <ShieldCheck className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
               <div className="leading-relaxed">
-                <span className="font-display font-bold text-emerald-900">Seluruh Paket Soal Aktif Bersamaan: </span>
-                <span className="text-emerald-800 font-sans">
-                  Semua kelas yang dibuat di bawah ini <strong>aktif secara serentak</strong> di database cloud. Siswa dari tiap kelas dapat mengerjakan ujian pada jam yang sama menggunakan Token Siswa kelasnya, dan Pengawas Ruang memantau dengan PIN Pengawas kelasnya.
+                <span className="font-display font-bold text-blue-900">Kontrol Akses Pengerjaan Mandiri per Paket: </span>
+                <span className="text-blue-800 font-sans">
+                  Gunakan switch <strong>toggle akses</strong> di bawah ikon aksi kelola untuk membuka atau menutup akses ujian tiap paket. Ketika akses <strong>ditutup</strong>, siswa tidak dapat mengakses paket soal di luar jam ujian walaupun telah memiliki Token PIN.
                 </span>
               </div>
             </div>
@@ -362,13 +386,15 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                   <th className="py-3 px-4">Jenjang & Waktu</th>
                   <th className="py-3 px-4">Soal & Skor</th>
                   <th className="py-3 px-4 min-w-[280px]">Kode Akses Siswa & PIN Pengawas</th>
-                  <th className="py-3 px-4 text-center">Status di Cloud</th>
-                  <th className="py-3 px-4 text-right">Aksi Kelola</th>
+                  <th className="py-3 px-4 text-center">Status Akses</th>
+                  <th className="py-3 px-4 text-right min-w-[160px]">Aksi & Kontrol Akses</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-sans">
                 {filteredExams.map((exam) => {
                   const isActiveProctoring = exam.id === activeExamId;
+                  const isAccessible = exam.status !== 'closed';
+                  const isTogglingAccess = togglingAccessId === exam.id;
                   const isCopied = copiedTokenId === exam.id;
                   const isProctorCopied = copiedProctorPinId === exam.id;
                   const isRegenerating = isRegeneratingId === exam.id;
@@ -502,12 +528,19 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                         </div>
                       </td>
 
-                      {/* 5. Status di Cloud */}
+                      {/* 5. Status Akses */}
                       <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-display font-bold shadow-2xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                          Aktif & Siap Ujian
-                        </span>
+                        {isAccessible ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-display font-bold shadow-2xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                            Akses Dibuka
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-display font-bold shadow-2xs">
+                            <Lock className="w-3.5 h-3.5 text-rose-500" />
+                            Akses Ditutup
+                          </span>
+                        )}
                         {isActiveProctoring && (
                           <span className="block text-[10px] text-blue-600 font-display font-semibold mt-1">
                             👁️ Sedang Dimonitor
@@ -515,8 +548,9 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                         )}
                       </td>
 
-                      {/* 6. Action Buttons */}
+                      {/* 6. Action Buttons & Access Toggle Per Item */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        {/* Baris Atas: Icon Aksi Kelola */}
                         <div className="flex items-center justify-end gap-1">
                           {/* Edit Questions */}
                           <button
@@ -561,6 +595,38 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                             title="Hapus Bank Soal"
                           >
                             <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Baris Bawah: Toggle Akses Per Item Bank Soal */}
+                        <div className="mt-2 pt-1.5 border-t border-slate-100 flex items-center justify-end gap-2">
+                          <span className={`text-[10px] font-display font-semibold transition-colors ${
+                            isAccessible ? 'text-emerald-700 font-bold' : 'text-slate-400'
+                          }`}>
+                            {isAccessible ? 'Buka Akses' : 'Tutup Akses'}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={isTogglingAccess}
+                            onClick={(e) => handleToggleAccess(e, exam)}
+                            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                              isAccessible ? 'bg-emerald-500' : 'bg-slate-300 hover:bg-slate-400'
+                            } ${isTogglingAccess ? 'opacity-60 cursor-wait' : ''}`}
+                            title={isAccessible ? 'Akses Ujian Terbuka (Klik untuk Menutup Akses)' : 'Akses Ujian Tertutup (Klik untuk Membuka Akses)'}
+                          >
+                            <span
+                              className={`pointer-events-none inline-flex items-center justify-center h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                                isAccessible ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            >
+                              {isTogglingAccess ? (
+                                <Loader2 className="w-2.5 h-2.5 text-slate-500 animate-spin" />
+                              ) : isAccessible ? (
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                              ) : (
+                                <Lock className="w-2 h-2 text-slate-400" />
+                              )}
+                            </span>
                           </button>
                         </div>
                       </td>

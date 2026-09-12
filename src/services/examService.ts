@@ -442,6 +442,56 @@ export const examService = {
   },
 
   /**
+   * Update Exam Access Status (published = accessible / closed = blocked)
+   */
+  async updateExamStatus(examId: string, status: 'published' | 'closed'): Promise<{ success: boolean; error?: string }> {
+    try {
+      if (isValidUUID(examId)) {
+        const { error } = await supabase
+          .from('exams')
+          .update({ status, updated_at: new Date().toISOString() })
+          .eq('id', examId);
+
+        if (error) {
+          console.error('Supabase updateExamStatus error:', error);
+          return { success: false, error: error.message };
+        }
+      }
+
+      // Update teacher-scoped local storage caches
+      if (typeof window !== 'undefined') {
+        const { data: { user } } = await supabase.auth.getUser();
+        const cleanEmail = (user?.email || '').toLowerCase().trim();
+        if (cleanEmail) {
+          const listRaw = localStorage.getItem(`ujianpintar_all_exams_${cleanEmail}`);
+          if (listRaw) {
+            try {
+              const list: ExamSettings[] = JSON.parse(listRaw);
+              const updated = list.map((e) => (e.id === examId ? { ...e, status } : e));
+              localStorage.setItem(`ujianpintar_all_exams_${cleanEmail}`, JSON.stringify(updated));
+            } catch {}
+          }
+          const pubRaw = localStorage.getItem(`ujianpintar_published_exam_${cleanEmail}`);
+          if (pubRaw) {
+            try {
+              const pub: ExamSettings = JSON.parse(pubRaw);
+              if (pub.id === examId) {
+                pub.status = status;
+                localStorage.setItem(`ujianpintar_published_exam_${cleanEmail}`, JSON.stringify(pub));
+              }
+            } catch {}
+          }
+        }
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('updateExamStatus exception:', err);
+      return { success: false, error: err.message || 'Gagal mengubah status akses ujian.' };
+    }
+  },
+
+  /**
    * Fetch the latest published Exam session and its questions strictly for the CURRENT teacher
    */
   async getLatestExam(teacherEmail?: string): Promise<{ exam: ExamSettings | null; questions: Question[] }> {
@@ -563,14 +613,30 @@ export const examService = {
         .from('exams')
         .select('*')
         .eq('token', cleanToken)
-        .in('status', ['published', 'active'])
-        .single();
+        .maybeSingle();
 
       if (examError || !exam) {
         return { 
           exam: null, 
           questions: [], 
-          error: 'Token PIN tidak ditemukan atau sudah kedaluwarsa/dinonaktifkan oleh guru.' 
+          error: 'Token PIN tidak ditemukan atau tidak valid.' 
+        };
+      }
+
+      // Validasi status akses paket ujian
+      if (exam.status === 'closed') {
+        return {
+          exam: null,
+          questions: [],
+          error: 'Akses ujian sedang ditutup oleh guru pengawas. Sesi ujian saat ini tidak aktif atau belum dibuka.',
+        };
+      }
+
+      if (exam.status && exam.status !== 'published' && exam.status !== 'active') {
+        return {
+          exam: null,
+          questions: [],
+          error: 'Paket ujian belum dibuka atau masih dalam status draf.',
         };
       }
 
@@ -597,6 +663,13 @@ export const examService = {
         try {
           const cachedExam = JSON.parse(cachedExamRaw);
           if (cachedExam && cachedExam.token === token) {
+            if (cachedExam.status === 'closed') {
+              return {
+                exam: null,
+                questions: [],
+                error: 'Akses ujian sedang ditutup oleh guru pengawas. Sesi ujian saat ini tidak aktif atau belum dibuka.',
+              };
+            }
             const cachedQuestions = JSON.parse(cachedQuestionsRaw);
             return { exam: cachedExam, questions: cachedQuestions, error: null };
           }
@@ -952,6 +1025,73 @@ export const examService = {
       });
     } catch (err: any) {
       console.warn('resetStudentSession warning:', err.message);
+    }
+  },
+
+  /**
+   * Gatekeeper: Check if a student is allowed to enter or resume an exam session
+   * Blocks students who have already submitted or were expelled until the teacher resets the session
+   */
+  async checkStudentSessionAccess(examId: string, studentNisn: string): Promise<{
+    allowed: boolean;
+    reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working';
+    message?: string;
+    existingSession?: any;
+  }> {
+    try {
+      const cleanNisn = studentNisn.trim();
+      let query = supabase
+        .from('student_sessions')
+        .select('*')
+        .eq('nisn', cleanNisn);
+
+      if (examId && isValidUUID(examId)) {
+        query = query.eq('exam_id', examId);
+      }
+
+      const { data: sessions, error } = await query.order('created_at', { ascending: false }).limit(1);
+
+      if (error || !sessions || sessions.length === 0) {
+        return { allowed: true };
+      }
+
+      const session = sessions[0];
+
+      if (session.status === 'submitted') {
+        return {
+          allowed: false,
+          reason: 'submitted',
+          message: 'Akses Terkunci: Anda telah menyelesaikan dan mengumpulkan ujian ini. Anda tidak dapat masuk kembali kecuali sesi Anda di-reset oleh guru pengawas.',
+          existingSession: session,
+        };
+      }
+
+      if (session.status === 'violation_flagged') {
+        return {
+          allowed: false,
+          reason: 'violation_flagged',
+          message: 'Akses Ditolak: Anda telah dikeluarkan dari sesi ujian oleh guru pengawas karena pelanggaran integritas. Hubungi guru pengawas untuk meminta reset sesi ujian.',
+          existingSession: session,
+        };
+      }
+
+      if (session.status === 'timed_out') {
+        return {
+          allowed: false,
+          reason: 'timed_out',
+          message: 'Akses Ditutup: Waktu pengerjaan ujian Anda telah habis.',
+          existingSession: session,
+        };
+      }
+
+      return {
+        allowed: true,
+        reason: 'active_working',
+        existingSession: session,
+      };
+    } catch (err: any) {
+      console.warn('checkStudentSessionAccess exception:', err);
+      return { allowed: true };
     }
   },
 

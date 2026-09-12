@@ -25,6 +25,7 @@ interface LiveProctoringDashboardProps {
   allExams?: ExamSettings[];
   activeExam?: ExamSettings;
   onSelectExam?: (exam: ExamSettings) => void;
+  onToggleExamAccess?: (examId: string, newStatus: 'published' | 'closed') => Promise<void>;
 }
 
 export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = ({
@@ -36,6 +37,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
   allExams = [],
   activeExam,
   onSelectExam,
+  onToggleExamAccess,
 }) => {
   const [selectedStudent, setSelectedStudent] = useState<StudentProctoring | null>(null);
   const [isExamDropdownOpen, setIsExamDropdownOpen] = useState(false);
@@ -271,6 +273,39 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
                   {copiedProctorPin ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
+            )}
+
+            {/* Access Toggle Button in Proctoring */}
+            {activeExam.id !== 'all' && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const nextStatus = activeExam.status === 'closed' ? 'published' : 'closed';
+                  if (onToggleExamAccess) {
+                    await onToggleExamAccess(activeExam.id, nextStatus);
+                  } else {
+                    await examService.updateExamStatus(activeExam.id, nextStatus);
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-display font-bold border transition-colors cursor-pointer shadow-xs ${
+                  activeExam.status === 'closed'
+                    ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200'
+                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                }`}
+                title={activeExam.status === 'closed' ? 'Akses ujian ditutup. Klik untuk membuka.' : 'Akses ujian dibuka. Klik untuk menutup.'}
+              >
+                {activeExam.status === 'closed' ? (
+                  <>
+                    <Lock className="w-3.5 h-3.5 text-rose-600" />
+                    <span>Akses Ditutup</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                    <span>Akses Dibuka</span>
+                  </>
+                )}
+              </button>
             )}
 
             {/* Projector Mode Button */}

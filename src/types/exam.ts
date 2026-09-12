@@ -30,7 +30,7 @@ export interface ExamSettings {
   scheduleTime: string;
   token: string; // 6-digit Student Exam Token
   proctorPin?: string; // 6-digit Teacher Supervisor PIN per exam
-  status?: 'published' | 'draft' | 'archived';
+  status?: 'published' | 'draft' | 'archived' | 'closed' | 'active';
   questionCount?: number;
   totalPoints?: number;
   createdAt?: string;

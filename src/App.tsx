@@ -123,6 +123,7 @@ export function App() {
   const [grades, setGrades] = useState<GradeRecord[]>(initialGradeRecords);
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const [subscription, setSubscription] = useState<TeacherSubscription>({
     tier: 'free',
@@ -422,6 +423,19 @@ export function App() {
     }
   };
 
+  const handleToggleExamAccess = async (examId: string, newStatus: 'published' | 'closed') => {
+    try {
+      setAllExams((prev) => prev.map((e) => (e.id === examId ? { ...e, status: newStatus } : e)));
+      if (examSettings.id === examId) {
+        setExamSettings((prev) => ({ ...prev, status: newStatus }));
+      }
+      await examService.updateExamStatus(examId, newStatus);
+    } catch (err) {
+      console.warn('handleToggleExamAccess error:', err);
+      await refreshTeacherExams();
+    }
+  };
+
   const handleLoginSuccess = async (userData: { name: string; email: string; school: string; subject: string }) => {
     setCurrentUser(userData);
     setIsAuthenticated(true);
@@ -627,6 +641,7 @@ export function App() {
         activeStudentCount={activeStudentsCount}
         onLogout={handleLogout}
         onNavigateToLanding={() => {
+          setIsMobileSidebarOpen(false);
           setCurrentView('landing');
           window.history.pushState(null, '', '/');
         }}
@@ -635,6 +650,8 @@ export function App() {
         subjectName={currentUser.subject}
         subscription={subscription}
         onOpenSubscription={() => setActiveTab('subscription')}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
       {/* Main Content Area */}
@@ -646,6 +663,7 @@ export function App() {
           subscription={subscription}
           onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
           onNavigateTab={(tab) => setActiveTab(tab)}
+          onToggleMobileMenu={() => setIsMobileSidebarOpen((prev) => !prev)}
         />
 
         {/* Banner Pengingat Lengkapi Biodata Sekolah */}
@@ -687,6 +705,7 @@ export function App() {
               isMobilePreviewOpen={isMobilePreviewOpen}
               setIsMobilePreviewOpen={setIsMobilePreviewOpen}
               onStudentSubmit={handleStudentSubmit}
+              onToggleExamAccess={handleToggleExamAccess}
             />
           )}
 
@@ -700,6 +719,7 @@ export function App() {
               allExams={allExams}
               activeExam={examSettings}
               onSelectExam={handleSelectExamForProctoring}
+              onToggleExamAccess={handleToggleExamAccess}
             />
           )}
 

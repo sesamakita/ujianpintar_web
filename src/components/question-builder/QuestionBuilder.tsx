@@ -12,7 +12,8 @@ import {
   KeyRound, 
   Copy, 
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Lock
 } from 'lucide-react';
 import type { ExamSettings, Question } from '../../types/exam';
 import { ExamSettingsPanel } from './ExamSettingsPanel';
@@ -36,6 +37,7 @@ interface QuestionBuilderProps {
   onSetActiveExamForProctoring: (exam: ExamSettings) => void;
   onCreateNewExam: (newExam: ExamSettings) => void;
   onDeleteExam: (examId: string) => Promise<void>;
+  onToggleExamAccess?: (examId: string, newStatus: 'published' | 'closed') => Promise<void>;
   builderView: 'list' | 'editor';
   setBuilderView: (view: 'list' | 'editor') => void;
   onOpenMobilePreview: () => void;
@@ -68,6 +70,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
   isMobilePreviewOpen,
   setIsMobilePreviewOpen,
   onStudentSubmit,
+  onToggleExamAccess,
 }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
@@ -250,6 +253,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
           setBuilderView('editor');
         }}
         onDeleteExam={onDeleteExam}
+        onToggleExamAccess={onToggleExamAccess}
       />
     );
   }
@@ -295,6 +299,39 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
               <KeyRound className="w-3.5 h-3.5 text-blue-400" />
               <span>PIN: {examSettings.token}</span>
               {copiedPin ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 opacity-60" />}
+            </button>
+
+            {/* Access Status Toggle Pill */}
+            <button
+              type="button"
+              onClick={async () => {
+                const nextStatus = examSettings.status === 'closed' ? 'published' : 'closed';
+                setExamSettings((prev) => ({ ...prev, status: nextStatus }));
+                if (onToggleExamAccess) {
+                  await onToggleExamAccess(examSettings.id, nextStatus);
+                } else {
+                  await examService.updateExamStatus(examSettings.id, nextStatus);
+                  await onRefreshExams();
+                }
+              }}
+              className={`h-8 px-3 rounded-xl text-xs font-display font-bold border transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0 ${
+                examSettings.status === 'closed'
+                  ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 shadow-2xs'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 shadow-2xs'
+              }`}
+              title={examSettings.status === 'closed' ? 'Akses ujian ditutup. Klik untuk membuka akses ujian.' : 'Akses ujian dibuka. Klik untuk menutup akses ujian.'}
+            >
+              {examSettings.status === 'closed' ? (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Akses: Ditutup</span>
+                </>
+              ) : (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                  <span>Akses: Dibuka</span>
+                </>
+              )}
             </button>
             
             {/* Jumlah Soal */}

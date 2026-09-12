@@ -241,18 +241,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-100/90 flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans select-none">
+    <div className="min-h-screen bg-slate-100/90 flex items-center justify-center p-3 sm:p-6 lg:p-8 font-sans select-none">
       {/* Main Split Container */}
-      <div className="max-w-5xl w-full bg-white rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[580px]">
+      <div className="max-w-5xl w-full bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-0 md:min-h-[580px]">
         
-        {/* Left Side: Brand Showcase (5 Cols) */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-8 lg:p-9 text-white flex flex-col justify-between relative overflow-hidden">
+        {/* Left Side: Brand Showcase (Hidden on Mobile, 5 Cols on Tablet & Desktop) */}
+        <div className="hidden md:flex md:col-span-5 lg:col-span-5 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 md:p-6 lg:p-9 text-white flex-col justify-between relative overflow-hidden">
           {/* Background Glow */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
 
           {/* Top Logo */}
-          <div className="relative z-10 space-y-6">
+          <div className="relative z-10 space-y-4 lg:space-y-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/30 flex-shrink-0">
                 <GraduationCap className="w-5 h-5" />
@@ -270,11 +270,11 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </div>
             </div>
 
-            <div className="space-y-2.5 pt-2">
+            <div className="space-y-2.5 pt-1 lg:pt-2">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/15 border border-blue-500/25 text-blue-300 text-xs font-display font-bold">
                 <Sparkles className="w-3.5 h-3.5 text-blue-400" /> Platform Asesmen Berintegritas
               </span>
-              <h2 className="text-xl lg:text-2xl font-display font-extrabold text-white leading-tight tracking-tight">
+              <h2 className="text-lg md:text-xl lg:text-2xl font-display font-extrabold text-white leading-tight tracking-tight">
                 Ujian Online Mudah Seperti Google Form, Sekuat CBT Profesional.
               </h2>
               <p className="text-xs text-slate-300 leading-relaxed font-sans">
@@ -284,8 +284,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </div>
 
           {/* Feature Highlights */}
-          <div className="relative z-10 space-y-2.5 my-6">
-            <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-xs">
+          <div className="relative z-10 space-y-2.5 my-4 lg:my-6">
+            <div className="flex items-center gap-3 p-2.5 lg:p-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-xs">
               <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center flex-shrink-0">
                 <ShieldCheck className="w-4 h-4" />
               </div>
@@ -295,7 +295,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-xs">
+            <div className="flex items-center gap-3 p-2.5 lg:p-3 bg-white/5 rounded-2xl border border-white/10 backdrop-blur-xs">
               <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
                 <Zap className="w-4 h-4" />
               </div>
@@ -307,7 +307,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </div>
 
           {/* Security Bottom Pill */}
-          <div className="relative z-10 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+          <div className="relative z-10 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] lg:text-[11px] text-slate-400 font-mono">
             <div className="flex items-center gap-2">
               <span>🔐 Supabase Cloud Protected</span>
               <a
@@ -327,16 +327,37 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </div>
         </div>
 
-        {/* Right Side: Auth Form (7 Cols) */}
-        <div className="lg:col-span-7 p-7 lg:p-10 flex flex-col justify-between bg-white">
+        {/* Right Side: Auth Form (Full on Mobile, 7 Cols on Tablet & Desktop) */}
+        <div className="col-span-1 md:col-span-7 lg:col-span-7 p-5 sm:p-7 lg:p-10 flex flex-col justify-between bg-white">
           
           <div>
+            {/* Mobile-Only Header Brand Bar */}
+            <div className="flex md:hidden items-center justify-between pb-3.5 mb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/25 flex-shrink-0">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-display font-black text-base text-slate-900 leading-none">UjianPintar</span>
+                    <span className="text-[9px] uppercase font-mono font-black tracking-wider px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded border border-blue-200">
+                      PRO
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-sans mt-0.5">Portal Guru & Ujian Sekolah</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
+                <span>🔐 Supabase</span>
+              </div>
+            </div>
+
             {/* Back to Landing Page Link */}
             {onBackToLanding && (
               <button
                 type="button"
                 onClick={onBackToLanding}
-                className="mb-5 inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition-colors font-medium group cursor-pointer"
+                className="mb-4 sm:mb-5 inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-blue-600 transition-colors font-medium group cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
                 <span>Kembali ke Website Utama</span>
@@ -344,9 +365,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             )}
 
             {/* Mode Switcher Tabs */}
-            <div className="flex items-center justify-between pb-5 border-b border-slate-100 gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 sm:pb-5 border-b border-slate-100 gap-3">
               <div>
-                <h3 className="text-xl font-display font-extrabold text-slate-900 tracking-tight">
+                <h3 className="text-lg sm:text-xl font-display font-extrabold text-slate-900 tracking-tight">
                   {mode === 'login' && 'Masuk ke Portal Guru'}
                   {mode === 'signup' && 'Daftar Akun Guru Baru'}
                   {mode === 'forgot' && forgotStep === 1 && 'Autentikasi & Verifikasi Akun'}

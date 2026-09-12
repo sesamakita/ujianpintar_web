@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { 
   Bell, 
   Clock,
-  Building2
+  Building2,
+  Menu
 } from 'lucide-react';
 import type { ExamSettings } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
@@ -15,12 +16,14 @@ interface HeaderProps {
   subscription?: TeacherSubscription;
   onOpenUpgradeModal?: () => void;
   onNavigateTab?: (tab: 'builder' | 'proctoring' | 'analytics' | 'settings' | 'subscription') => void;
+  onToggleMobileMenu?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   violationCount,
   onNavigateTab,
+  onToggleMobileMenu,
 }) => {
   const [time, setTime] = useState<string>('');
   const schoolAccess = schoolLicenseService.checkAccess();
@@ -61,10 +64,20 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-20 px-6 flex items-center justify-between shadow-xs">
-      {/* Left Side: Clean Page Title */}
-      <div className="flex items-center gap-3">
-        <h2 className="font-display font-bold text-slate-900 text-base tracking-tight">
+    <header className="h-16 bg-white border-b border-slate-200 sticky top-0 z-20 px-4 lg:px-6 flex items-center justify-between shadow-xs">
+      {/* Left Side: Clean Page Title & Mobile Hamburger */}
+      <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        {onToggleMobileMenu && (
+          <button
+            type="button"
+            onClick={onToggleMobileMenu}
+            className="lg:hidden p-2 -ml-1 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center flex-shrink-0"
+            title="Buka Menu Navigasi"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+        <h2 className="font-display font-bold text-slate-900 text-sm sm:text-base tracking-tight truncate">
           {getPageTitle()}
         </h2>
       </div>

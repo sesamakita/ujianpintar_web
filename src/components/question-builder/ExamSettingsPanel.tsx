@@ -8,7 +8,9 @@ import {
   GraduationCap, 
   RefreshCw, 
   Sliders,
-  Check
+  Check,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import type { ExamSettings } from '../../types/exam';
 import { TimePickerModal } from './TimePickerModal';
@@ -136,17 +138,25 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
         </div>
       </div>
 
-      {/* Dynamic Token Generator */}
-      <div className="pt-3.5 border-t border-slate-100">
-        <div className="flex items-center justify-between mb-2">
+      {/* Dynamic Token Generator & Access Control */}
+      <div className="pt-3.5 border-t border-slate-100 space-y-3">
+        <div className="flex items-center justify-between">
           <label className="text-xs font-display font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
             <KeyRound className="w-3.5 h-3.5 text-blue-600" /> Token PIN Akses
           </label>
-          <div className="inline-flex items-center justify-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[10px] shadow-xs">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <span className="font-sans font-semibold text-emerald-700">Status:</span>
-            <span className="font-mono font-bold text-emerald-900">AKTIF</span>
-          </div>
+          {settings.status === 'closed' ? (
+            <div className="inline-flex items-center justify-center gap-1 px-2 py-0.5 bg-rose-50 border border-rose-200 rounded-lg text-[10px] shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              <span className="font-sans font-semibold text-rose-700">Akses:</span>
+              <span className="font-mono font-bold text-rose-900">DITUTUP</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center justify-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[10px] shadow-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+              <span className="font-sans font-semibold text-emerald-700">Akses:</span>
+              <span className="font-mono font-bold text-emerald-900">DIBUKA</span>
+            </div>
+          )}
         </div>
         
         <div className="flex gap-2">
@@ -161,9 +171,46 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
-        <p className="text-[11px] text-slate-400 font-sans mt-1.5 leading-normal">
-          Bagikan 6 digit token ini ke siswa saat ujian dimulai.
-        </p>
+
+        {/* Toggle Buka/Tutup Akses Ujian */}
+        <div className={`p-3 rounded-xl border transition-all flex items-center justify-between gap-3 ${
+          settings.status === 'closed'
+            ? 'bg-rose-50/50 border-rose-200 text-rose-950'
+            : 'bg-emerald-50/50 border-emerald-200 text-emerald-950'
+        }`}>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-1.5">
+              {settings.status === 'closed' ? (
+                <Lock className="w-3.5 h-3.5 text-rose-600 flex-shrink-0" />
+              ) : (
+                <Unlock className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+              )}
+              <span className="text-xs font-display font-bold">
+                {settings.status === 'closed' ? 'Akses Ujian Ditutup' : 'Akses Ujian Dibuka'}
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-sans">
+              {settings.status === 'closed'
+                ? 'Siswa diblokir dari pengerjaan di luar jam ujian.'
+                : 'Siswa dapat memasukkan Token PIN untuk mulai ujian.'}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => handleTextChange('status', settings.status === 'closed' ? 'published' : 'closed')}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+              settings.status === 'closed' ? 'bg-slate-300 hover:bg-slate-400' : 'bg-emerald-500'
+            }`}
+            title={settings.status === 'closed' ? 'Klik untuk Membuka Akses Ujian' : 'Klik untuk Menutup Akses Ujian'}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
+                settings.status === 'closed' ? 'translate-x-0' : 'translate-x-5'
+              }`}
+            />
+          </button>
+        </div>
       </div>
 
       {/* Anti-Cheat Toggles */}
