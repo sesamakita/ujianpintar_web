@@ -133,7 +133,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
 
     const stu = students.find((s) => s.id === studentId);
     if (stu) {
-      examService.resetStudentSession(stu.nisn, activeExam?.id);
+      examService.resetStudentSession(stu.nisn, activeExam?.id, stu.name);
       const newLog: ViolationLogItem = {
         id: `reset-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -445,6 +445,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
         <div className="lg:col-span-4 sticky top-20">
           <ViolationFeed
             logs={violationLogs}
+            students={students}
             onClearLogs={() => setViolationLogs([])}
           />
         </div>

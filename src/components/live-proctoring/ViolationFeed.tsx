@@ -3,14 +3,15 @@ import {
   Clock, 
   CheckCircle
 } from 'lucide-react';
-import type { ViolationLogItem } from '../../types/exam';
+import type { ViolationLogItem, StudentProctoring } from '../../types/exam';
 
 interface ViolationFeedProps {
   logs: ViolationLogItem[];
+  students?: StudentProctoring[];
   onClearLogs: () => void;
 }
 
-export const ViolationFeed: React.FC<ViolationFeedProps> = ({ logs, onClearLogs }) => {
+export const ViolationFeed: React.FC<ViolationFeedProps> = ({ logs, students = [], onClearLogs }) => {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 flex flex-col h-full space-y-3">
       {/* Header */}
@@ -39,6 +40,16 @@ export const ViolationFeed: React.FC<ViolationFeedProps> = ({ logs, onClearLogs 
             const isDanger = log.severity === 'danger';
             const isWarning = log.severity === 'warning';
 
+            // Lookup real student name if log only contains NISN or digits
+            const matchedStudent = students.find(
+              (s) => (log.studentNisn && s.nisn === log.studentNisn) || (log.studentName && s.nisn === log.studentName)
+            );
+            const isNumericName = /^\d+$/.test((log.studentName || '').trim());
+            const displayName =
+              ((isNumericName || log.studentName === log.studentNisn || !log.studentName) && matchedStudent?.name)
+                ? matchedStudent.name
+                : (log.studentName || matchedStudent?.name || 'Peserta Ujian');
+
             return (
               <div
                 key={log.id}
@@ -62,7 +73,7 @@ export const ViolationFeed: React.FC<ViolationFeedProps> = ({ logs, onClearLogs 
                 </div>
 
                 <div className="font-display font-bold text-slate-900 text-xs">
-                  {log.studentName}
+                  {displayName}
                 </div>
 
                 <div className="text-[11px] text-slate-600 font-sans leading-tight">
