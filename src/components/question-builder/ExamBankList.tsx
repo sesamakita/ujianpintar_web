@@ -832,20 +832,15 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
               <div>
                 <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
-                  Tingkat Kelas
+                  Tingkat / Rombel Kelas
                 </label>
-                <select
+                <input
+                  type="text"
                   value={duplicateGradeLevel}
                   onChange={(e) => setDuplicateGradeLevel(e.target.value)}
+                  placeholder="Contoh: Kelas X-A, Kelas 7B, XII MIPA 1"
                   className="w-full px-3.5 py-2.5 text-xs font-sans font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-900"
-                >
-                  <option value="Kelas X (Fase E)">Kelas X (Fase E)</option>
-                  <option value="Kelas XI (Fase F)">Kelas XI (Fase F)</option>
-                  <option value="Kelas XII (Fase F)">Kelas XII (Fase F)</option>
-                  <option value="Kelas VII">Kelas VII</option>
-                  <option value="Kelas VIII">Kelas VIII</option>
-                  <option value="Kelas IX">Kelas IX</option>
-                </select>
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
