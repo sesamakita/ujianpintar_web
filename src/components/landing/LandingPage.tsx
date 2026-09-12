@@ -1065,7 +1065,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/25 scale-100 hover:scale-[1.01] active:scale-95"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Unduh APK Siswa Android (v1.0)</span>
+                  <span>Unduh APK Siswa Android (30 MB)</span>
                 </button>
 
                 <button
