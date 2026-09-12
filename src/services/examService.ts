@@ -189,7 +189,14 @@ export const examService = {
 
       const { data: exams, error } = await query.order('created_at', { ascending: false });
 
-      if (!error && exams && exams.length > 0) {
+      if (!error && Array.isArray(exams)) {
+        if (exams.length === 0) {
+          if (typeof window !== 'undefined' && cleanEmail) {
+            localStorage.setItem(`ujianpintar_all_exams_${cleanEmail}`, JSON.stringify([]));
+          }
+          return [];
+        }
+
         const formatted: ExamSettings[] = exams.map((row: any) => {
           const qList = Array.isArray(row.questions) ? row.questions : [];
           const totalPoints = qList.reduce((sum: number, q: any) => sum + (q.points || 0), 0);
@@ -226,8 +233,8 @@ export const examService = {
         return formatted;
       }
 
-      // Fallback to local storage
-      if (typeof window !== 'undefined' && cleanEmail) {
+      // Fallback to local storage HANYA jika terjadi error koneksi / offline
+      if (error && typeof window !== 'undefined' && cleanEmail) {
         const cached = localStorage.getItem(`ujianpintar_all_exams_${cleanEmail}`);
         if (cached) {
           try {
@@ -458,7 +465,16 @@ export const examService = {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      if (!examError && exams && exams.length > 0) {
+      if (!examError && Array.isArray(exams)) {
+        if (exams.length === 0) {
+          // Akun ini memang tidak memiliki ujian aktif di Supabase
+          if (typeof window !== 'undefined' && cleanEmail) {
+            localStorage.removeItem(`ujianpintar_published_exam_${cleanEmail}`);
+            localStorage.removeItem(`ujianpintar_published_questions_${cleanEmail}`);
+          }
+          return { exam: null, questions: [] };
+        }
+
         const examRow = exams[0];
         const examSettings: ExamSettings = {
           id: examRow.id,
@@ -514,8 +530,8 @@ export const examService = {
         return { exam: examSettings, questions: loadedQuestions };
       }
 
-      // 2. Fallback to teacher-scoped localStorage
-      if (cleanEmail && typeof window !== 'undefined') {
+      // 2. Fallback to teacher-scoped localStorage HANYA jika terjadi error koneksi / offline
+      if (examError && cleanEmail && typeof window !== 'undefined') {
         const cachedExamRaw = localStorage.getItem(`ujianpintar_published_exam_${cleanEmail}`) || localStorage.getItem(`smartexam_published_exam_${cleanEmail}`);
         const cachedQuestionsRaw = localStorage.getItem(`ujianpintar_published_questions_${cleanEmail}`) || localStorage.getItem(`smartexam_published_questions_${cleanEmail}`);
 

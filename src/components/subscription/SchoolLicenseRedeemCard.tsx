@@ -207,7 +207,7 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
     const basicSub: TeacherSubscription = {
       tier: 'free',
       status: 'free',
-      planName: 'Paket Guru Basic',
+      planName: 'Guru Basic',
       startedAt: new Date().toISOString(),
       expiresAt: new Date().toISOString(),
       daysRemaining: 0,

@@ -138,7 +138,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       });
       setIsLoading(false);
       if (res.error) {
-        setNotification(`Gagal mendaftar: ${res.error}`);
+        const rawErr = res.error.toLowerCase();
+        let signUpError = res.error;
+        if (rawErr.includes('already registered') || rawErr.includes('user already exists')) {
+          signUpError = 'Email ini sudah terdaftar. Silakan masuk menggunakan kata sandi Anda atau gunakan tombol "Masuk dengan Akun Google".';
+        } else {
+          const sanitized = res.error
+            .replace(/supabase/gi, 'sistem')
+            .replace(/postgresql/gi, 'database');
+          signUpError = `Gagal mendaftar: ${sanitized}`;
+        }
+        setNotification(signUpError);
         return; // ← STOP jika error
       }
       onLoginSuccess({
@@ -153,11 +163,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       setIsLoading(false);
       // Blokir login jika ada error atau user null (password salah, dll)
       if (res.error || !res.user) {
-        let errorMsg = res.error || 'Email atau kata sandi tidak valid.';
-        if (errorMsg.toLowerCase().includes('invalid login credentials')) {
-          errorMsg = 'Login gagal: Email/kata sandi salah, atau akun belum dikonfirmasi di Supabase (email_confirmed_at bernilai NULL).';
-        } else {
-          errorMsg = `Login gagal: ${errorMsg}`;
+        const rawError = (res.error || '').toLowerCase();
+        let errorMsg = 'Email atau kata sandi tidak sesuai. Jika akun Anda terdaftar melalui Google, silakan gunakan tombol "Masuk dengan Akun Google" di atas atau atur kata sandi melalui menu Lupa Kata Sandi.';
+
+        if (rawError.includes('invalid login credentials')) {
+          errorMsg = 'Email atau kata sandi tidak sesuai. Jika akun Anda terdaftar melalui Google, silakan gunakan tombol "Masuk dengan Akun Google" di atas atau atur kata sandi melalui menu Lupa Kata Sandi.';
+        } else if (rawError.includes('email not confirmed')) {
+          errorMsg = 'Email Anda belum dikonfirmasi. Silakan periksa kotak masuk atau folder spam email Anda untuk link verifikasi.';
+        } else if (rawError.includes('too many requests') || rawError.includes('rate limit')) {
+          errorMsg = 'Terlalu banyak percobaan masuk yang gagal. Demi keamanan, silakan tunggu beberapa saat sebelum mencoba kembali.';
+        } else if (res.error) {
+          const sanitized = res.error
+            .replace(/supabase/gi, 'sistem')
+            .replace(/postgresql/gi, 'database')
+            .replace(/email_confirmed_at/gi, 'konfirmasi email')
+            .replace(/null/gi, 'kosong');
+          errorMsg = `Gagal masuk: ${sanitized}`;
         }
         setNotification(errorMsg);
         return; // ← STOP — jangan izinkan masuk
@@ -369,9 +390,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
             {/* Notification Banner */}
             {notification && (
-              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 text-blue-900 rounded-xl text-xs font-medium flex items-center gap-2 animate-in fade-in">
-                <AlertCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                <span>{notification}</span>
+              <div className={`mt-4 p-3.5 rounded-xl text-xs font-medium flex items-start gap-2.5 animate-in fade-in ${
+                notification.includes('berhasil')
+                  ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
+                  : 'bg-amber-50 border border-amber-200 text-amber-900'
+              }`}>
+                <AlertCircle className={`w-4 h-4 flex-shrink-0 mt-0.5 ${
+                  notification.includes('berhasil') ? 'text-emerald-600' : 'text-amber-600'
+                }`} />
+                <span className="leading-relaxed">{notification}</span>
               </div>
             )}
 

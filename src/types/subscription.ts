@@ -56,12 +56,21 @@ export interface TransactionRecord {
   billingCycle: BillingCycle;
   amount: number;
   fee: number;
+  uniqueCode?: number;
   totalAmount: number;
   paymentChannel: PaymentChannel;
   paymentChannelName: string;
-  status: 'pending' | 'paid' | 'failed' | 'expired';
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'rejected';
   createdAt: string;
   paidAt?: string;
+  approvedBy?: string;
   customerEmail: string;
   customerName: string;
+  customerWhatsapp?: string;
+  customerSchool?: string;
+  paymentDetails?: {
+    accountNumber?: string;
+    accountName?: string;
+    transferProofUrl?: string;
+  };
 }

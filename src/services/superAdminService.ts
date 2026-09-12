@@ -437,23 +437,61 @@ export const superAdminService = {
     try {
       const cleanEmail = email.toLowerCase().trim();
 
-      // Delete from profiles
+      // 1. Temukan dan hapus seluruh paket ujian, butir soal, dan sesi siswa milik guru ini
+      try {
+        const { data: teacherExams } = await supabaseAdmin
+          .from('exams')
+          .select('id')
+          .eq('teacher_id', teacherId);
+
+        const examIds = (teacherExams || []).map((e: any) => e.id).filter(Boolean);
+
+        if (examIds.length > 0) {
+          for (const examId of examIds) {
+            try { await supabaseAdmin.from('student_answers').delete().eq('session_id', examId); } catch {}
+            try { await supabaseAdmin.from('questions').delete().eq('exam_id', examId); } catch {}
+            try { await supabaseAdmin.from('student_sessions').delete().eq('exam_id', examId); } catch {}
+            try { await supabaseAdmin.from('grade_records').delete().eq('exam_id', examId); } catch {}
+            try { await supabaseAdmin.from('violation_logs').delete().eq('exam_id', examId); } catch {}
+          }
+          try { await supabaseAdmin.from('exams').delete().eq('teacher_id', teacherId); } catch {}
+        }
+      } catch (examErr) {
+        console.warn('SuperAdmin cleanup exams warning:', examErr);
+      }
+
+      // 2. Hapus data langganan & relasi lisensi sekolah jika ada
+      try {
+        await supabaseAdmin.from('subscriptions').delete().eq('teacher_id', teacherId);
+      } catch {}
+      try {
+        await supabaseAdmin.from('school_teachers').delete().eq('teacher_id', teacherId);
+      } catch {}
+
+      // 3. Hapus profil dari tabel profiles
       await supabaseAdmin.from('profiles').delete().eq('id', teacherId);
 
-      // Delete from auth.users
+      // 4. Hapus akun login dari auth.users
       const { error: authErr } = await supabaseAdmin.auth.admin.deleteUser(teacherId);
       if (authErr) {
         console.warn('SuperAdmin deleteUser auth warning:', authErr);
       }
 
-      // Remove any local cache
-      localStorage.removeItem(`ujianpintar_profile_${cleanEmail}`);
-      localStorage.removeItem(`ujianpintar_sub_${cleanEmail}`);
-      localStorage.removeItem(`ujianpintar_membership_${cleanEmail}`);
+      // 5. Bersihkan SELURUH data cache di localStorage yang terkait dengan email guru ini
+      if (typeof window !== 'undefined') {
+        const keysToDelete: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.includes(cleanEmail) || key.endsWith(cleanEmail))) {
+            keysToDelete.push(key);
+          }
+        }
+        keysToDelete.forEach((key) => localStorage.removeItem(key));
+      }
 
       return {
         success: true,
-        message: `Akun guru (${cleanEmail}) berhasil dihapus dari database VPS.`,
+        message: `Akun guru (${cleanEmail}) beserta seluruh bank soal, paket ujian, dan riwayat siswa berhasil dihapus tuntas.`,
       };
     } catch (err: any) {
       return {

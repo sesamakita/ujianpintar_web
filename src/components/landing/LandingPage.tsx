@@ -21,6 +21,7 @@ import {
   Sun,
   Moon,
   User,
+  LogOut,
   Download,
   X,
   Radio,
@@ -45,6 +46,7 @@ interface LandingPageProps {
     name: string;
     school: string;
   };
+  onLogout?: () => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
@@ -53,6 +55,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onOpenMobileSimulation,
   isAuthenticated,
   currentUser,
+  onLogout,
 }) => {
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
   // Default to Light Mode (Mode Cerah)
@@ -217,36 +220,65 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-950" />
                 </button>
 
-                {/* Vertical Dropdown Card */}
+                {/* Standard Dropdown Card */}
                 {isUserMenuOpen && (
                   <div
-                    className={`absolute right-0 mt-2.5 w-56 rounded-2xl p-3.5 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3 ${
-                      isDarkMode ? 'glass-panel-dark text-white' : 'glass-panel-light text-slate-800'
+                    className={`absolute right-0 mt-2 w-64 rounded-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3 ${
+                      isDarkMode
+                        ? 'bg-slate-900 border border-slate-800 shadow-2xl shadow-black/60 text-slate-100'
+                        : 'bg-white border border-slate-200 shadow-xl shadow-slate-900/10 text-slate-800'
                     }`}
                   >
                     {/* User Info (Minimalist) */}
-                    <div className="px-1 pt-0.5 border-b border-slate-100 dark:border-white/10 pb-2.5">
+                    <div className={`px-0.5 pb-3 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
                       <div className={`text-sm font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                         {currentUser?.name || 'Bpk. Guru'}
                       </div>
-                      <div className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-semibold mt-0.5">
+                      {currentUser?.school && (
+                        <div className={`text-[11px] truncate mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                          {currentUser.school}
+                        </div>
+                      )}
+                      <div className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-semibold mt-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
                         <span>Sesi Aktif</span>
                       </div>
                     </div>
 
-                    {/* Button Masuk Dashboard */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        onNavigateToPortal();
-                      }}
-                      className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <span>Masuk Dashboard</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
+                    {/* Horizontal Buttons: Masuk Dashboard & Logout */}
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          onNavigateToPortal();
+                        }}
+                        className="flex-1 py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                        title="Buka Dashboard Guru"
+                      >
+                        <span>Dashboard</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          if (onLogout) {
+                            onLogout();
+                          }
+                        }}
+                        className={`py-2.5 px-3 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer border whitespace-nowrap ${
+                          isDarkMode
+                            ? 'bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30'
+                            : 'bg-rose-50 hover:bg-rose-100 text-rose-600 border-rose-200/80'
+                        }`}
+                        title="Keluar dari Akun Guru"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Logout</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

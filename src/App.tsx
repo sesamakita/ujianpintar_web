@@ -527,6 +527,7 @@ export function App() {
         <LandingPage
           isAuthenticated={isAuthenticated}
           currentUser={currentUser}
+          onLogout={handleLogout}
           onNavigateToAuth={(mode) => {
             setAuthInitialMode(mode);
             setCurrentView('auth');

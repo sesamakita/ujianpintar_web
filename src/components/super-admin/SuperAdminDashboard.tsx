@@ -2070,13 +2070,13 @@ export const SuperAdminDashboard: React.FC = () => {
         isOpen={!!deleteTargetTeacher}
         onClose={() => setDeleteTargetTeacher(null)}
         onConfirm={handleExecuteDeleteTeacher}
-        title="Hapus Akun Guru dari Supabase VPS?"
+        title="Hapus Akun Guru & Seluruh Data Ujian?"
         message={
           <span>
-            Hapus akun <strong className="font-bold text-slate-900">&quot;{deleteTargetTeacher?.fullName}&quot;</strong> ({deleteTargetTeacher?.email}) secara permanen dari Supabase VPS? Seluruh data profil dan auth akan dihapus.
+            Hapus akun <strong className="font-bold text-slate-900">&quot;{deleteTargetTeacher?.fullName}&quot;</strong> ({deleteTargetTeacher?.email}) secara permanen dari Supabase VPS? Seluruh data profil, paket ujian, bank soal, dan riwayat siswa akan dihapus bersih.
           </span>
         }
-        confirmText="Ya, Hapus Akun"
+        confirmText="Ya, Hapus Akun & Data"
         cancelText="Batal"
         variant="danger"
         iconType="trash"

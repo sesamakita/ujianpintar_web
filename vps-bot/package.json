@@ -1,0 +1,13 @@
+﻿{
+  "name": "guruhebat-telegram-payment-bot",
+  "version": "1.0.0",
+  "description": "Telegram Admin Bot for UjianPintar / Guru Hebat Payment & Subscription Management with WAHA",
+  "type": "module",
+  "main": "telegram-payment-bot.js",
+  "scripts": {
+    "start": "node telegram-payment-bot.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
+  }
+}
