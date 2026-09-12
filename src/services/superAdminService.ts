@@ -27,6 +27,8 @@ export interface VpsTeacherUser {
   subscriptionTier: 'free' | 'pro' | 'school';
   isSchoolAffiliated: boolean;
   affiliatedSchoolName?: string;
+  subscriptionExpiresAt?: string;
+  subscriptionStartedAt?: string;
 }
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://api.ujianpintar.online';
@@ -115,6 +117,23 @@ export const superAdminService = {
       // 4. Get all school licenses to check affiliation
       const schools = schoolLicenseService.getSchoolsDB();
 
+      // 4b. Fetch paid transactions from payment_transactions table
+      const paidEmails = new Set<string>();
+      const paidTeacherIds = new Set<string>();
+      try {
+        const { data: paidTrx } = await supabaseAdmin
+          .from('payment_transactions')
+          .select('customer_email, teacher_id, tier, status')
+          .eq('status', 'paid');
+
+        (paidTrx || []).forEach((pt: any) => {
+          if (pt.customer_email) paidEmails.add(pt.customer_email.toLowerCase().trim());
+          if (pt.teacher_id) paidTeacherIds.add(pt.teacher_id);
+        });
+      } catch (err) {
+        console.warn('SuperAdmin: payment_transactions query warning:', err);
+      }
+
       // 5. Build merged teacher list
       const teachers: VpsTeacherUser[] = [];
       const processedEmails = new Set<string>();
@@ -142,7 +161,7 @@ export const superAdminService = {
         const npsn = prof?.npsn || meta.npsn || '';
         const nip = prof?.nip || meta.nip || '';
         const subject = prof?.subject || meta.subject || 'Guru Pengajar';
-        const whatsappNumber = meta.whatsapp_number || '';
+        const whatsappNumber = meta.whatsapp_number || prof?.whatsapp_number || '';
         const role = prof?.role || 'teacher';
         const avatarUrl = meta.avatar_url || meta.picture || undefined;
 
@@ -160,20 +179,29 @@ export const superAdminService = {
           }
         }
 
-        // Check subscription tier
+        // Check subscription tier from database (profiles table & payment_transactions)
         let subscriptionTier: 'free' | 'pro' | 'school' = isSchoolAffiliated ? 'school' : 'free';
-        const cachedSub = localStorage.getItem(`ujianpintar_sub_${email}`) || localStorage.getItem(`smartexam_sub_${email}`);
-        if (cachedSub) {
-          try {
-            const parsed = JSON.parse(cachedSub);
-            if (parsed.tier === 'pro') subscriptionTier = 'pro';
-            else if (parsed.tier === 'school') subscriptionTier = 'school';
-          } catch {
-            // ignore
-          }
-        }
-        if (role === 'pro' || role === 'premium') {
+        const dbTier = String(prof?.subscription_tier || '').toLowerCase().trim();
+        const roleLower = String(role || '').toLowerCase().trim();
+        const expiresAt = prof?.subscription_expires_at;
+        const isNotExpired = !expiresAt || new Date(expiresAt).getTime() > Date.now();
+
+        if ((dbTier === 'pro' || roleLower === 'pro' || roleLower === 'premium' || paidEmails.has(email) || paidTeacherIds.has(u.id)) && isNotExpired) {
           subscriptionTier = 'pro';
+        } else if (dbTier === 'school' || roleLower === 'school' || isSchoolAffiliated) {
+          subscriptionTier = 'school';
+        } else {
+          // LocalStorage fallback
+          const cachedSub = localStorage.getItem(`ujianpintar_sub_${email}`) || localStorage.getItem(`smartexam_sub_${email}`);
+          if (cachedSub) {
+            try {
+              const parsed = JSON.parse(cachedSub);
+              if (parsed.tier === 'pro') subscriptionTier = 'pro';
+              else if (parsed.tier === 'school') subscriptionTier = 'school';
+            } catch {
+              // ignore
+            }
+          }
         }
 
         const teacherExams = examsByTeacher.get(u.id) || [];
@@ -197,6 +225,8 @@ export const superAdminService = {
           subscriptionTier,
           isSchoolAffiliated,
           affiliatedSchoolName,
+          subscriptionExpiresAt: prof?.subscription_expires_at || undefined,
+          subscriptionStartedAt: prof?.subscription_started_at || undefined,
         });
       }
 
@@ -204,21 +234,35 @@ export const superAdminService = {
       for (const [profId, prof] of profileMap.entries()) {
         if (!teachers.some(t => t.id === profId)) {
           const teacherExams = examsByTeacher.get(profId) || [];
+          const pEmail = (prof.email || 'guru@vps.internal').toLowerCase().trim();
+          const pDbTier = String(prof?.subscription_tier || '').toLowerCase().trim();
+          const pRole = String(prof?.role || '').toLowerCase().trim();
+          const isNotExpired = !prof?.subscription_expires_at || new Date(prof.subscription_expires_at).getTime() > Date.now();
+
+          let sTier: 'free' | 'pro' | 'school' = 'free';
+          if ((pDbTier === 'pro' || pRole === 'pro' || paidEmails.has(pEmail) || paidTeacherIds.has(profId)) && isNotExpired) {
+            sTier = 'pro';
+          } else if (pDbTier === 'school' || pRole === 'school') {
+            sTier = 'school';
+          }
+
           teachers.push({
             id: profId,
-            email: prof.email || 'guru@vps.internal',
+            email: pEmail,
             fullName: prof.full_name || 'Guru VPS',
             provider: 'email',
             schoolName: prof.school_name || '',
             npsn: prof.npsn || '',
             nip: prof.nip || '',
             subject: prof.subject || 'Pengajar',
-            role: prof.role || 'teacher',
+            role: prof.role || (sTier === 'pro' ? 'pro' : 'teacher'),
             createdAt: prof.created_at || new Date().toISOString(),
             examCount: teacherExams.length,
             exams: teacherExams,
-            subscriptionTier: 'free',
-            isSchoolAffiliated: false,
+            subscriptionTier: sTier,
+            isSchoolAffiliated: sTier === 'school',
+            subscriptionExpiresAt: prof?.subscription_expires_at || undefined,
+            subscriptionStartedAt: prof?.subscription_started_at || undefined,
           });
         }
       }
@@ -243,22 +287,33 @@ export const superAdminService = {
   ): Promise<{ success: boolean; message: string }> {
     try {
       const cleanEmail = email.toLowerCase().trim();
-
-      // 1. Update in profiles table on VPS
       const newRole = tier === 'pro' ? 'pro' : tier === 'school' ? 'school' : 'teacher';
+      const now = new Date();
+      const expiresAt = tier === 'pro' 
+        ? new Date(now.getTime() + 365 * 24 * 3600 * 1000).toISOString() 
+        : null;
+
+      // 1. Update in profiles table on VPS with complete subscription metadata
       await supabaseAdmin
         .from('profiles')
-        .update({ role: newRole, updated_at: new Date().toISOString() })
+        .update({ 
+          role: newRole, 
+          subscription_tier: tier,
+          subscription_status: tier === 'pro' ? 'active' : tier === 'school' ? 'school' : 'free',
+          subscription_expires_at: expiresAt,
+          subscription_started_at: tier === 'pro' ? now.toISOString() : null,
+          updated_at: now.toISOString() 
+        })
         .eq('id', teacherId);
 
-      // 2. Set subscription cache
+      // 2. Set subscription cache in localStorage
       if (tier === 'pro') {
         const subData = {
           tier: 'pro',
           status: 'active',
           planName: 'Guru Mandiri PRO (Akses Super Admin)',
-          startedAt: new Date().toISOString(),
-          expiresAt: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString(),
+          startedAt: now.toISOString(),
+          expiresAt: expiresAt,
           daysRemaining: 365,
           isTrial: false,
           maxExamsPerMonth: -1,

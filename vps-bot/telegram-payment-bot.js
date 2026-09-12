@@ -163,17 +163,26 @@ async function activateTransaction(transactionId, daysToAdd = 365) {
     console.error('Failed to update transaction status:', updateTrxErr);
   }
 
-  // 3. Update profil guru di tabel profiles (jika id profile diketahui)
+  // 3. Update profil guru di tabel profiles
   if (cleanEmail) {
     try {
-      const profileId = trx.teacher_id;
+      let profileId = trx.teacher_id;
+      if (!profileId) {
+        const { data: usersData } = await supabase.auth.admin.listUsers();
+        const found = usersData?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
+        if (found) profileId = found.id;
+      }
+
       if (profileId) {
         await supabase.from('profiles').update({
+          role: 'pro',
           subscription_tier: tier,
+          subscription_status: 'active',
           subscription_expires_at: newExpiry.toISOString(),
           subscription_started_at: now.toISOString(),
           updated_at: now.toISOString()
         }).eq('id', profileId);
+        console.log(`✅ Profile ${profileId} (${cleanEmail}) updated to PRO in database`);
       }
     } catch (e) {
       console.warn('Profile table update warning:', e.message);
@@ -351,6 +360,24 @@ Selamat datang Admin! Bot ini mengelola verifikasi transfer DANA dan aktivasi li
       paid_at: now.toISOString(),
       approved_by: 'Manual Telegram Command'
     });
+
+    try {
+      const { data: usersData } = await supabase.auth.admin.listUsers();
+      const found = usersData?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
+      if (found?.id) {
+        await supabase.from('profiles').update({
+          role: 'pro',
+          subscription_tier: 'pro',
+          subscription_status: 'active',
+          subscription_expires_at: newExpiry.toISOString(),
+          subscription_started_at: now.toISOString(),
+          updated_at: now.toISOString()
+        }).eq('id', found.id);
+        console.log(`✅ Profile ${found.id} (${cleanEmail}) updated to PRO via /aktifkan`);
+      }
+    } catch (err) {
+      console.warn('Manual activation profile update warning:', err.message);
+    }
 
     const expStr = newExpiry.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
     await sendTelegramMessage(chatId, `🎉 <b>AKTIVASI MANUAL BERHASIL!</b>\n━━━━━━━━━━━━━━━━━━━\n👤 <b>Email:</b> <code>${cleanEmail}</code>\n📅 <b>Aktif s/d:</b> ${expStr} (${days} Hari)\n✨ <b>Status:</b> <b>ACTIVE PRO</b>`);

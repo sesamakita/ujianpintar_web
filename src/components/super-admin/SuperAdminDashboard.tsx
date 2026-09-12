@@ -1033,10 +1033,17 @@ export const SuperAdminDashboard: React.FC = () => {
                       {/* License Tier */}
                       <td className="px-4 py-3.5">
                         {teacher.subscriptionTier === 'pro' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
-                            <Sparkles className="w-3 h-3 text-amber-600" />
-                            <span>PRO Mandiri</span>
-                          </span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 w-fit">
+                              <Sparkles className="w-3 h-3 text-amber-600" />
+                              <span>PRO Mandiri</span>
+                            </span>
+                            {teacher.subscriptionExpiresAt && (
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                s/d {new Date(teacher.subscriptionExpiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                              </span>
+                            )}
+                          </div>
                         ) : teacher.subscriptionTier === 'school' ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300">
                             <Building2 className="w-3 h-3 text-indigo-600" />
@@ -1684,9 +1691,22 @@ export const SuperAdminDashboard: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">Status Lisensi</span>
-                  <span className="inline-block mt-0.5 px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200 font-bold uppercase text-[10px]">
-                    {selectedTeacherForDetails.subscriptionTier}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                      selectedTeacherForDetails.subscriptionTier === 'pro'
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                        : selectedTeacherForDetails.subscriptionTier === 'school'
+                        ? 'bg-indigo-100 text-indigo-900 border border-indigo-300'
+                        : 'bg-slate-100 text-slate-700 border border-slate-300'
+                    }`}>
+                      {selectedTeacherForDetails.subscriptionTier === 'pro' ? 'PRO Mandiri' : selectedTeacherForDetails.subscriptionTier === 'school' ? 'Lisensi Sekolah' : 'Basic (Gratis)'}
+                    </span>
+                    {selectedTeacherForDetails.subscriptionExpiresAt && (
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        (Aktif s/d {new Date(selectedTeacherForDetails.subscriptionExpiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })})
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
 
