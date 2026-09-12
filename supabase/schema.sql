@@ -180,7 +180,7 @@ create policy "Teachers can manage own exams" on public.exams
   for all using (auth.uid() = teacher_id);
 
 create policy "Public can read active exam by token" on public.exams
-  for select using (status in ('published', 'active'));
+  for select using (status in ('published', 'active', 'closed'));
 
 -- Questions Policies
 create policy "Teachers can manage questions of own exams" on public.questions

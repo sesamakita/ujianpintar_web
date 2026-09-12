@@ -877,18 +877,28 @@ export const examService = {
    */
   async recordStudentSubmission(
     student: StudentProctoring,
-    grade: GradeRecord
+    grade: GradeRecord,
+    examId?: string
   ) {
     try {
+      const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
       const cleanNisn = student.nisn.trim();
+      const validExamId = (examId && isValidUUID(examId)) ? examId : null;
 
-      // 1. Update or Insert student session
-      const { data: existingSessions } = await supabase
+      // 1. Update or Insert student session scoped to nisn and exam_id
+      let sessionQuery = supabase
         .from('student_sessions')
         .select('id')
         .eq('nisn', cleanNisn);
 
+      if (validExamId) {
+        sessionQuery = sessionQuery.eq('exam_id', validExamId);
+      }
+
+      const { data: existingSessions } = await sessionQuery.order('created_at', { ascending: false });
+
       const sessionPayload = {
+        exam_id: validExamId,
         nisn: cleanNisn,
         student_name: student.name.trim(),
         class_name: student.className.trim(),
@@ -902,18 +912,20 @@ export const examService = {
       };
 
       if (existingSessions && existingSessions.length > 0) {
+        const primarySessionId = existingSessions[0].id;
         await supabase
           .from('student_sessions')
           .update(sessionPayload)
-          .eq('nisn', cleanNisn);
+          .eq('id', primarySessionId);
       } else {
         await supabase
           .from('student_sessions')
           .insert(sessionPayload);
       }
 
-      // 2. Update or Insert Grade Record
+      // 2. Update or Insert Grade Record scoped to nisn and exam_id
       const gradePayload = {
+        exam_id: validExamId,
         student_id: student.id || `stu-${cleanNisn}`,
         nisn: cleanNisn,
         name: grade.name.trim(),
@@ -926,16 +938,23 @@ export const examService = {
         status: grade.status,
       };
 
-      const { data: existingGrades } = await supabase
+      let gradeQuery = supabase
         .from('grade_records')
         .select('id')
         .eq('nisn', cleanNisn);
 
+      if (validExamId) {
+        gradeQuery = gradeQuery.eq('exam_id', validExamId);
+      }
+
+      const { data: existingGrades } = await gradeQuery.order('created_at', { ascending: false });
+
       if (existingGrades && existingGrades.length > 0) {
+        const primaryGradeId = existingGrades[0].id;
         await supabase
           .from('grade_records')
           .update(gradePayload)
-          .eq('nisn', cleanNisn);
+          .eq('id', primaryGradeId);
       } else {
         await supabase
           .from('grade_records')
@@ -1004,9 +1023,12 @@ export const examService = {
   /**
    * Reset student session in Supabase
    */
-  async resetStudentSession(studentNisn: string) {
+  async resetStudentSession(studentNisn: string, examId?: string) {
     try {
-      await supabase
+      const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
+      const validExamId = (examId && isValidUUID(examId)) ? examId : null;
+
+      let updateQuery = supabase
         .from('student_sessions')
         .update({
           status: 'working',
@@ -1015,8 +1037,15 @@ export const examService = {
         })
         .eq('nisn', studentNisn);
 
+      if (validExamId) {
+        updateQuery = updateQuery.eq('exam_id', validExamId);
+      }
+
+      await updateQuery;
+
       const nowStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       await supabase.from('violation_logs').insert({
+        exam_id: validExamId,
         student_name: studentNisn,
         student_nisn: studentNisn,
         timestamp: nowStr,
@@ -1100,7 +1129,10 @@ export const examService = {
    */
   async forceSubmitStudent(studentNisn: string, examId?: string) {
     try {
-      await supabase
+      const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
+      const validExamId = (examId && isValidUUID(examId)) ? examId : null;
+
+      let updateQuery = supabase
         .from('student_sessions')
         .update({
           status: 'submitted',
@@ -1109,6 +1141,12 @@ export const examService = {
         })
         .eq('nisn', studentNisn);
 
+      if (validExamId) {
+        updateQuery = updateQuery.eq('exam_id', validExamId);
+      }
+
+      await updateQuery;
+
       // Broadcast force submit command to student
       const alertChannel = supabase.channel(`student-alerts-${studentNisn}`);
       await alertChannel.send({
@@ -1116,7 +1154,7 @@ export const examService = {
         event: 'force_submit',
         payload: {
           studentNisn,
-          examId: examId || null,
+          examId: validExamId,
         },
       });
     } catch (err: any) {
@@ -1129,14 +1167,16 @@ export const examService = {
    */
   async addGlobalTime(addedMinutes: number, examId?: string) {
     try {
+      const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
+      const validExamId = (examId && isValidUUID(examId)) ? examId : null;
       const addedSec = addedMinutes * 60;
       let query = supabase
         .from('student_sessions')
         .select('id, remaining_seconds')
         .neq('status', 'submitted');
       
-      if (examId && examId !== 'all') {
-        query = query.eq('exam_id', examId);
+      if (validExamId) {
+        query = query.eq('exam_id', validExamId);
       }
 
       const { data: activeSessions } = await query;
@@ -1151,14 +1191,14 @@ export const examService = {
       }
 
       // Broadcast time extension event
-      const channelName = (examId && examId !== 'all') ? `exam-alerts-${examId}` : 'exam-alerts-global';
+      const channelName = validExamId ? `exam-alerts-${validExamId}` : 'exam-alerts-global';
       const classChannel = supabase.channel(channelName);
       await classChannel.send({
         type: 'broadcast',
         event: 'add_time',
         payload: {
           addedMinutes,
-          examId: examId || null,
+          examId: validExamId,
         },
       });
     } catch (err: any) {
@@ -1171,6 +1211,9 @@ export const examService = {
    */
   async lockAllExams(examId?: string) {
     try {
+      const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
+      const validExamId = (examId && isValidUUID(examId)) ? examId : null;
+
       let query = supabase
         .from('student_sessions')
         .update({
@@ -1180,20 +1223,20 @@ export const examService = {
         })
         .neq('status', 'submitted');
 
-      if (examId && examId !== 'all') {
-        query = query.eq('exam_id', examId);
+      if (validExamId) {
+        query = query.eq('exam_id', validExamId);
       }
 
       await query;
 
       // Broadcast lock event
-      const channelName = (examId && examId !== 'all') ? `exam-alerts-${examId}` : 'exam-alerts-global';
+      const channelName = validExamId ? `exam-alerts-${validExamId}` : 'exam-alerts-global';
       const classChannel = supabase.channel(channelName);
       await classChannel.send({
         type: 'broadcast',
         event: 'lock_exam',
         payload: {
-          examId: examId || null,
+          examId: validExamId,
         },
       });
     } catch (err: any) {

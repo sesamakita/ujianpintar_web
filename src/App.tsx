@@ -272,8 +272,9 @@ export function App() {
           examService.getViolationLogs(targetExamId),
         ]);
 
-        if (remoteStudents && remoteStudents.length > 0) {
+        if (remoteStudents) {
           setStudents((prev) => {
+            if (remoteStudents.length === 0) return [];
             return remoteStudents.map((rs) => {
               const existing = prev.find((p) => p.nisn === rs.nisn);
               if (existing) {
@@ -289,11 +290,11 @@ export function App() {
           });
         }
 
-        if (remoteGrades && remoteGrades.length > 0) {
+        if (remoteGrades) {
           setGrades(remoteGrades);
         }
 
-        if (remoteLogs && remoteLogs.length > 0) {
+        if (remoteLogs) {
           setViolationLogs(remoteLogs);
         }
       } catch (err) {
@@ -506,7 +507,7 @@ export function App() {
     if (newLogs && newLogs.length > 0) {
       setViolationLogs((prev) => [...newLogs, ...prev]);
     }
-    examService.recordStudentSubmission(newStudent, newGrade);
+    examService.recordStudentSubmission(newStudent, newGrade, examSettings.id);
   };
 
   // Super Admin Dedicated Standalone Route & Portal

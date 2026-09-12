@@ -32,7 +32,7 @@ export interface VpsTeacherUser {
 }
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://api.ujianpintar.online';
-const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3ODc5MTY0MjQsImV4cCI6MjEwMzI3NjQyNH0.-Zu1ZjsJ4wDzMVh00MunYCVwPaVnwbOJdLe58NSmpQg';
+const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 export const supabaseAdmin: SupabaseClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
