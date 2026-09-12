@@ -182,7 +182,7 @@ export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
                 </span>
               </div>
               <p className={`text-xs mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                Versi 1.0 • Ukuran 15 MB • Sistem Kiosk Anti-Curang
+                Versi 1.0 • Ukuran 30 MB • Sistem Kiosk Anti-Curang
               </p>
             </div>
           </div>
@@ -310,7 +310,7 @@ export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
                       <Download className="w-4 h-4" />
                       <span>
                         {waStatus === 'valid' && isEmailValid
-                          ? 'Unduh APK Sekarang (15 MB)'
+                          ? 'Unduh APK Sekarang (30 MB)'
                           : 'Lengkapi Email & Nomor WA Aktif'}
                       </span>
                     </>
