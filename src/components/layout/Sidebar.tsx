@@ -3,13 +3,13 @@ import {
   Activity, 
   BarChart3, 
   Settings, 
-  GraduationCap, 
   LogOut,
   Sparkles,
   Award,
   Globe,
   X
 } from 'lucide-react';
+import { AppLogoBadge } from '../common/AppLogo';
 import type { ExamSettings } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
 
@@ -115,9 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* 1. Brand Header (Fixed Top) */}
         <div className="p-4 border-b border-slate-100 flex items-center justify-between flex-shrink-0 bg-white">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 flex-shrink-0">
-              <GraduationCap className="w-5 h-5" />
-            </div>
+            <AppLogoBadge size="md" />
             <div>
               <div className="flex items-center gap-1.5">
                 <h1 className="font-display font-black text-slate-900 text-lg tracking-tight leading-none">UjianPintar</h1>

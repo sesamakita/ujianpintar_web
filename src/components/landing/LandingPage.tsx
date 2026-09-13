@@ -17,7 +17,6 @@ import {
   Play,
   FileSpreadsheet,
   Cpu,
-  GraduationCap,
   Sun,
   Moon,
   User,
@@ -34,6 +33,7 @@ import {
   Building2,
   Zap
 } from 'lucide-react';
+import { AppLogoBadge } from '../common/AppLogo';
 import { MathRenderer } from '../common/MathRenderer';
 import { DownloadApkModal } from './DownloadApkModal';
 
@@ -147,9 +147,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           {/* Logo Brand */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
-            <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-700 flex items-center justify-center shadow-lg shadow-blue-600/25 border border-blue-400/30">
-              <GraduationCap className="w-6 h-6 text-white" />
-            </div>
+            <AppLogoBadge size="lg" variant="gradient" />
             <div className="flex items-center">
               <span className={`text-2xl sm:text-[26px] font-black font-display tracking-tight leading-none ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
                 Ujian<span className="text-blue-600">Pintar</span>
@@ -1769,9 +1767,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             isDarkMode ? 'border-slate-800' : 'border-slate-200'
           }`}>
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white">
-                <GraduationCap className="w-4 h-4" />
-              </div>
+              <AppLogoBadge size="sm" />
               <span className={`font-bold font-display text-base ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>UjianPintar</span>
               <span className="text-slate-400">• Portal Asesmen & Ujian Digital</span>
             </div>
