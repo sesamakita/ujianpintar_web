@@ -13,6 +13,8 @@ interface HeaderProps {
   activeTab: string;
   examSettings: ExamSettings;
   violationCount: number;
+  teacherName?: string;
+  avatarUrl?: string;
   subscription?: TeacherSubscription;
   onOpenUpgradeModal?: () => void;
   onNavigateTab?: (tab: 'builder' | 'proctoring' | 'analytics' | 'settings' | 'subscription') => void;
@@ -22,6 +24,8 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   violationCount,
+  teacherName,
+  avatarUrl,
   onNavigateTab,
   onToggleMobileMenu,
 }) => {
@@ -128,6 +132,26 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </button>
         </div>
+
+        {/* Teacher Avatar Button */}
+        <button
+          type="button"
+          onClick={() => onNavigateTab?.('settings')}
+          className="p-0.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer flex items-center"
+          title={`Profil Guru: ${teacherName || 'Pengaturan'}`}
+        >
+          {avatarUrl ? (
+            <img
+              src={avatarUrl}
+              alt={teacherName || 'Guru'}
+              className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-100 shadow-xs flex-shrink-0"
+            />
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-display font-black text-xs flex items-center justify-center shadow-xs ring-2 ring-blue-100 flex-shrink-0">
+              {teacherName ? teacherName.replace(/Bpk\.|Ibu|Dr\.|S\.Pd\.|M\.Pd\./g, '').trim().substring(0, 2).toUpperCase() : 'GU'}
+            </div>
+          )}
+        </button>
       </div>
     </header>
   );

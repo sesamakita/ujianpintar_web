@@ -104,6 +104,7 @@ export function App() {
     whatsapp?: string;
     nip?: string;
     npsn?: string;
+    avatarUrl?: string;
   }>({
     name: 'Rahmat, S.Pd.',
     email: 'rahmat.guru@gmail.com',
@@ -173,6 +174,7 @@ export function App() {
             whatsapp: user.whatsapp || '',
             nip: user.nip || '',
             npsn: user.npsn || '',
+            avatarUrl: user.avatarUrl || '',
           });
           if (userSub) {
             setSubscription(userSub);
@@ -649,6 +651,7 @@ export function App() {
         teacherName={currentUser.name}
         schoolName={currentUser.school}
         subjectName={currentUser.subject}
+        avatarUrl={currentUser.avatarUrl}
         subscription={subscription}
         onOpenSubscription={() => setActiveTab('subscription')}
         isMobileOpen={isMobileSidebarOpen}
@@ -661,6 +664,8 @@ export function App() {
           activeTab={activeTab}
           examSettings={examSettings}
           violationCount={violationCount}
+          teacherName={currentUser.name}
+          avatarUrl={currentUser.avatarUrl}
           subscription={subscription}
           onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
           onNavigateTab={(tab) => setActiveTab(tab)}

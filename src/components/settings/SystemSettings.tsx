@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Building2, 
   User, 
@@ -12,7 +12,9 @@ import {
   EyeOff,
   ShieldCheck,
   Lock,
-  BookOpen
+  BookOpen,
+  Camera,
+  Trash2
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 
@@ -25,6 +27,7 @@ interface SystemSettingsProps {
     whatsapp?: string;
     nip?: string;
     npsn?: string;
+    avatarUrl?: string;
   };
   onProfileUpdated?: (updated: {
     name: string;
@@ -33,6 +36,7 @@ interface SystemSettingsProps {
     nip?: string;
     npsn?: string;
     subject?: string;
+    avatarUrl?: string;
   }) => void;
 }
 
@@ -46,6 +50,8 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [school, setSchool] = useState(currentUser.school || '');
   const [npsn, setNpsn] = useState(currentUser.npsn || '');
   const [subject, setSubject] = useState(currentUser.subject || '');
+  const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [saved, setSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -59,6 +65,76 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
+  // Compress image to lightweight base64
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (readerEvent) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxSize = 256;
+          let width = img.width;
+          let height = img.height;
+          if (width > height) {
+            if (width > maxSize) {
+              height = Math.round((height * maxSize) / width);
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = Math.round((width * maxSize) / height);
+              height = maxSize;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(readerEvent.target?.result as string);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = () => reject(new Error('Gagal memproses gambar foto.'));
+        img.src = readerEvent.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('Gagal membaca file gambar.'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setErrorMessage('Format file tidak didukung. Harap gunakan format gambar (JPG, PNG, atau WEBP).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage('Ukuran file foto maksimal 5 MB.');
+      return;
+    }
+
+    try {
+      const base64 = await compressImage(file);
+      setAvatarUrl(base64);
+      setErrorMessage(null);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Gagal mengunggah foto.');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setAvatarUrl('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   // Sync state when currentUser prop changes
   useEffect(() => {
     setName(currentUser.name || '');
@@ -67,6 +143,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     setSchool(currentUser.school || '');
     setNpsn(currentUser.npsn || '');
     setSubject(currentUser.subject || '');
+    setAvatarUrl(currentUser.avatarUrl || '');
   }, [currentUser]);
 
   const handleSavePassword = async (e: React.FormEvent) => {
@@ -109,9 +186,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       nip: nip.trim(),
       npsn: npsn.trim(),
       subject: subject.trim(),
+      avatarUrl: avatarUrl.trim(),
     };
 
     const res = await authService.updateTeacherProfile(updatedProfile);
+    await authService.updateAvatarUrl(avatarUrl.trim());
 
     if (res.success) {
       if (onProfileUpdated) {
@@ -171,7 +250,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
       <form onSubmit={handleSave} className="space-y-4">
         {/* Card 1: Profil Guru Penguji */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
           <div className="flex items-center gap-2.5 pb-2.5 border-b border-slate-100">
             <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
               <User className="w-4 h-4" />
@@ -185,6 +264,57 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               </p>
             </div>
           </div>
+
+          {/* Fitur Foto Profil Guru Penguji */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80">
+            <div className="relative group flex-shrink-0">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={name || 'Guru'}
+                  className="w-16 h-16 rounded-2xl object-cover ring-2 ring-blue-500/20 shadow-xs border border-slate-200"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-display font-black text-xl flex items-center justify-center shadow-xs ring-2 ring-blue-500/20">
+                  {name ? name.replace(/Bpk\.|Ibu|Dr\.|S\.Pd\.|M\.Pd\./g, '').trim().substring(0, 2).toUpperCase() : <User className="w-7 h-7" />}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleAvatarChange}
+                  accept="image/png,image/jpeg,image/webp,image/jpg"
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 rounded-xl text-xs font-display font-bold shadow-2xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Camera className="w-3.5 h-3.5 text-blue-600" />
+                  <span>{avatarUrl ? 'Ganti Foto Profil' : 'Tambah Foto Profil'}</span>
+                </button>
+                {avatarUrl && (
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-xs font-display font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus Foto</span>
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 font-sans leading-tight">
+                Format yang didukung: JPG, PNG, atau WEBP. Jika tidak diisi, sistem otomatis menampilkan inisial bawaan.
+              </p>
+            </div>
+          </div>
+
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             <div>

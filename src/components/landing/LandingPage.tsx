@@ -45,6 +45,7 @@ interface LandingPageProps {
   currentUser?: {
     name: string;
     school: string;
+    avatarUrl?: string;
   };
   onLogout?: () => void;
 }
@@ -206,7 +207,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                  className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center relative ${
+                  className={`p-1.5 rounded-xl transition-all cursor-pointer flex items-center justify-center relative ${
                     isUserMenuOpen
                       ? 'bg-blue-500/20 border-blue-400 text-blue-600 ring-2 ring-blue-500/20'
                       : isDarkMode
@@ -215,9 +216,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   }`}
                   title="Profil & Masuk Dashboard"
                 >
-                  <User className="w-4 h-4" />
+                  {currentUser?.avatarUrl ? (
+                    <img
+                      src={currentUser.avatarUrl}
+                      alt={currentUser.name || 'Guru'}
+                      className="w-6 h-6 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <div className="p-1">
+                      <User className="w-4 h-4" />
+                    </div>
+                  )}
                   {/* Active Green Dot Badge */}
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-950" />
+                  <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-950" />
                 </button>
 
                 {/* Standard Dropdown Card */}
@@ -229,19 +240,32 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         : 'bg-white border border-slate-200 shadow-xl shadow-slate-900/10 text-slate-800'
                     }`}
                   >
-                    {/* User Info (Minimalist) */}
-                    <div className={`px-0.5 pb-3 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                      <div className={`text-sm font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                        {currentUser?.name || 'Bpk. Guru'}
-                      </div>
-                      {currentUser?.school && (
-                        <div className={`text-[11px] truncate mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                          {currentUser.school}
+                    {/* User Info with Avatar */}
+                    <div className={`flex items-center gap-2.5 pb-3 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                      {currentUser?.avatarUrl ? (
+                        <img
+                          src={currentUser.avatarUrl}
+                          alt={currentUser.name || 'Guru'}
+                          className="w-10 h-10 rounded-xl object-cover ring-2 ring-blue-500/20 flex-shrink-0"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white font-display font-black text-sm flex items-center justify-center flex-shrink-0">
+                          {currentUser?.name ? currentUser.name.replace(/Bpk\.|Ibu|Dr\.|S\.Pd\.|M\.Pd\./g, '').trim().substring(0, 2).toUpperCase() : 'GU'}
                         </div>
                       )}
-                      <div className="text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 font-semibold mt-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
-                        <span>Sesi Aktif</span>
+                      <div className="overflow-hidden min-w-0">
+                        <div className={`text-sm font-bold truncate ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                          {currentUser?.name || 'Bpk. Guru'}
+                        </div>
+                        {currentUser?.school && (
+                          <div className={`text-[11px] truncate mt-0.5 ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                            {currentUser.school}
+                          </div>
+                        )}
+                        <div className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold mt-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                          <span>Sesi Aktif</span>
+                        </div>
                       </div>
                     </div>
 

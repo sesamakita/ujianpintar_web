@@ -23,6 +23,7 @@ interface SidebarProps {
   teacherName?: string;
   schoolName?: string;
   subjectName?: string;
+  avatarUrl?: string;
   subscription?: TeacherSubscription;
   onOpenSubscription?: () => void;
   isMobileOpen?: boolean;
@@ -37,6 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   teacherName = 'Rahmat, S.Pd.',
   schoolName = 'SMA Negeri 1 Indonesia',
   subjectName = 'Matematika Wajib',
+  avatarUrl,
   subscription,
   onOpenSubscription,
   isMobileOpen = false,
@@ -274,9 +276,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
             title="Buka Pengaturan Profil Guru"
             className="flex items-center gap-2.5 overflow-hidden p-1 -m-1 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer text-left"
           >
-            <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-display font-black flex items-center justify-center text-xs shadow-sm ring-2 ring-blue-100 flex-shrink-0">
-              {getInitials(teacherName)}
-            </div>
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={teacherName}
+                className="w-8 h-8 rounded-full object-cover shadow-sm ring-2 ring-blue-100 flex-shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-display font-black flex items-center justify-center text-xs shadow-sm ring-2 ring-blue-100 flex-shrink-0">
+                {getInitials(teacherName)}
+              </div>
+            )}
             <div className="overflow-hidden">
               <div className="text-sm font-display font-bold text-slate-900 truncate">{teacherName}</div>
               <div className="text-[11px] text-slate-500 font-medium font-sans truncate">{subjectName}</div>

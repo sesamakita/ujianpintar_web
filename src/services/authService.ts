@@ -9,6 +9,7 @@ export interface UserProfile {
   whatsapp?: string;
   nip?: string;
   npsn?: string;
+  avatarUrl?: string;
 }
 
 export const authService = {
@@ -248,6 +249,10 @@ export const authService = {
         }
       }
 
+      // Load avatar from localStorage (stored as base64)
+      const avatarCacheKey = `ujianpintar_avatar_${cleanEmail}`;
+      const savedAvatar = typeof window !== 'undefined' ? localStorage.getItem(avatarCacheKey) || meta.avatar_url || '' : '';
+
       const isDemoAccount = !user.id || cleanEmail.includes('demo');
       return {
         id: user.id,
@@ -258,6 +263,7 @@ export const authService = {
         whatsapp: meta.whatsapp_number || '',
         nip: profile?.nip || meta.nip || '',
         npsn: profile?.npsn || meta.npsn || '',
+        avatarUrl: savedAvatar || undefined,
       };
     } catch (err) {
       return null;
@@ -505,6 +511,36 @@ export const authService = {
     } catch (err: any) {
       console.warn('updateTeacherProfile exception:', err);
       return { success: false, error: err.message || 'Gagal memperbarui profil.' };
+    }
+  },
+
+  /**
+   * Save teacher avatar (base64 data URL) to localStorage + Supabase user_metadata
+   */
+  async updateAvatarUrl(base64DataUrl: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const cleanEmail = (user?.email || '').toLowerCase().trim();
+
+      // Save to localStorage
+      if (cleanEmail) {
+        localStorage.setItem(`ujianpintar_avatar_${cleanEmail}`, base64DataUrl);
+      }
+
+      // Also persist to Supabase user_metadata (best-effort)
+      if (user) {
+        try {
+          await supabase.auth.updateUser({
+            data: { avatar_url: base64DataUrl },
+          });
+        } catch {
+          // non-critical, localStorage is the primary store
+        }
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Gagal menyimpan foto profil.' };
     }
   },
 };
