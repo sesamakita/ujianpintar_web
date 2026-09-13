@@ -146,6 +146,12 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
     }
   };
 
+  // Clear All Violation Logs from Supabase and UI
+  const handleClearLogs = async () => {
+    setViolationLogs([]);
+    await examService.clearViolationLogs(activeExam?.id);
+  };
+
   // Send Warning
   const handleSendWarning = (studentId: string, message: string) => {
     const stu = students.find((s) => s.id === studentId);
@@ -446,7 +452,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
           <ViolationFeed
             logs={violationLogs}
             students={students}
-            onClearLogs={() => setViolationLogs([])}
+            onClearLogs={handleClearLogs}
           />
         </div>
       </div>

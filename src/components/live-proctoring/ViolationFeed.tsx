@@ -8,10 +8,20 @@ import type { ViolationLogItem, StudentProctoring } from '../../types/exam';
 interface ViolationFeedProps {
   logs: ViolationLogItem[];
   students?: StudentProctoring[];
-  onClearLogs: () => void;
+  onClearLogs: () => void | Promise<void>;
 }
 
 export const ViolationFeed: React.FC<ViolationFeedProps> = ({ logs, students = [], onClearLogs }) => {
+  const [isClearing, setIsClearing] = React.useState(false);
+
+  const handleClear = async () => {
+    setIsClearing(true);
+    try {
+      await onClearLogs();
+    } finally {
+      setIsClearing(false);
+    }
+  };
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 flex flex-col h-full space-y-3">
       {/* Header */}
@@ -88,10 +98,12 @@ export const ViolationFeed: React.FC<ViolationFeedProps> = ({ logs, students = [
       {logs.length > 0 && (
         <div className="pt-2 border-t border-slate-100 text-center">
           <button
-            onClick={onClearLogs}
-            className="text-[11px] text-slate-400 hover:text-slate-700 font-display font-bold transition-colors cursor-pointer"
+            type="button"
+            disabled={isClearing}
+            onClick={handleClear}
+            className="text-[11px] text-slate-400 hover:text-slate-700 font-display font-bold transition-colors cursor-pointer disabled:opacity-50"
           >
-            Bersihkan Log Riwayat
+            {isClearing ? 'Membersihkan log riwayat...' : 'Bersihkan Log Riwayat'}
           </button>
         </div>
       )}

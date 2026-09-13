@@ -782,6 +782,33 @@ export const examService = {
   },
 
   /**
+   * Clear all violation logs from Supabase for an exam session
+   */
+  async clearViolationLogs(examId?: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
+      const validExamId = (examId && isValidUUID(examId)) ? examId : null;
+
+      let deleteQuery = supabase.from('violation_logs').delete();
+      if (validExamId) {
+        deleteQuery = deleteQuery.eq('exam_id', validExamId);
+      } else {
+        deleteQuery = deleteQuery.not('id', 'is', null);
+      }
+
+      const { error } = await deleteQuery;
+      if (error) {
+        console.warn('clearViolationLogs warning:', error.message);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err: any) {
+      console.warn('clearViolationLogs exception:', err.message);
+      return { success: false, error: err.message };
+    }
+  },
+
+  /**
    * Real-Time Proctoring: Subscribe to live student session updates, violations, and grade submissions
    * Isolated to the specific exam session
    */
