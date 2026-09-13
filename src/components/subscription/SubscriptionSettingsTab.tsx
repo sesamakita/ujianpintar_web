@@ -8,7 +8,8 @@ import {
   CreditCard, 
   Receipt, 
   CheckCircle2,
-  Gift
+  Gift,
+  Trash2
 } from 'lucide-react';
 import type { 
   SubscriptionPlan, 
@@ -44,7 +45,9 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
   const [selectedPlanForCheckout, setSelectedPlanForCheckout] = useState<SubscriptionPlan | null>(null);
   const [isTrialActivating, setIsTrialActivating] = useState(false);
 
-  const transactions: TransactionRecord[] = subscriptionService.getTransactionHistory(currentUser.email);
+  const [transactions, setTransactions] = useState<TransactionRecord[]>(() =>
+    subscriptionService.getTransactionHistory(currentUser.email)
+  );
 
   const handleActivateTrial = async () => {
     setIsTrialActivating(true);
@@ -231,7 +234,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
 
       {/* 3. TRANSACTION / BILLING HISTORY */}
       <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center flex-shrink-0">
               <Receipt className="w-4 h-4" />
@@ -245,6 +248,21 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
               </p>
             </div>
           </div>
+
+          {transactions.length > 0 && (
+            <button
+              type="button"
+              onClick={async () => {
+                await subscriptionService.clearTransactionHistory(currentUser.email);
+                setTransactions([]);
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-semibold border border-rose-200 transition-colors cursor-pointer shadow-2xs"
+              title="Hapus dan reset riwayat tagihan invoice"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Reset Riwayat</span>
+            </button>
+          )}
         </div>
 
         {transactions.length === 0 ? (

@@ -243,18 +243,6 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
     }
   };
 
-  // Testing Helper: Simulate Approval for Instant Local Testing
-  const handleSimulateInstant = async () => {
-    setIsSendingOrder(true);
-    const result = await subscriptionService.processSimulatedPayment(activeTransaction);
-    setIsSendingOrder(false);
-    if (result.success) {
-      setIsWaitingApproval(false);
-      setIsSuccess(true);
-      onPaymentSuccess(result.subscription);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 font-sans overflow-y-auto select-none">
       <div className="bg-white rounded-3xl p-5 sm:p-7 max-w-xl w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150 my-auto flex flex-col max-h-[95vh] overflow-y-auto">
@@ -429,16 +417,6 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                   className="text-xs text-slate-400 hover:text-slate-600 underline cursor-pointer"
                 >
                   Kembali ke Detail Pembayaran
-                </button>
-
-                {/* Dev simulation shortcut */}
-                <button
-                  type="button"
-                  onClick={handleSimulateInstant}
-                  className="text-[10px] text-blue-500 hover:text-blue-700 underline cursor-pointer"
-                  title="Klik untuk mensimulasikan persetujuan jika menguji coba tanpa Telegram"
-                >
-                  Simulasi Persetujuan Cepat (Demo)
                 </button>
               </div>
             </div>

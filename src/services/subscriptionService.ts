@@ -622,6 +622,14 @@ Saya telah mentransfer tepat sejumlah *${formatRupiah(transaction.totalAmount)}*
     const cleanEmail = (teacherEmail || '').toLowerCase().trim();
     if (!cleanEmail) return [];
 
+    // Auto-reset once for all users to wipe out previous test / demo invoice data
+    if (!localStorage.getItem('ujianpintar_invoice_reset_done_v2')) {
+      localStorage.removeItem(`ujianpintar_transactions_${cleanEmail}`);
+      localStorage.removeItem('ujianpintar_transactions');
+      localStorage.setItem('ujianpintar_invoice_reset_done_v2', 'true');
+      return [];
+    }
+
     const historyRaw = localStorage.getItem(`ujianpintar_transactions_${cleanEmail}`);
     if (historyRaw) {
       try {
@@ -631,6 +639,32 @@ Saya telah mentransfer tepat sejumlah *${formatRupiah(transaction.totalAmount)}*
       }
     }
     return [];
+  },
+
+  /**
+   * Clear / Reset Billing & Invoice Transaction History
+   */
+  async clearTransactionHistory(teacherEmail?: string): Promise<boolean> {
+    if (typeof window === 'undefined') return true;
+    const cleanEmail = (teacherEmail || '').toLowerCase().trim();
+    if (cleanEmail) {
+      localStorage.removeItem(`ujianpintar_transactions_${cleanEmail}`);
+    }
+    localStorage.removeItem('ujianpintar_transactions');
+    localStorage.setItem('ujianpintar_invoice_reset_done_v2', 'true');
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user?.id) {
+        await supabase.from('payment_transactions').delete().eq('teacher_id', user.id);
+      } else if (cleanEmail) {
+        await supabase.from('payment_transactions').delete().eq('customer_email', cleanEmail);
+      }
+    } catch {
+      // ignore
+    }
+
+    return true;
   },
 };
 

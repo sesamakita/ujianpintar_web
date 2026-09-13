@@ -222,8 +222,6 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
     setIsLeaveSchoolConfirmOpen(false);
   };
 
-  const demoCodes = ['SMAN1-JKT-2027', 'SMPN2-BDG-2027', 'SEKOLAH-JUARA-2027'];
-
   // Filter registered teachers by search query
   const registeredTeachers = schoolDetails?.registeredTeachers || [];
   const maxTeachers = schoolDetails?.maxTeachers || 50;
@@ -550,7 +548,7 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
                       type="text"
                       value={licenseCode}
                       onChange={(e) => setLicenseCode(e.target.value.toUpperCase())}
-                      placeholder="Contoh: SMAN1-JKT-2027"
+                      placeholder="Masukkan kode lisensi resmi sekolah..."
                       className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 uppercase focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors tracking-wider"
                     />
                   </div>
@@ -568,28 +566,6 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
                       </>
                     )}
                   </button>
-                </div>
-              </div>
-
-              {/* Helper chips */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs text-slate-600">
-                <span className="font-semibold text-slate-700 block text-[11px]">
-                  💡 Contoh Kode Lisensi Demo untuk Uji Coba:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {demoCodes.map((code) => (
-                    <button
-                      key={code}
-                      type="button"
-                      onClick={() => {
-                        setLicenseCode(code);
-                      }}
-                      className="px-2.5 py-1 bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-lg text-[11px] font-mono font-bold text-emerald-800 transition-colors cursor-pointer"
-                      title="Klik untuk mencoba kode ini"
-                    >
-                      {code}
-                    </button>
-                  ))}
                 </div>
               </div>
             </form>
@@ -633,14 +609,11 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
                   type="password"
                   value={operatorPinInput}
                   onChange={(e) => setOperatorPinInput(e.target.value)}
-                  placeholder="PIN Master (Demo: 123456)"
+                  placeholder="Masukkan 6-digit PIN Master"
                   className="w-full h-11 px-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                   autoFocus
                   required
                 />
-                <span className="text-[10px] text-slate-500 mt-1 block">
-                  💡 PIN Demo untuk pengujian: <code className="font-mono font-bold text-amber-800">123456</code>
-                </span>
               </div>
 
               <div className="pt-2 flex gap-2">
