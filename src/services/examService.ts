@@ -1105,7 +1105,7 @@ export const examService = {
    */
   async checkStudentSessionAccess(examId: string, studentNisn: string): Promise<{
     allowed: boolean;
-    reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working';
+    reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working' | 'capacity_exceeded';
     message?: string;
     existingSession?: any;
   }> {
@@ -1122,44 +1122,95 @@ export const examService = {
 
       const { data: sessions, error } = await query.order('created_at', { ascending: false }).limit(1);
 
-      if (error || !sessions || sessions.length === 0) {
-        return { allowed: true };
-      }
+      // Jika siswa sudah pernah masuk sebelumnya, periksa status sesinya
+      if (!error && sessions && sessions.length > 0) {
+        const session = sessions[0];
 
-      const session = sessions[0];
+        if (session.status === 'submitted') {
+          return {
+            allowed: false,
+            reason: 'submitted',
+            message: 'Akses Terkunci: Anda telah menyelesaikan dan mengumpulkan ujian ini. Anda tidak dapat masuk kembali kecuali sesi Anda di-reset oleh guru pengawas.',
+            existingSession: session,
+          };
+        }
 
-      if (session.status === 'submitted') {
+        if (session.status === 'violation_flagged') {
+          return {
+            allowed: false,
+            reason: 'violation_flagged',
+            message: 'Akses Ditolak: Anda telah dikeluarkan dari sesi ujian oleh guru pengawas karena pelanggaran integritas. Hubungi guru pengawas untuk meminta reset sesi ujian.',
+            existingSession: session,
+          };
+        }
+
+        if (session.status === 'timed_out') {
+          return {
+            allowed: false,
+            reason: 'timed_out',
+            message: 'Akses Ditutup: Waktu pengerjaan ujian Anda telah habis.',
+            existingSession: session,
+          };
+        }
+
+        // Status 'working': Siswa sedang aktif -> Izinkan lanjut (resume)
         return {
-          allowed: false,
-          reason: 'submitted',
-          message: 'Akses Terkunci: Anda telah menyelesaikan dan mengumpulkan ujian ini. Anda tidak dapat masuk kembali kecuali sesi Anda di-reset oleh guru pengawas.',
+          allowed: true,
+          reason: 'active_working',
           existingSession: session,
         };
       }
 
-      if (session.status === 'violation_flagged') {
-        return {
-          allowed: false,
-          reason: 'violation_flagged',
-          message: 'Akses Ditolak: Anda telah dikeluarkan dari sesi ujian oleh guru pengawas karena pelanggaran integritas. Hubungi guru pengawas untuk meminta reset sesi ujian.',
-          existingSession: session,
-        };
+      // Siswa BARU yang mencoba bergabung: Periksa batasan kuota kapasitas peserta (Paket Free: Max 40 siswa)
+      if (examId && isValidUUID(examId)) {
+        try {
+          const { data: examData } = await supabase
+            .from('exams')
+            .select('teacher_id')
+            .eq('id', examId)
+            .maybeSingle();
+
+          if (examData?.teacher_id) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('subscription_tier, subscription_expires_at')
+              .eq('id', examData.teacher_id)
+              .maybeSingle();
+
+            let isUnlimited = false;
+            if (profile && (profile.subscription_tier === 'pro' || profile.subscription_tier === 'school')) {
+              if (profile.subscription_expires_at) {
+                const expiry = new Date(profile.subscription_expires_at).getTime();
+                if (expiry > Date.now()) {
+                  isUnlimited = true;
+                }
+              } else {
+                isUnlimited = true;
+              }
+            }
+
+            // Jika akun guru adalah Free (Basic), batasi maksimal 40 siswa per ujian
+            if (!isUnlimited) {
+              const { count, error: countErr } = await supabase
+                .from('student_sessions')
+                .select('id', { count: 'exact', head: true })
+                .eq('exam_id', examId);
+
+              if (!countErr && typeof count === 'number' && count >= 40) {
+                return {
+                  allowed: false,
+                  reason: 'capacity_exceeded',
+                  message: 'Kapasitas Ujian Penuh: Sesi ujian ini telah mencapai batas maksimal 40 siswa (Paket Guru Basic). Silakan hubungi guru pengawas Anda untuk meng-upgrade ke akun Guru PRO agar kapasitas peserta menjadi tanpa batas (Unlimited).',
+                };
+              }
+            }
+          }
+        } catch (capErr) {
+          console.warn('Quota check exception:', capErr);
+        }
       }
 
-      if (session.status === 'timed_out') {
-        return {
-          allowed: false,
-          reason: 'timed_out',
-          message: 'Akses Ditutup: Waktu pengerjaan ujian Anda telah habis.',
-          existingSession: session,
-        };
-      }
-
-      return {
-        allowed: true,
-        reason: 'active_working',
-        existingSession: session,
-      };
+      return { allowed: true };
     } catch (err: any) {
       console.warn('checkStudentSessionAccess exception:', err);
       return { allowed: true };

@@ -7,16 +7,26 @@ import {
   Search, 
   FileCheck,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  Lock,
+  Sparkles
 } from 'lucide-react';
 import type { GradeRecord, ExamSettings } from '../../types/exam';
+import type { TeacherSubscription } from '../../types/subscription';
 
 interface GradeAnalyticsProps {
   grades: GradeRecord[];
   examSettings: ExamSettings;
+  subscription?: TeacherSubscription;
+  onOpenUpgradeModal?: (title?: string, desc?: string) => void;
 }
 
-export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({ grades, examSettings }) => {
+export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
+  grades,
+  examSettings,
+  subscription,
+  onOpenUpgradeModal,
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'Lulus' | 'Remedial'>('all');
 
@@ -62,6 +72,21 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({ grades, examSett
     document.body.removeChild(link);
   };
 
+  const handleExportXLSX = () => {
+    if (subscription?.tier === 'free') {
+      if (onOpenUpgradeModal) {
+        onOpenUpgradeModal(
+          'Buka Format Raport Excel (.xlsx)',
+          'Ekspor format raport Excel (.xlsx) dengan lembar nilai resmi, analisis butir soal, dan rekap rombel tersedia khusus untuk akun Guru PRO & Lisensi Sekolah.'
+        );
+      }
+      return;
+    }
+
+    // Export formatted data for PRO / School
+    handleExportCSV();
+  };
+
   return (
     <div className="p-5 space-y-4 max-w-7xl mx-auto">
       {/* Top Banner & Export Action */}
@@ -80,13 +105,42 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({ grades, examSett
           </span>
         </div>
 
-        <button
-          onClick={handleExportCSV}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap shadow-xs"
-        >
-          <FileSpreadsheet className="w-4 h-4 text-slate-600 flex-shrink-0" />
-          <span>Ekspor ke Excel (.csv)</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Ekspor CSV Standar (Gratis untuk semua) */}
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap shadow-xs"
+            title="Ekspor CSV Standar"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
+            <span>Ekspor Standar (.CSV)</span>
+          </button>
+
+          {/* Ekspor Raport Excel Lengkap (PRO / School Feature) */}
+          <button
+            type="button"
+            onClick={handleExportXLSX}
+            className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-display font-bold transition-all cursor-pointer whitespace-nowrap shadow-xs ${
+              subscription?.tier === 'free'
+                ? 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200'
+                : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+            }`}
+            title={subscription?.tier === 'free' ? 'Fitur Guru PRO: Buka Ekspor Raport Excel (.xlsx)' : 'Ekspor Raport Excel Lengkap'}
+          >
+            {subscription?.tier === 'free' ? (
+              <Lock className="w-3.5 h-3.5 text-amber-700 flex-shrink-0" />
+            ) : (
+              <Sparkles className="w-3.5 h-3.5 text-emerald-100 flex-shrink-0" />
+            )}
+            <span>Raport Excel (.XLSX)</span>
+            {subscription?.tier === 'free' && (
+              <span className="px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded text-[9px] font-mono font-black">
+                PRO
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* KPI Cards Grid */}

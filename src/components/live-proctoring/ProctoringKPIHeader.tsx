@@ -6,26 +6,35 @@ import {
   AlertTriangle, 
   PlusCircle, 
   Lock,
-  Radio
+  Radio,
+  Zap
 } from 'lucide-react';
 import type { StudentProctoring } from '../../types/exam';
+import type { TeacherSubscription } from '../../types/subscription';
 
 interface ProctoringKPIHeaderProps {
   students: StudentProctoring[];
   onAddGlobalTime: (minutes: number) => void;
   onLockAllExams: () => void;
+  subscription?: TeacherSubscription;
+  onOpenUpgradeModal?: (title?: string, description?: string) => void;
 }
 
 export const ProctoringKPIHeader: React.FC<ProctoringKPIHeaderProps> = ({
   students,
   onAddGlobalTime,
   onLockAllExams,
+  subscription,
+  onOpenUpgradeModal,
 }) => {
   const total = students.length;
   const submitted = students.filter((s) => s.status === 'submitted').length;
   const inProgress = students.filter((s) => s.status === 'working' || s.status === 'violation_flagged').length;
   const violations = students.reduce((sum, s) => sum + s.violationCount, 0);
   const studentsWithViolation = students.filter((s) => s.violationCount > 0).length;
+
+  const isFree = !subscription || subscription.tier === 'free';
+  const isCapacityFull = isFree && total >= 40;
 
   return (
     <div className="space-y-3.5">
@@ -68,20 +77,77 @@ export const ProctoringKPIHeader: React.FC<ProctoringKPIHeaderProps> = ({
         </div>
       </div>
 
+      {/* Warning Banner Jika Kuota Siswa Free Tier Penuh */}
+      {isCapacityFull && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-amber-900 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 font-bold flex-shrink-0 text-base shadow-2xs">
+              ⚠️
+            </div>
+            <div>
+              <p className="font-display font-bold text-xs text-amber-950">
+                Kapasitas Maksimal 40 Siswa Tercapai (Paket Guru Basic)
+              </p>
+              <p className="text-[11px] text-amber-800 font-sans mt-0.5 leading-relaxed">
+                Siswa baru yang mencoba login ujian akan ditolak oleh sistem. Upgrade ke <strong>Guru PRO</strong> untuk kapasitas peserta tanpa batas (Unlimited).
+              </p>
+            </div>
+          </div>
+          {onOpenUpgradeModal && (
+            <button
+              type="button"
+              onClick={() =>
+                onOpenUpgradeModal(
+                  'Buka Kapasitas Siswa Tanpa Batas',
+                  'Sesi ujian Anda telah mencapai batas kuota maksimal 40 siswa (Paket Guru Basic). Tingkatkan ke Guru PRO untuk kuota siswa tanpa batas (Unlimited) dan pemantauan lintas kelas yang leluasa.'
+                )
+              }
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-display font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap"
+            >
+              <Zap className="w-3.5 h-3.5 text-amber-200 fill-amber-200" />
+              <span>Upgrade ke PRO</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Total Siswa */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className={`p-3.5 rounded-2xl border shadow-xs flex items-center justify-between transition-colors ${
+          isCapacityFull ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200'
+        }`}>
           <div className="space-y-0.5">
-            <span className="text-[10px] font-display font-bold text-slate-400 uppercase tracking-wider block">
-              Total Peserta
-            </span>
-            <div className="text-xl font-display font-black text-slate-900 tracking-tight leading-tight">
-              {total} <span className="text-xs font-display font-semibold text-slate-400">Siswa</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] font-display font-bold text-slate-400 uppercase tracking-wider block">
+                Total Peserta
+              </span>
+              {isFree ? (
+                <span className="px-1.5 py-0.5 bg-slate-100 text-slate-600 text-[9px] font-bold rounded">
+                  Max 40
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded">
+                  Unlimited
+                </span>
+              )}
             </div>
-            <span className="text-[11px] text-slate-500 font-sans block">Sesi terhubung</span>
+            <div className="text-xl font-display font-black text-slate-900 tracking-tight leading-tight">
+              {total}
+              {isFree && <span className="text-xs font-semibold text-slate-400 font-sans"> / 40</span>}{' '}
+              <span className="text-xs font-display font-semibold text-slate-400">Siswa</span>
+            </div>
+            <span className={`text-[11px] font-sans block ${isCapacityFull ? 'text-amber-700 font-semibold' : 'text-slate-500'}`}>
+              {isCapacityFull
+                ? 'Kuota penuh (Basic)'
+                : isFree
+                ? `Sisa kuota: ${Math.max(0, 40 - total)} siswa`
+                : 'Sesi terhubung (PRO)'}
+            </span>
           </div>
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+            isCapacityFull ? 'bg-amber-100 text-amber-700' : 'bg-blue-50 text-blue-600'
+          }`}>
             <Users className="w-4.5 h-4.5" />
           </div>
         </div>

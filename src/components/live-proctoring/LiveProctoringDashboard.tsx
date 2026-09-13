@@ -15,6 +15,7 @@ import { StudentActionModal } from './StudentActionModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { examService } from '../../services/examService';
 import type { StudentProctoring, ViolationLogItem, ExamSettings } from '../../types/exam';
+import type { TeacherSubscription } from '../../types/subscription';
 
 interface LiveProctoringDashboardProps {
   students: StudentProctoring[];
@@ -24,6 +25,8 @@ interface LiveProctoringDashboardProps {
   activeTotalQuestions?: number;
   allExams?: ExamSettings[];
   activeExam?: ExamSettings;
+  subscription?: TeacherSubscription;
+  onOpenUpgradeModal?: (title?: string, description?: string) => void;
   onSelectExam?: (exam: ExamSettings) => void;
   onToggleExamAccess?: (examId: string, newStatus: 'published' | 'closed') => Promise<void>;
 }
@@ -36,6 +39,8 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
   activeTotalQuestions = 5,
   allExams = [],
   activeExam,
+  subscription,
+  onOpenUpgradeModal,
   onSelectExam,
   onToggleExamAccess,
 }) => {
@@ -434,6 +439,8 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
         students={students}
         onAddGlobalTime={handleAddGlobalTime}
         onLockAllExams={handleLockAllExams}
+        subscription={subscription}
+        onOpenUpgradeModal={onOpenUpgradeModal}
       />
 
       {/* Main Grid: Student Table & Live Violation Feed */}

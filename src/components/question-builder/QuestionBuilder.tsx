@@ -26,12 +26,16 @@ import { examService } from '../../services/examService';
 
 import { generateUUID } from '../../services/examService';
 
+import type { TeacherSubscription } from '../../types/subscription';
+
 interface QuestionBuilderProps {
   examSettings: ExamSettings;
   setExamSettings: React.Dispatch<React.SetStateAction<ExamSettings>>;
   questions: Question[];
   setQuestions: React.Dispatch<React.SetStateAction<Question[]>>;
   allExams: ExamSettings[];
+  subscription?: TeacherSubscription;
+  onOpenUpgradeModal?: (title?: string, desc?: string) => void;
   onRefreshExams: () => Promise<void>;
   onSelectExamForEdit: (exam: ExamSettings) => void;
   onSetActiveExamForProctoring: (exam: ExamSettings) => void;
@@ -59,6 +63,8 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
   questions,
   setQuestions,
   allExams,
+  subscription,
+  onOpenUpgradeModal,
   onRefreshExams,
   onSelectExamForEdit,
   onSetActiveExamForProctoring,
@@ -254,6 +260,8 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
         }}
         onDeleteExam={onDeleteExam}
         onToggleExamAccess={onToggleExamAccess}
+        subscription={subscription}
+        onOpenUpgradeModal={onOpenUpgradeModal}
       />
     );
   }

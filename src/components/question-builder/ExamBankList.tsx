@@ -17,15 +17,19 @@ import {
   ShieldCheck,
   Lock,
   AlertCircle,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 import type { ExamSettings } from '../../types/exam';
+import type { TeacherSubscription } from '../../types/subscription';
 import { examService, generateUUID } from '../../services/examService';
 import { ConfirmModal } from '../common/ConfirmModal';
 
 interface ExamBankListProps {
   exams: ExamSettings[];
   activeExamId: string;
+  subscription?: TeacherSubscription;
+  onOpenUpgradeModal?: (title?: string, desc?: string) => void;
   onSelectExamForEdit: (exam: ExamSettings) => void;
   onSetActiveExamForProctoring: (exam: ExamSettings) => void;
   onRefreshExams: () => Promise<void>;
@@ -37,6 +41,8 @@ interface ExamBankListProps {
 export const ExamBankList: React.FC<ExamBankListProps> = ({
   exams,
   activeExamId,
+  subscription,
+  onOpenUpgradeModal,
   onSelectExamForEdit,
   onSetActiveExamForProctoring,
   onRefreshExams,
@@ -118,6 +124,17 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
   const handleOpenDuplicateModal = (e: React.MouseEvent, exam: ExamSettings) => {
     e.stopPropagation();
+    const isFree = subscription?.tier === 'free';
+    const maxExams = subscription?.maxExamsPerMonth ?? 3;
+    if (isFree && exams.length >= maxExams) {
+      if (onOpenUpgradeModal) {
+        onOpenUpgradeModal(
+          'Batas 3 Sesi Ujian Tercapai',
+          `Akun Guru Basic dibatasi maksimal ${maxExams} paket soal aktif. Tingkatkan ke Guru PRO untuk menduplikasi paket soal tanpa batas.`
+        );
+      }
+      return;
+    }
     setDuplicateTargetExam(exam);
     setDuplicateTitle(`${exam.title} (Kelas Baru)`);
     setDuplicateGradeLevel(exam.gradeLevel || 'Kelas X (Fase E)');
@@ -187,6 +204,17 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
   };
 
   const handleOpenCreateModal = () => {
+    const isFree = subscription?.tier === 'free';
+    const maxExams = subscription?.maxExamsPerMonth ?? 3;
+    if (isFree && exams.length >= maxExams) {
+      if (onOpenUpgradeModal) {
+        onOpenUpgradeModal(
+          'Batas 3 Sesi Ujian Tercapai',
+          `Akun Guru Basic dibatasi maksimal ${maxExams} paket soal aktif. Tingkatkan ke Guru PRO untuk membuat paket soal tanpa batas.`
+        );
+      }
+      return;
+    }
     setNewTitle('');
     setNewSubject('');
     setNewGradeLevel('Kelas X (Fase E)');
@@ -265,13 +293,37 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-display font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer hover:scale-[1.01]"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Buat Bank Soal Baru</span>
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Quota Badge Indicator */}
+          {subscription?.tier === 'free' ? (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200/80 rounded-xl text-xs">
+              <span className="font-semibold text-amber-800">
+                {exams.length}/3 Ujian Digunakan
+              </span>
+              <button
+                type="button"
+                onClick={() => onOpenUpgradeModal?.('Upgrade ke Guru PRO', 'Buka kuota ujian tanpa batas, kapasitas siswa tak terhingga, dan fitur raport otomatis.')}
+                className="text-blue-600 hover:text-blue-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-0.5"
+              >
+                <span>Upgrade PRO</span>
+                <span>→</span>
+              </button>
+            </div>
+          ) : (
+            <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-xl text-xs font-bold font-mono text-blue-700 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+              <span>{subscription?.tier === 'school' ? 'LISENSI SEKOLAH' : 'UNLIMITED PRO'}</span>
+            </div>
+          )}
+
+          <button
+            onClick={handleOpenCreateModal}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-display font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer hover:scale-[1.01]"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Buat Bank Soal Baru</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Bank Soal List Table */}

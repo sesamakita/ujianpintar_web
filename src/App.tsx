@@ -123,7 +123,22 @@ export function App() {
   const [violationLogs, setViolationLogs] = useState<ViolationLogItem[]>(initialViolationLogs);
   const [grades, setGrades] = useState<GradeRecord[]>(initialGradeRecords);
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
-  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [upgradeModalConfig, setUpgradeModalConfig] = useState<{
+    isOpen: boolean;
+    title?: string;
+    description?: string;
+  }>({
+    isOpen: false,
+  });
+
+  const handleOpenUpgradeModal = (title?: string, description?: string) => {
+    setUpgradeModalConfig({
+      isOpen: true,
+      title,
+      description,
+    });
+  };
+
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const [subscription, setSubscription] = useState<TeacherSubscription>({
@@ -667,7 +682,7 @@ export function App() {
           teacherName={currentUser.name}
           avatarUrl={currentUser.avatarUrl}
           subscription={subscription}
-          onOpenUpgradeModal={() => setIsUpgradeModalOpen(true)}
+          onOpenUpgradeModal={() => handleOpenUpgradeModal()}
           onNavigateTab={(tab) => setActiveTab(tab)}
           onToggleMobileMenu={() => setIsMobileSidebarOpen((prev) => !prev)}
         />
@@ -698,6 +713,8 @@ export function App() {
               questions={questions}
               setQuestions={setQuestions}
               allExams={allExams}
+              subscription={subscription}
+              onOpenUpgradeModal={handleOpenUpgradeModal}
               onRefreshExams={async () => {
                 await refreshTeacherExams();
               }}
@@ -724,6 +741,8 @@ export function App() {
               activeTotalQuestions={questions.length}
               allExams={allExams}
               activeExam={examSettings}
+              subscription={subscription}
+              onOpenUpgradeModal={handleOpenUpgradeModal}
               onSelectExam={handleSelectExamForProctoring}
               onToggleExamAccess={handleToggleExamAccess}
             />
@@ -733,6 +752,8 @@ export function App() {
             <GradeAnalytics
               grades={grades}
               examSettings={examSettings}
+              subscription={subscription}
+              onOpenUpgradeModal={handleOpenUpgradeModal}
             />
           )}
 
@@ -774,9 +795,14 @@ export function App() {
 
       {/* Global Upgrade to PRO Modal */}
       <UpgradePromptModal
-        isOpen={isUpgradeModalOpen}
-        onClose={() => setIsUpgradeModalOpen(false)}
-        onOpenPlans={() => setActiveTab('subscription')}
+        isOpen={upgradeModalConfig.isOpen}
+        onClose={() => setUpgradeModalConfig((prev) => ({ ...prev, isOpen: false }))}
+        onOpenPlans={() => {
+          setUpgradeModalConfig((prev) => ({ ...prev, isOpen: false }));
+          setActiveTab('subscription');
+        }}
+        featureTitle={upgradeModalConfig.title}
+        featureDescription={upgradeModalConfig.description}
       />
     </div>
   );
