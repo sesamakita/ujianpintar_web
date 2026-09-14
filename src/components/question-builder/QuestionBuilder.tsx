@@ -44,6 +44,7 @@ interface QuestionBuilderProps {
   onToggleExamAccess?: (examId: string, newStatus: 'published' | 'closed') => Promise<void>;
   builderView: 'list' | 'editor';
   setBuilderView: (view: 'list' | 'editor') => void;
+  isExamsLoading?: boolean;
   onOpenMobilePreview: () => void;
   isMobilePreviewOpen: boolean;
   setIsMobilePreviewOpen: (open: boolean) => void;
@@ -72,6 +73,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
   onDeleteExam,
   builderView,
   setBuilderView,
+  isExamsLoading = false,
   onOpenMobilePreview,
   isMobilePreviewOpen,
   setIsMobilePreviewOpen,
@@ -248,6 +250,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
       <ExamBankList
         exams={allExams}
         activeExamId={examSettings.id}
+        isLoading={isExamsLoading}
         onSelectExamForEdit={(selected) => {
           onSelectExamForEdit(selected);
           setBuilderView('editor');

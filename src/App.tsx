@@ -118,6 +118,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'builder' | 'proctoring' | 'analytics' | 'settings' | 'subscription'>('builder');
   const [builderView, setBuilderView] = useState<'list' | 'editor'>('list');
   const [allExams, setAllExams] = useState<ExamSettings[]>([]);
+  const [isExamsLoading, setIsExamsLoading] = useState<boolean>(false);
   const [examSettings, setExamSettings] = useState<ExamSettings>(initialExamSettings);
   const [questions, setQuestions] = useState<Question[]>(initialQuestions);
   const [students, setStudents] = useState<StudentProctoring[]>(initialStudents);
@@ -215,23 +216,32 @@ export function App() {
             setActiveTab('settings');
           }
 
-          // Fetch all exams for this teacher
-          const teacherExams = await examService.getAllTeacherExams(user.email);
+          // 1. INSTANT DISPLAY FROM LOCAL CACHE (0ms response):
+          const cachedExams = examService.getCachedExams(user.email);
+          if (cachedExams && cachedExams.length > 0) {
+            setAllExams(cachedExams);
+            setExamSettings(cachedExams[0]);
+          } else {
+            setIsExamsLoading(true);
+          }
+
+          // 2. Fetch fresh exams for this teacher from Supabase
+          const teacherExams = await examService.getAllTeacherExams(user.email, user.id);
           if (!isMounted) return;
-          setAllExams(teacherExams);
+          setIsExamsLoading(false);
 
           if (teacherExams && teacherExams.length > 0) {
+            setAllExams(teacherExams);
             const firstExam = teacherExams[0];
+            setExamSettings(firstExam);
+
             const examData = await examService.getExamById(firstExam.id);
             if (!isMounted) return;
-            if (examData.exam) {
-              setExamSettings(examData.exam);
-            }
             if (examData.questions) {
               setQuestions(examData.questions);
             }
-          } else {
-            const latestExamData = await examService.getLatestExam(user.email);
+          } else if (cachedExams.length === 0) {
+            const latestExamData = await examService.getLatestExam(user.email, user.id);
             if (!isMounted) return;
             if (latestExamData.exam) {
               setExamSettings(latestExamData.exam);
@@ -251,6 +261,7 @@ export function App() {
           setIsAuthenticated(false);
         }
       } catch (err) {
+        setIsExamsLoading(false);
         console.warn('Session & exam restore warning:', err);
       } finally {
         const elapsedTime = Date.now() - splashStartTime;
@@ -269,7 +280,12 @@ export function App() {
     // Listen for Supabase OAuth login events (e.g. after selecting Google account)
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        restoreSession();
+        setIsAuthenticated((prev) => {
+          if (!prev) {
+            restoreSession();
+          }
+          return true;
+        });
       } else if (event === 'SIGNED_OUT') {
         setIsAuthenticated(false);
         setCurrentView('landing');
@@ -474,7 +490,7 @@ export function App() {
     }
   };
 
-  const handleLoginSuccess = async (userData: { name: string; email: string; school: string; subject: string }) => {
+  const handleLoginSuccess = async (userData: { id?: string; name: string; email: string; school: string; subject: string }) => {
     setCurrentUser(userData);
     setIsAuthenticated(true);
     setCurrentView('portal');
@@ -489,21 +505,33 @@ export function App() {
     setGrades([]);
     setViolationLogs([]);
 
+    // 1. INSTANT DISPLAY DARI CACHE LOKAL (0 ms):
+    // Tampilkan katalog bank soal seketika tanpa menunggu jaringan
+    const cachedExams = examService.getCachedExams(userData.email);
+    if (cachedExams && cachedExams.length > 0) {
+      setAllExams(cachedExams);
+      setExamSettings(cachedExams[0]);
+    } else {
+      setIsExamsLoading(true);
+    }
+
+    // 2. BACKGROUND SYNC DARI SUPABASE:
+    // Sinkronkan data terbaru dengan teacher_id terverifikasi
     try {
-      const teacherExams = await examService.getAllTeacherExams(userData.email);
-      setAllExams(teacherExams);
+      const teacherExams = await examService.getAllTeacherExams(userData.email, userData.id);
+      setIsExamsLoading(false);
 
       if (teacherExams && teacherExams.length > 0) {
+        setAllExams(teacherExams);
         const firstExam = teacherExams[0];
+        setExamSettings(firstExam);
+
         const examData = await examService.getExamById(firstExam.id);
-        if (examData.exam) {
-          setExamSettings(examData.exam);
-        }
         if (examData.questions) {
           setQuestions(examData.questions);
         }
-      } else {
-        const latestExamData = await examService.getLatestExam(userData.email);
+      } else if (cachedExams.length === 0) {
+        const latestExamData = await examService.getLatestExam(userData.email, userData.id);
         if (latestExamData.exam) {
           setExamSettings(latestExamData.exam);
           setQuestions(latestExamData.questions || []);
@@ -519,6 +547,7 @@ export function App() {
         }
       }
     } catch (err) {
+      setIsExamsLoading(false);
       console.warn('Load exam on login error:', err);
     }
   };
@@ -755,6 +784,7 @@ export function App() {
               onDeleteExam={handleDeleteExam}
               builderView={builderView}
               setBuilderView={setBuilderView}
+              isExamsLoading={isExamsLoading}
               onOpenMobilePreview={() => setIsMobilePreviewOpen(true)}
               isMobilePreviewOpen={isMobilePreviewOpen}
               setIsMobilePreviewOpen={setIsMobilePreviewOpen}

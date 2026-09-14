@@ -169,34 +169,56 @@ export const examService = {
   },
 
   /**
+   * Get cached exams synchronously from localStorage (0ms instant response)
+   */
+  getCachedExams(teacherEmail?: string): ExamSettings[] {
+    if (typeof window === 'undefined') return [];
+    const cleanEmail = (teacherEmail || '').toLowerCase().trim();
+    if (!cleanEmail) return [];
+    const cached = localStorage.getItem(`ujianpintar_all_exams_${cleanEmail}`);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [];
+  },
+
+  /**
    * Fetch All Exams created by the authenticated Teacher
    */
-  async getAllTeacherExams(teacherEmail?: string): Promise<ExamSettings[]> {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const activeTeacherId = user?.id;
-      const cleanEmail = (user?.email || teacherEmail || '').toLowerCase().trim();
+  async getAllTeacherExams(teacherEmail?: string, teacherId?: string): Promise<ExamSettings[]> {
+    const cleanEmail = (teacherEmail || '').toLowerCase().trim();
 
-      let query = supabase.from('exams').select('*, questions(id, points)');
-      if (activeTeacherId) {
-        query = query.eq('teacher_id', activeTeacherId);
-      } else if (cleanEmail) {
-        const { data: prof } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
-        if (prof?.id) {
-          query = query.eq('teacher_id', prof.id);
-        }
+    try {
+      // 1. Ambil teacherId secara instan: parameter > session di memori > auth.getUser
+      let activeTeacherId = teacherId;
+      if (!activeTeacherId) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        activeTeacherId = sessionData?.session?.user?.id;
+      }
+      if (!activeTeacherId) {
+        const { data: userData } = await supabase.auth.getUser();
+        activeTeacherId = userData?.user?.id;
       }
 
-      const { data: exams, error } = await query.order('created_at', { ascending: false });
+      // Jika belum ada session/user, langsung kembalikan cache lokal
+      if (!activeTeacherId) {
+        if (cleanEmail) {
+          return this.getCachedExams(cleanEmail);
+        }
+        return [];
+      }
+
+      // 2. Query tabel exams berdasarkan teacher_id yang valid
+      const { data: exams, error } = await supabase
+        .from('exams')
+        .select('*, questions(id, points)')
+        .eq('teacher_id', activeTeacherId)
+        .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(exams)) {
-        if (exams.length === 0) {
-          if (typeof window !== 'undefined' && cleanEmail) {
-            localStorage.setItem(`ujianpintar_all_exams_${cleanEmail}`, JSON.stringify([]));
-          }
-          return [];
-        }
-
         const formatted: ExamSettings[] = exams.map((row: any) => {
           const qList = Array.isArray(row.questions) ? row.questions : [];
           const totalPoints = qList.reduce((sum: number, q: any) => sum + (q.points || 0), 0);
@@ -233,19 +255,17 @@ export const examService = {
         return formatted;
       }
 
-      // Fallback to local storage HANYA jika terjadi error koneksi / offline
-      if (error && typeof window !== 'undefined' && cleanEmail) {
-        const cached = localStorage.getItem(`ujianpintar_all_exams_${cleanEmail}`);
-        if (cached) {
-          try {
-            return JSON.parse(cached);
-          } catch {}
-        }
+      // Fallback ke cache lokal jika terjadi error koneksi / offline
+      if (cleanEmail) {
+        return this.getCachedExams(cleanEmail);
       }
 
       return [];
     } catch (err: any) {
       console.warn('getAllTeacherExams exception:', err.message);
+      if (cleanEmail) {
+        return this.getCachedExams(cleanEmail);
+      }
       return [];
     }
   },
@@ -494,24 +514,39 @@ export const examService = {
   /**
    * Fetch the latest published Exam session and its questions strictly for the CURRENT teacher
    */
-  async getLatestExam(teacherEmail?: string): Promise<{ exam: ExamSettings | null; questions: Question[] }> {
+  async getLatestExam(teacherEmail?: string, teacherId?: string): Promise<{ exam: ExamSettings | null; questions: Question[] }> {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const activeTeacherId = user?.id;
-      const cleanEmail = (user?.email || teacherEmail || '').toLowerCase().trim();
+      const cleanEmail = (teacherEmail || '').toLowerCase().trim();
 
-      // 1. Fetch latest exam from Supabase strictly for this teacher account
-      let examQuery = supabase.from('exams').select('*');
-      if (activeTeacherId) {
-        examQuery = examQuery.eq('teacher_id', activeTeacherId);
-      } else if (cleanEmail) {
-        const { data: prof } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
-        if (prof?.id) {
-          examQuery = examQuery.eq('teacher_id', prof.id);
-        }
+      // 1. Ambil teacherId secara instan: parameter > session di memori > auth.getUser
+      let activeTeacherId = teacherId;
+      if (!activeTeacherId) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        activeTeacherId = sessionData?.session?.user?.id;
+      }
+      if (!activeTeacherId) {
+        const { data: userData } = await supabase.auth.getUser();
+        activeTeacherId = userData?.user?.id;
       }
 
-      const { data: exams, error: examError } = await examQuery
+      if (!activeTeacherId) {
+        if (cleanEmail && typeof window !== 'undefined') {
+          const cachedExamRaw = localStorage.getItem(`ujianpintar_published_exam_${cleanEmail}`);
+          const cachedQuestionsRaw = localStorage.getItem(`ujianpintar_published_questions_${cleanEmail}`);
+          if (cachedExamRaw) {
+            try {
+              return { exam: JSON.parse(cachedExamRaw), questions: cachedQuestionsRaw ? JSON.parse(cachedQuestionsRaw) : [] };
+            } catch {}
+          }
+        }
+        return { exam: null, questions: [] };
+      }
+
+      // 2. Fetch latest exam from Supabase strictly for this teacher account
+      const { data: exams, error: examError } = await supabase
+        .from('exams')
+        .select('*')
+        .eq('teacher_id', activeTeacherId)
         .order('created_at', { ascending: false })
         .limit(1);
 

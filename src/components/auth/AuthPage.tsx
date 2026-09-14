@@ -22,7 +22,7 @@ import { AppLogoBadge } from '../common/AppLogo';
 import { authService } from '../../services/authService';
 
 interface AuthPageProps {
-  onLoginSuccess: (userData: { name: string; email: string; school: string; subject: string }) => void;
+  onLoginSuccess: (userData: { id?: string; name: string; email: string; school: string; subject: string }) => void;
   onBackToLanding?: () => void;
   initialMode?: 'login' | 'signup' | 'forgot';
 }
@@ -152,6 +152,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         return; // ← STOP jika error
       }
       onLoginSuccess({
+        id: res.user?.id,
         name: res.profile?.name || fullName || 'Rahmat, S.Pd.',
         email: email || 'rahmat.guru@gmail.com',
         school: res.profile?.school || schoolName || 'SMA Negeri 1 Indonesia',
@@ -184,6 +185,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         return; // ← STOP — jangan izinkan masuk
       }
       onLoginSuccess({
+        id: res.user?.id,
         name: res.profile?.name || 'Rahmat, S.Pd.',
         email: email || 'rahmat.guru@gmail.com',
         school: res.profile?.school || 'SMA Negeri 1 Indonesia',

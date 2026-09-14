@@ -29,6 +29,7 @@ interface ExamBankListProps {
   exams: ExamSettings[];
   activeExamId: string;
   subscription?: TeacherSubscription;
+  isLoading?: boolean;
   onOpenUpgradeModal?: (title?: string, desc?: string) => void;
   onSelectExamForEdit: (exam: ExamSettings) => void;
   onSetActiveExamForProctoring: (exam: ExamSettings) => void;
@@ -42,6 +43,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
   exams,
   activeExamId,
   subscription,
+  isLoading = false,
   onOpenUpgradeModal,
   onSelectExamForEdit,
   onSetActiveExamForProctoring,
@@ -328,7 +330,26 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
       {/* Main Bank Soal List Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-        {filteredExams.length === 0 && !searchQuery ? (
+        {isLoading && exams.length === 0 ? (
+          <div className="p-12 text-center space-y-4">
+            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto">
+              <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="font-display font-bold text-slate-800 text-sm">
+                Memuat Katalog Bank Soal & PIN Akses...
+              </h3>
+              <p className="text-xs text-slate-400 font-sans max-w-sm mx-auto">
+                Sinkronisasi modul ujian dan butir soal dari database sekolah.
+              </p>
+            </div>
+            {/* Shimmer skeleton bars */}
+            <div className="max-w-md mx-auto space-y-2.5 pt-2">
+              <div className="h-4 bg-slate-100 rounded-lg animate-pulse w-3/4 mx-auto" />
+              <div className="h-4 bg-slate-100 rounded-lg animate-pulse w-1/2 mx-auto" />
+            </div>
+          </div>
+        ) : filteredExams.length === 0 && !searchQuery ? (
           <div className="p-12 text-center space-y-3">
             <div className="w-14 h-14 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto">
               <Layers className="w-6 h-6" />
