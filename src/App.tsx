@@ -200,6 +200,9 @@ export function App() {
             setSubscription(userSub);
           }
           setIsAuthenticated(true);
+          try {
+            await supabase.auth.refreshSession();
+          } catch {}
 
           // Jika kembali dari redirect Google OAuth (ada access_token di hash atau code di search)
           const isOAuthCallback = typeof window !== 'undefined' && (

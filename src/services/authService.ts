@@ -522,19 +522,32 @@ export const authService = {
       const { data: { user } } = await supabase.auth.getUser();
       const cleanEmail = (user?.email || '').toLowerCase().trim();
 
-      // Save to localStorage
+      // Save to localStorage (primary fast store)
       if (cleanEmail) {
         localStorage.setItem(`ujianpintar_avatar_${cleanEmail}`, base64DataUrl);
       }
 
-      // Also persist to Supabase user_metadata (best-effort)
+      // Also persist to profiles table
       if (user) {
         try {
-          await supabase.auth.updateUser({
-            data: { avatar_url: base64DataUrl },
-          });
+          await supabase
+            .from('profiles')
+            .update({ avatar_url: base64DataUrl })
+            .eq('id', user.id);
         } catch {
-          // non-critical, localStorage is the primary store
+          // non-critical
+        }
+
+        // Only persist to Supabase Auth metadata if it is a real short URL, NOT a base64 data URL
+        // (Base64 in user_metadata bloats the JWT access token and triggers HTTP 400 Bad Request)
+        if (base64DataUrl && !base64DataUrl.startsWith('data:')) {
+          try {
+            await supabase.auth.updateUser({
+              data: { avatar_url: base64DataUrl },
+            });
+          } catch {
+            // non-critical
+          }
         }
       }
 
