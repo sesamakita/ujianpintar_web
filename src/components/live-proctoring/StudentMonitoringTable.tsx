@@ -23,13 +23,15 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
   const [statusFilter, setStatusFilter] = useState<'all' | 'working' | 'submitted' | 'violation'>('all');
 
   const filteredStudents = students.filter((s) => {
+    const sName = s?.name || 'Siswa';
+    const sNisn = s?.nisn || '';
     const matchSearch =
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.nisn.includes(searchQuery);
+      sName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      sNisn.includes(searchQuery);
     
     if (!matchSearch) return false;
 
-    if (statusFilter === 'working') return s.status === 'working';
+    if (statusFilter === 'working') return s.status === 'working' || s.status === 'violation_flagged';
     if (statusFilter === 'submitted') return s.status === 'submitted';
     if (statusFilter === 'violation') return s.violationCount > 0;
     return true;
@@ -151,6 +153,9 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                 const currentProg = Math.min(totalQ, Math.max(0, Number(student.progressCount) || 0));
                 const progressPct = Math.min(100, Math.round((currentProg / totalQ) * 100));
                 const hasViolation = student.violationCount > 0;
+                const safeName = student.name || 'Siswa';
+                const safeNisn = student.nisn || '-';
+                const safeClass = student.className || 'Kelas X';
 
                 return (
                   <tr
@@ -171,12 +176,12 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                               : 'bg-blue-100 text-blue-800'
                           }`}
                         >
-                          {student.name.substring(0, 2).toUpperCase()}
+                          {safeName.substring(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <div className="font-display font-bold text-slate-900 text-sm">{student.name}</div>
+                          <div className="font-display font-bold text-slate-900 text-sm">{safeName}</div>
                           <div className="text-[11px] text-slate-500 font-mono mt-0.5">
-                            {student.nisn} • {student.className}
+                            {safeNisn} • {safeClass}
                           </div>
                         </div>
                       </div>

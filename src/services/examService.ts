@@ -723,10 +723,16 @@ export const examService = {
   async getLiveStudents(examId?: string): Promise<StudentProctoring[]> {
     try {
       let query = supabase.from('student_sessions').select('*').order('started_at', { ascending: false });
-      if (examId) query = query.eq('exam_id', examId);
+      if (examId && examId !== 'all') {
+        query = query.eq('exam_id', examId);
+      }
 
       const { data, error } = await query;
-      if (error || !data) return [];
+      if (error) {
+        console.warn('getLiveStudents Supabase error:', error.message);
+        return [];
+      }
+      if (!data) return [];
 
       // Deduplicate by NISN to ensure each student only appears once
       const uniqueStudents = new Map<string, StudentProctoring>();
@@ -736,10 +742,10 @@ export const examService = {
           uniqueStudents.set(cleanNisn, {
             id: row.id,
             nisn: cleanNisn,
-            name: row.student_name,
-            className: row.class_name,
-            status: row.status,
-            remainingSeconds: row.remaining_seconds,
+            name: row.student_name || 'Siswa',
+            className: row.class_name || 'Kelas X',
+            status: row.status || 'working',
+            remainingSeconds: row.remaining_seconds !== undefined && row.remaining_seconds !== null ? Number(row.remaining_seconds) : 0,
             totalQuestions: row.total_questions || 5,
             progressCount: row.progress_count || 0,
             violationCount: row.violation_count || 0,
@@ -750,7 +756,8 @@ export const examService = {
       });
 
       return Array.from(uniqueStudents.values());
-    } catch {
+    } catch (err: any) {
+      console.warn('getLiveStudents exception:', err?.message || err);
       return [];
     }
   },
@@ -761,10 +768,16 @@ export const examService = {
   async getGradeRecords(examId?: string): Promise<GradeRecord[]> {
     try {
       let query = supabase.from('grade_records').select('*').order('created_at', { ascending: false });
-      if (examId) query = query.eq('exam_id', examId);
+      if (examId && examId !== 'all') {
+        query = query.eq('exam_id', examId);
+      }
 
       const { data, error } = await query;
-      if (error || !data) return [];
+      if (error) {
+        console.warn('getGradeRecords Supabase error:', error.message);
+        return [];
+      }
+      if (!data) return [];
 
       // Deduplicate by NISN
       const uniqueGrades = new Map<string, GradeRecord>();
@@ -772,13 +785,13 @@ export const examService = {
         const cleanNisn = (d.nisn || '').trim();
         if (cleanNisn && !uniqueGrades.has(cleanNisn)) {
           uniqueGrades.set(cleanNisn, {
-            studentId: d.student_id,
-            name: d.name,
+            studentId: d.student_id || `stu-${cleanNisn}`,
+            name: d.name || 'Siswa',
             nisn: cleanNisn,
-            className: d.class_name,
-            score: d.score,
+            className: d.class_name || 'Kelas X',
+            score: Number(d.score) || 0,
             maxScore: d.max_score || 100,
-            submittedAt: d.submitted_at,
+            submittedAt: d.submitted_at || '-',
             timeSpentMinutes: d.time_spent_minutes || 1,
             tabViolations: d.tab_violations || 0,
             status: d.status || 'Lulus',
@@ -787,7 +800,8 @@ export const examService = {
       });
 
       return Array.from(uniqueGrades.values());
-    } catch {
+    } catch (err: any) {
+      console.warn('getGradeRecords exception:', err?.message || err);
       return [];
     }
   },
@@ -798,20 +812,27 @@ export const examService = {
   async getViolationLogs(examId?: string): Promise<ViolationLogItem[]> {
     try {
       let query = supabase.from('violation_logs').select('*').order('created_at', { ascending: false });
-      if (examId) query = query.eq('exam_id', examId);
+      if (examId && examId !== 'all') {
+        query = query.eq('exam_id', examId);
+      }
 
       const { data, error } = await query;
-      if (error || !data) return [];
+      if (error) {
+        console.warn('getViolationLogs Supabase error:', error.message);
+        return [];
+      }
+      if (!data) return [];
 
       return data.map((d: any) => ({
         id: d.id,
-        timestamp: d.timestamp,
-        studentName: d.student_name,
-        studentNisn: d.student_nisn,
-        message: d.message,
+        timestamp: d.timestamp || new Date().toLocaleTimeString('id-ID'),
+        studentName: d.student_name || 'Siswa',
+        studentNisn: d.student_nisn || '-',
+        message: d.message || 'Pelanggaran terdeteksi',
         severity: d.severity || 'warning',
       }));
-    } catch {
+    } catch (err: any) {
+      console.warn('getViolationLogs exception:', err?.message || err);
       return [];
     }
   },
@@ -862,16 +883,16 @@ export const examService = {
         (payload: any) => {
           if (payload.new) {
             const row = payload.new;
-            if (examId && row.exam_id && row.exam_id !== examId) {
+            if (examId && examId !== 'all' && row.exam_id && row.exam_id !== examId) {
               return; // Ignore other exams' telemetry
             }
             const updatedStudent: StudentProctoring = {
               id: row.id,
-              name: row.student_name,
-              nisn: row.nisn,
-              className: row.class_name,
-              status: row.status,
-              remainingSeconds: row.remaining_seconds,
+              name: row.student_name || 'Siswa',
+              nisn: row.nisn || '',
+              className: row.class_name || 'Kelas X',
+              status: row.status || 'working',
+              remainingSeconds: row.remaining_seconds !== undefined && row.remaining_seconds !== null ? Number(row.remaining_seconds) : 0,
               totalQuestions: row.total_questions || 5,
               progressCount: row.progress_count || 0,
               violationCount: row.violation_count || 0,
@@ -888,15 +909,15 @@ export const examService = {
         (payload: any) => {
           if (payload.new) {
             const row = payload.new;
-            if (examId && row.exam_id && row.exam_id !== examId) {
+            if (examId && examId !== 'all' && row.exam_id && row.exam_id !== examId) {
               return; // Ignore other exams' violation logs
             }
             const newLog: ViolationLogItem = {
               id: row.id,
-              timestamp: row.timestamp,
-              studentName: row.student_name,
-              studentNisn: row.student_nisn,
-              message: row.message,
+              timestamp: row.timestamp || new Date().toLocaleTimeString('id-ID'),
+              studentName: row.student_name || 'Siswa',
+              studentNisn: row.student_nisn || '-',
+              message: row.message || 'Pelanggaran terdeteksi',
               severity: row.severity || 'warning',
             };
             onViolationLog(newLog);
@@ -909,17 +930,17 @@ export const examService = {
         (payload: any) => {
           if (payload.new && onGradeUpdate) {
             const d = payload.new;
-            if (examId && d.exam_id && d.exam_id !== examId) {
+            if (examId && examId !== 'all' && d.exam_id && d.exam_id !== examId) {
               return; // Ignore other exams' grades
             }
             const newGrade: GradeRecord = {
-              studentId: d.student_id,
-              name: d.name,
-              nisn: d.nisn,
-              className: d.class_name,
-              score: d.score,
+              studentId: d.student_id || `stu-${d.nisn}`,
+              name: d.name || 'Siswa',
+              nisn: d.nisn || '',
+              className: d.class_name || 'Kelas X',
+              score: Number(d.score) || 0,
               maxScore: d.max_score || 100,
-              submittedAt: d.submitted_at,
+              submittedAt: d.submitted_at || '-',
               timeSpentMinutes: d.time_spent_minutes || 1,
               tabViolations: d.tab_violations || 0,
               status: d.status || 'Lulus',

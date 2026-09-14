@@ -300,7 +300,15 @@ export function App() {
 
   // Fetch initial telemetry from Supabase & Subscribe to Real-Time Proctoring updates with polling heartbeat
   useEffect(() => {
-    if (!isAuthenticated || !examSettings?.id) return;
+    if (!isAuthenticated) return;
+
+    // Auto-recovery: Jika examSettings.id kosong tapi list ujian guru ada, pilih ujian pertama
+    if ((!examSettings?.id || examSettings.id === '') && allExams.length > 0) {
+      setExamSettings(allExams[0]);
+      return;
+    }
+
+    if (!examSettings?.id) return;
 
     let isCancelled = false;
     let unsubscribe: (() => void) | undefined;
@@ -349,15 +357,16 @@ export function App() {
       }
     };
 
-    // 1. Initial immediate fetch for this exam
+    // 1. Initial immediate fetch for this exam / class session
     fetchLatestData();
 
-    // 2. Setup 2.5 second polling fallback immediately so it is tracked synchronously
+    // 2. Setup polling fallback: 2.5 detik jika sedang di tab proctoring/analytics, 10 detik di tab lain
+    const intervalTime = (activeTab === 'proctoring' || activeTab === 'analytics') ? 2500 : 10000;
     pollInterval = setInterval(() => {
       if (!isCancelled) {
         fetchLatestData();
       }
-    }, 2500);
+    }, intervalTime);
 
     // 3. Realtime WebSockets listener for instant updates strictly for this exam (or all exams)
     unsubscribe = examService.subscribeToLiveProctoring(
@@ -399,7 +408,7 @@ export function App() {
       if (pollInterval) clearInterval(pollInterval);
       if (unsubscribe) unsubscribe();
     };
-  }, [isAuthenticated, examSettings.id]);
+  }, [isAuthenticated, examSettings?.id, activeTab, allExams.length]);
 
   const activeStudentsCount = students.filter((s) => s.status === 'working' || s.status === 'violation_flagged').length;
   const violationCount = students.reduce((sum, s) => sum + s.violationCount, 0);
@@ -422,18 +431,39 @@ export function App() {
 
   const handleSetActiveExamForProctoring = async (selectedExam: ExamSettings) => {
     try {
+      const isSameExam = examSettings?.id === selectedExam.id;
       setExamSettings(selectedExam);
-      setStudents([]);
-      setGrades([]);
-      setViolationLogs([]);
       setActiveTab('proctoring');
 
-      const data = await examService.getExamById(selectedExam.id);
+      // Jika berpindah ke ujian berbeda, bersihkan telemetri lama sambil memuat yang baru
+      if (!isSameExam) {
+        setStudents([]);
+        setGrades([]);
+        setViolationLogs([]);
+      }
+
+      const targetId = selectedExam.id === 'all' ? undefined : selectedExam.id;
+      const [data, remoteStudents, remoteGrades, remoteLogs] = await Promise.all([
+        examService.getExamById(selectedExam.id),
+        examService.getLiveStudents(targetId),
+        examService.getGradeRecords(targetId),
+        examService.getViolationLogs(targetId),
+      ]);
+
       if (data.exam) {
         setExamSettings((prev) => (prev.id === selectedExam.id ? { ...prev, ...data.exam } : prev));
       }
       if (data.questions) {
         setQuestions(data.questions);
+      }
+      if (remoteStudents && remoteStudents.length > 0) {
+        setStudents(remoteStudents);
+      }
+      if (remoteGrades && remoteGrades.length > 0) {
+        setGrades(remoteGrades);
+      }
+      if (remoteLogs && remoteLogs.length > 0) {
+        setViolationLogs(remoteLogs);
       }
     } catch (err) {
       console.warn('handleSetActiveExamForProctoring error:', err);
@@ -664,6 +694,8 @@ export function App() {
   }
 
   const handleSelectExamForProctoring = async (selected: ExamSettings) => {
+    const isSameExam = examSettings?.id === selected.id;
+
     // 1. INSTANT OPTIMISTIC UPDATE: Langsung terapkan pergantian kelas ke state (0ms delay)
     if (selected.id === 'all') {
       setExamSettings({
@@ -683,26 +715,60 @@ export function App() {
           fullScreenLock: true,
         },
       });
-      setStudents([]);
-      setGrades([]);
-      setViolationLogs([]);
+
+      if (!isSameExam) {
+        setStudents([]);
+        setGrades([]);
+        setViolationLogs([]);
+      }
+
+      // Ambil telemetri serentak lintas seluruh kelas langsung
+      try {
+        const [remoteStudents, remoteGrades, remoteLogs] = await Promise.all([
+          examService.getLiveStudents(undefined),
+          examService.getGradeRecords(undefined),
+          examService.getViolationLogs(undefined),
+        ]);
+        if (remoteStudents) setStudents(remoteStudents);
+        if (remoteGrades) setGrades(remoteGrades);
+        if (remoteLogs) setViolationLogs(remoteLogs);
+      } catch (err) {
+        console.warn('handleSelectExamForProctoring all classes error:', err);
+      }
       return;
     }
 
     // Terapkan konfigurasi kelas secara instan dari list ujian yang sudah ada di memory
     setExamSettings(selected);
-    setStudents([]);
-    setGrades([]);
-    setViolationLogs([]);
+    if (!isSameExam) {
+      setStudents([]);
+      setGrades([]);
+      setViolationLogs([]);
+    }
 
-    // 2. Di latar belakang (non-blocking), sinkronkan detail pertanyaan jika ada perubahan terbaru
+    // 2. Di latar belakang (non-blocking), sinkronkan detail pertanyaan dan telemetri langsung
     try {
-      const examData = await examService.getExamById(selected.id);
+      const [examData, remoteStudents, remoteGrades, remoteLogs] = await Promise.all([
+        examService.getExamById(selected.id),
+        examService.getLiveStudents(selected.id),
+        examService.getGradeRecords(selected.id),
+        examService.getViolationLogs(selected.id),
+      ]);
+
       if (examData.exam) {
         setExamSettings((prev) => (prev.id === selected.id ? { ...prev, ...examData.exam } : prev));
       }
       if (examData.questions) {
         setQuestions(examData.questions);
+      }
+      if (remoteStudents && remoteStudents.length > 0) {
+        setStudents(remoteStudents);
+      }
+      if (remoteGrades && remoteGrades.length > 0) {
+        setGrades(remoteGrades);
+      }
+      if (remoteLogs && remoteLogs.length > 0) {
+        setViolationLogs(remoteLogs);
       }
     } catch (err) {
       console.warn('handleSelectExamForProctoring background refresh error:', err);
