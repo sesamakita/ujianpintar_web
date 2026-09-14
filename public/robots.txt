@@ -1,3 +1,6 @@
 # Izinkan mesin pencari (Google, Bing, dll) mengindeks platform
 User-agent: *
 Allow: /
+
+Sitemap: https://www.ujianpintar.online/sitemap.xml
+
