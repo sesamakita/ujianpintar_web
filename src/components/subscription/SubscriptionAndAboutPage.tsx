@@ -21,7 +21,10 @@ import {
   Globe2,
   Lock,
   FileCheck2,
-  Trash2
+  Trash2,
+  Briefcase,
+  Code2,
+  UserCheck
 } from 'lucide-react';
 import type { 
   SubscriptionPlan, 
@@ -548,7 +551,111 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
             </div>
           </div>
 
-          {/* 4 Key Pillar Grid */}
+          {/* 1. Status Akun Guru & Lisensi Aktif (Mirip Depo Air Pro) */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                <h4 className="font-display font-bold text-slate-900 text-sm">
+                  Status Akun Guru & Lisensi Aktif
+                </h4>
+              </div>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
+                subscription.tier === 'school'
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  : subscription.tier === 'pro'
+                  ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                  : 'bg-slate-100 text-slate-700 border border-slate-200'
+              }`}>
+                {subscription.tier === 'school' ? 'Lisensi Sekolah' : subscription.tier === 'pro' ? 'Guru PRO' : 'Paket Gratis'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Nama Guru</span>
+                <span className="font-display font-bold text-slate-900 text-sm truncate block">{currentUser.name}</span>
+                <span className="text-[10px] font-mono text-slate-500 block">NIP: {currentUser.nip || '-'}</span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Satuan Pendidikan</span>
+                <span className="font-display font-bold text-slate-900 text-sm truncate block">{currentUser.school || 'Sekolah'}</span>
+                <span className="text-[10px] font-mono text-slate-500 block">NPSN: {currentUser.npsn || '-'}</span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Paket Terdaftar</span>
+                <span className={`font-display font-bold text-sm truncate block ${
+                  subscription.tier === 'free' ? 'text-slate-700' : subscription.tier === 'pro' ? 'text-blue-600' : 'text-emerald-600'
+                }`}>
+                  {subscription.planName || (subscription.tier === 'free' ? 'Paket Gratis' : 'Paket Guru PRO')}
+                </span>
+                <span className="text-[10px] text-slate-500 block">
+                  Siklus: {subscription.billingCycle === 'yearly' ? 'Tahunan' : 'Bulanan'}
+                </span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Masa Berlaku</span>
+                <span className="font-display font-bold text-slate-900 text-sm truncate block">
+                  {subscription.expiresAt
+                    ? new Date(subscription.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : 'Aktif Selamanya'}
+                </span>
+                <span className="text-[10px] text-emerald-600 font-semibold block">
+                  {subscription.status === 'active' ? '✓ Status Aktif' : 'Status Uji Coba'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. Informasi Pengembang & Perusahaan Resmi */}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs space-y-4">
+            <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+              <Building2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <h4 className="font-display font-bold text-slate-900 text-sm">
+                Pengembang & Badan Usaha Resmi
+              </h4>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                  <Briefcase className="w-5 h-5" />
+                </div>
+                <div className="space-y-0.5 min-w-0">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Nama Bisnis</span>
+                  <span className="font-display font-black text-blue-600 text-sm block">DN Apps</span>
+                  <span className="text-[11px] text-slate-500 block truncate">Digital Application Studio</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div className="space-y-0.5 min-w-0">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Badan Usaha Resmi</span>
+                  <span className="font-display font-black text-slate-900 text-sm block truncate">PT Berdikari Bangun Bangsa</span>
+                  <span className="text-[11px] text-slate-500 block truncate">Entitas Perseroan Terdaftar</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                  <Code2 className="w-5 h-5" />
+                </div>
+                <div className="space-y-0.5 min-w-0">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lead Developer</span>
+                  <span className="font-display font-black text-slate-900 text-sm block">Deni Indrayana</span>
+                  <span className="text-[11px] text-slate-500 block truncate">Software Engineer</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. 4 Key Pillar Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-2.5">
@@ -601,20 +708,20 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
 
           </div>
 
-          {/* Technology & Developer Info Card */}
+          {/* 4. Technology & Legal Info Card */}
           <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-sm space-y-4">
             <h4 className="font-display font-black text-slate-900 text-base tracking-tight">
-              Informasi Spesifikasi & Bantuan
+              Informasi Spesifikasi & Bantuan Resmi
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
                 <span className="text-slate-400 block font-medium">Versi Rilis:</span>
-                <strong className="text-slate-900 font-mono text-sm">v2.4.0 (Build 2026)</strong>
+                <strong className="text-slate-900 font-mono text-sm">v2.4.0 (Build 2026.09)</strong>
               </div>
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
                 <span className="text-slate-400 block font-medium">Database Server:</span>
-                <strong className="text-slate-900 text-sm">PostgreSQL Supabase Cloud (Jakarta Region)</strong>
+                <strong className="text-slate-900 text-sm">PostgreSQL Supabase (Region Indonesia)</strong>
               </div>
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
                 <span className="text-slate-400 block font-medium">Enkripsi Integritas:</span>
@@ -622,12 +729,12 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
               </div>
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
                 <span className="text-slate-400 block font-medium">Lisensi Hak Cipta:</span>
-                <strong className="text-slate-900 text-sm">© 2026 UjianPintar Indonesia</strong>
+                <strong className="text-slate-900 text-sm">© 2026 PT Berdikari Bangun Bangsa (DN Apps)</strong>
               </div>
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between sm:col-span-2">
                 <div>
                   <span className="text-slate-400 block font-medium">Portal Super Admin:</span>
-                  <span className="text-slate-600 text-xs font-sans">Akses operator lisensi sekolah</span>
+                  <span className="text-slate-600 text-xs font-sans">Akses operator lisensi sekolah & manajemen voucher</span>
                 </div>
                 <button
                   type="button"
@@ -651,21 +758,23 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
                 </div>
                 <div>
                   <h5 className="font-display font-bold text-emerald-950 text-xs">
-                    Butuh Bantuan atau Ingin Berlangganan Kolektif Sekolah?
+                    Hotline Customer Support WA (0821-9692-9193)
                   </h5>
                   <p className="text-[11px] text-emerald-800 font-sans mt-0.5">
-                    Hubungi tim customer care UjianPintar via WhatsApp untuk konsultasi dan penerbitan faktur sekolah (BOS).
+                    Hubungi admin resmi DN Apps / PT Berdikari Bangun Bangsa untuk aktivasi akun PRO, konsultasi lisensi sekolah (BOS), atau kendala teknis.
                   </p>
                 </div>
               </div>
 
               <a
-                href="https://wa.me/6281234567890?text=Halo%20Admin%20UjianPintar,%20saya%20tertarik%20dengan%20paket%20langganan%20guru/sekolah"
+                href={`https://wa.me/6282196929193?text=${encodeURIComponent(
+                  `Halo Admin UjianPintar (DN Apps / PT Berdikari Bangun Bangsa),\nSaya ${currentUser.name} dari ${currentUser.school || 'Sekolah'}.\n\nSaya ingin berkonsultasi/bertanya terkait layanan UjianPintar PRO & Lisensi Sekolah:\n\n`
+                )}`}
                 target="_blank"
                 rel="noreferrer"
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-display font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer whitespace-nowrap"
               >
-                <span>Chat WhatsApp</span>
+                <span>Chat WhatsApp Admin</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>

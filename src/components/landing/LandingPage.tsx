@@ -1633,7 +1633,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
               <div className="mt-8 space-y-2">
                 <a
-                  href="https://wa.me/6281234567890?text=Halo%20Admin%20UjianPintar,%20sekolah%20kami%20ingin%20mengaktifkan%20Paket%20Lisensi%20Sekolah%20(NPSN)"
+                  href="https://wa.me/6282196929193?text=Halo%20Admin%20UjianPintar%20(DN%20Apps%20/%20PT%20Berdikari%20Bangun%20Bangsa),%20sekolah%20kami%20ingin%20mengaktifkan%20Paket%20Lisensi%20Sekolah%20(NPSN)"
                   target="_blank"
                   rel="noreferrer"
                   className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -1781,7 +1781,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           <div className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p>© 2026 UjianPintar. Hak Cipta Dilindungi Undang-Undang.</p>
+            <p>© 2026 PT Berdikari Bangun Bangsa (DN Apps). Developed by Deni Indrayana. Hak Cipta Dilindungi Undang-Undang.</p>
             <p className="text-[11px] text-slate-400">
               Dirancang untuk kemajuan pendidikan Indonesia • Guru Hebat, Siswa Berintegritas
             </p>
