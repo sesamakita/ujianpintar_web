@@ -173,6 +173,9 @@ export function App() {
     let isMounted = true;
 
     const restoreSession = async () => {
+      const splashStartTime = Date.now();
+      const MIN_SPLASH_DURATION_MS = 2000; // Tampilkan splash screen minimal 2 detik
+
       try {
         const [user, userSub] = await Promise.all([
           authService.getCurrentUser(),
@@ -250,9 +253,14 @@ export function App() {
       } catch (err) {
         console.warn('Session & exam restore warning:', err);
       } finally {
-        if (isMounted) {
-          setIsSessionLoading(false);
-        }
+        const elapsedTime = Date.now() - splashStartTime;
+        const remainingDelay = Math.max(0, MIN_SPLASH_DURATION_MS - elapsedTime);
+
+        setTimeout(() => {
+          if (isMounted) {
+            setIsSessionLoading(false);
+          }
+        }, remainingDelay);
       }
     };
 
