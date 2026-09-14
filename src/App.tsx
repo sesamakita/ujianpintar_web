@@ -11,6 +11,7 @@ import { MobilePreviewModal } from './components/question-builder/MobilePreviewM
 import { UpgradePromptModal } from './components/subscription/UpgradePromptModal';
 import { AuthPage } from './components/auth/AuthPage';
 import { LandingPage } from './components/landing/LandingPage';
+import { AppLogoIcon } from './components/common/AppLogo';
 import { authService } from './services/authService';
 import { examService, generateUUID } from './services/examService';
 import { subscriptionService } from './services/subscriptionService';
@@ -540,13 +541,59 @@ export function App() {
     );
   }
 
-  // Tampilkan layar loading saat cek sesi Supabase (mencegah flash ke login page)
+  // Tampilkan Splash Screen Resmi UjianPintar saat verifikasi sesi awal
   if (isSessionLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm text-slate-400 font-sans font-medium">Memverifikasi sesi...</span>
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center p-6 relative overflow-hidden select-none">
+        {/* Ambient Glow Effects */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl pointer-events-none animate-pulse" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+
+        {/* Brand Card & Pulse Animation */}
+        <div className="relative z-10 flex flex-col items-center text-center space-y-5 animate-in fade-in zoom-in-95 duration-300">
+          {/* Glowing App Logo Badge */}
+          <div className="relative">
+            <div className="absolute -inset-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl blur-md opacity-40 animate-pulse" />
+            <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-0.5 shadow-2xl shadow-blue-500/30 flex items-center justify-center border border-blue-400/30">
+              <AppLogoIcon className="w-12 h-auto" color="white" />
+            </div>
+          </div>
+
+          {/* Brand Typography */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-display font-black tracking-tight text-white">
+                Ujian<span className="text-blue-400">Pintar</span>
+              </h1>
+              <span className="px-2 py-0.5 text-[10px] font-mono font-bold tracking-wider uppercase bg-blue-500/20 text-blue-300 border border-blue-400/30 rounded-md">
+                CBT
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 font-sans tracking-wide max-w-xs sm:max-w-sm">
+              Platform Asesmen & Ujian Digital Sekolah
+            </p>
+          </div>
+
+          {/* Verification Status & Animated Progress */}
+          <div className="pt-2 flex flex-col items-center space-y-3">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/80 border border-slate-800 text-xs text-slate-300 shadow-inner">
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+              <span className="font-sans font-medium text-[11px] text-slate-300">
+                Memverifikasi sesi pengguna...
+              </span>
+            </div>
+
+            {/* Sleek Gradient Loading Shimmer Bar */}
+            <div className="w-36 h-1 bg-slate-800/80 rounded-full overflow-hidden relative">
+              <div className="absolute top-0 bottom-0 left-0 right-0 bg-gradient-to-r from-transparent via-blue-400 to-transparent w-full animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Security Badge */}
+        <div className="absolute bottom-6 text-[11px] text-slate-500 font-sans flex items-center gap-1.5">
+          <span>🔒</span>
+          <span>Koneksi Aman Terenkripsi • Supabase Cloud Realtime</span>
         </div>
       </div>
     );
