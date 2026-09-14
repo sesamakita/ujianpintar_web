@@ -883,7 +883,7 @@ export const examService = {
         (payload: any) => {
           if (payload.new) {
             const row = payload.new;
-            if (examId && examId !== 'all' && row.exam_id && row.exam_id !== examId) {
+            if (examId && examId !== 'all' && row.exam_id !== examId) {
               return; // Ignore other exams' telemetry
             }
             const updatedStudent: StudentProctoring = {
@@ -909,7 +909,7 @@ export const examService = {
         (payload: any) => {
           if (payload.new) {
             const row = payload.new;
-            if (examId && examId !== 'all' && row.exam_id && row.exam_id !== examId) {
+            if (examId && examId !== 'all' && row.exam_id !== examId) {
               return; // Ignore other exams' violation logs
             }
             const newLog: ViolationLogItem = {
@@ -930,7 +930,7 @@ export const examService = {
         (payload: any) => {
           if (payload.new && onGradeUpdate) {
             const d = payload.new;
-            if (examId && examId !== 'all' && d.exam_id && d.exam_id !== examId) {
+            if (examId && examId !== 'all' && d.exam_id !== examId) {
               return; // Ignore other exams' grades
             }
             const newGrade: GradeRecord = {
