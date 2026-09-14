@@ -79,7 +79,9 @@ export interface GradeRecord {
   score: number;
   maxScore: number;
   submittedAt: string;
+  createdAt?: string;
   timeSpentMinutes: number;
   tabViolations: number;
   status: 'Lulus' | 'Remedial';
 }
+
