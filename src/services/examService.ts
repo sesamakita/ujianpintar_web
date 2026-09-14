@@ -818,8 +818,9 @@ export const examService = {
     onViolationLog: (log: ViolationLogItem) => void,
     onGradeUpdate?: (grade: GradeRecord) => void
   ) {
+    const channelId = `proctoring-live-${examId || 'all'}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const channel = supabase
-      .channel(`proctoring-live-${examId || 'all'}`)
+      .channel(channelId)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'student_sessions' },
@@ -895,7 +896,12 @@ export const examService = {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        channel.unsubscribe();
+        supabase.removeChannel(channel);
+      } catch (err) {
+        console.warn('Realtime channel unsubscribe warning:', err);
+      }
     };
   },
 

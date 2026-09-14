@@ -286,8 +286,9 @@ export function App() {
   useEffect(() => {
     if (!isAuthenticated || !examSettings?.id) return;
 
+    let isCancelled = false;
     let unsubscribe: (() => void) | undefined;
-    let pollInterval: any;
+    let pollInterval: any = null;
     const targetExamId = examSettings.id === 'all' ? undefined : examSettings.id;
 
     const fetchLatestData = async () => {
@@ -297,6 +298,8 @@ export function App() {
           examService.getGradeRecords(targetExamId),
           examService.getViolationLogs(targetExamId),
         ]);
+
+        if (isCancelled) return;
 
         if (remoteStudents) {
           setStudents((prev) => {
@@ -316,61 +319,67 @@ export function App() {
           });
         }
 
-        if (remoteGrades) {
+        if (remoteGrades && !isCancelled) {
           setGrades(remoteGrades);
         }
 
-        if (remoteLogs) {
+        if (remoteLogs && !isCancelled) {
           setViolationLogs(remoteLogs);
         }
       } catch (err) {
-        console.warn('Live polling heartbeat check:', err);
+        if (!isCancelled) {
+          console.warn('Live polling heartbeat check:', err);
+        }
       }
     };
 
-    const initRealtimeSync = async () => {
-      // 1. Initial immediate fetch for this exam
-      await fetchLatestData();
+    // 1. Initial immediate fetch for this exam
+    fetchLatestData();
 
-      // 2. Setup 2.5 second polling fallback
-      pollInterval = setInterval(fetchLatestData, 2500);
+    // 2. Setup 2.5 second polling fallback immediately so it is tracked synchronously
+    pollInterval = setInterval(() => {
+      if (!isCancelled) {
+        fetchLatestData();
+      }
+    }, 2500);
 
-      // 3. Realtime WebSockets listener for instant updates strictly for this exam (or all exams)
-      unsubscribe = examService.subscribeToLiveProctoring(
-        targetExamId,
-        (updatedStudent) => {
-          setStudents((prev) => {
-            const exists = prev.find((s) => s.nisn === updatedStudent.nisn);
-            if (exists) {
-              return prev.map((s) => (s.nisn === updatedStudent.nisn ? {
-                ...s,
-                ...updatedStudent,
-                remainingSeconds: updatedStudent.status === 'submitted'
-                  ? 0
-                  : (s.remainingSeconds > 0 ? s.remainingSeconds : updatedStudent.remainingSeconds)
-              } : s));
-            }
-            return [updatedStudent, ...prev];
-          });
-        },
-        (newLog) => {
-          setViolationLogs((prev) => [newLog, ...prev]);
-        },
-        (newGrade) => {
-          setGrades((prev) => {
-            const exists = prev.find((g) => g.nisn === newGrade.nisn);
-            if (exists) {
-              return prev.map((g) => (g.nisn === newGrade.nisn ? { ...g, ...newGrade } : g));
-            }
-            return [newGrade, ...prev];
-          });
-        }
-      );
-    };
-
-    initRealtimeSync();
+    // 3. Realtime WebSockets listener for instant updates strictly for this exam (or all exams)
+    unsubscribe = examService.subscribeToLiveProctoring(
+      targetExamId,
+      (updatedStudent) => {
+        if (isCancelled) return;
+        setStudents((prev) => {
+          const exists = prev.find((s) => s.nisn === updatedStudent.nisn);
+          if (exists) {
+            return prev.map((s) => (s.nisn === updatedStudent.nisn ? {
+              ...s,
+              ...updatedStudent,
+              remainingSeconds: updatedStudent.status === 'submitted'
+                ? 0
+                : (s.remainingSeconds > 0 ? s.remainingSeconds : updatedStudent.remainingSeconds)
+            } : s));
+          }
+          return [updatedStudent, ...prev];
+        });
+      },
+      (newLog) => {
+        if (isCancelled) return;
+        setViolationLogs((prev) => [newLog, ...prev]);
+      },
+      (newGrade) => {
+        if (isCancelled) return;
+        setGrades((prev) => {
+          const exists = prev.find((g) => g.nisn === newGrade.nisn);
+          if (exists) {
+            return prev.map((g) => (g.nisn === newGrade.nisn ? { ...g, ...newGrade } : g));
+          }
+          return [newGrade, ...prev];
+        });
+      }
+    );
 
     return () => {
+      isCancelled = true;
       if (pollInterval) clearInterval(pollInterval);
       if (unsubscribe) unsubscribe();
     };
@@ -397,17 +406,19 @@ export function App() {
 
   const handleSetActiveExamForProctoring = async (selectedExam: ExamSettings) => {
     try {
-      const data = await examService.getExamById(selectedExam.id);
-      if (data.exam) {
-        setExamSettings(data.exam);
-      } else {
-        setExamSettings(selectedExam);
-      }
-      setQuestions(data.questions || []);
+      setExamSettings(selectedExam);
       setStudents([]);
       setGrades([]);
       setViolationLogs([]);
       setActiveTab('proctoring');
+
+      const data = await examService.getExamById(selectedExam.id);
+      if (data.exam) {
+        setExamSettings((prev) => (prev.id === selectedExam.id ? { ...prev, ...data.exam } : prev));
+      }
+      if (data.questions) {
+        setQuestions(data.questions);
+      }
     } catch (err) {
       console.warn('handleSetActiveExamForProctoring error:', err);
     }
@@ -624,45 +635,48 @@ export function App() {
   }
 
   const handleSelectExamForProctoring = async (selected: ExamSettings) => {
-    try {
-      if (selected.id === 'all') {
-        setExamSettings({
-          id: 'all',
-          title: 'Pemantauan Serentak (Semua Kelas)',
-          subject: currentUser.subject || 'Semua Mata Pelajaran',
-          gradeLevel: 'Lintas Kelas',
-          durationMinutes: 60,
-          scheduleDate: new Date().toISOString().split('T')[0],
-          scheduleTime: '08:00',
-          token: 'MULTI',
-          status: 'published',
-          antiCheat: {
-            detectTabSwitch: true,
-            shuffleQuestions: true,
-            shuffleOptions: true,
-            fullScreenLock: true,
-          },
-        });
-        setStudents([]);
-        setGrades([]);
-        setViolationLogs([]);
-        return;
-      }
+    // 1. INSTANT OPTIMISTIC UPDATE: Langsung terapkan pergantian kelas ke state (0ms delay)
+    if (selected.id === 'all') {
+      setExamSettings({
+        id: 'all',
+        title: 'Pemantauan Serentak (Semua Kelas)',
+        subject: currentUser.subject || 'Semua Mata Pelajaran',
+        gradeLevel: 'Lintas Kelas',
+        durationMinutes: 60,
+        scheduleDate: new Date().toISOString().split('T')[0],
+        scheduleTime: '08:00',
+        token: 'MULTI',
+        status: 'published',
+        antiCheat: {
+          detectTabSwitch: true,
+          shuffleQuestions: true,
+          shuffleOptions: true,
+          fullScreenLock: true,
+        },
+      });
+      setStudents([]);
+      setGrades([]);
+      setViolationLogs([]);
+      return;
+    }
 
+    // Terapkan konfigurasi kelas secara instan dari list ujian yang sudah ada di memory
+    setExamSettings(selected);
+    setStudents([]);
+    setGrades([]);
+    setViolationLogs([]);
+
+    // 2. Di latar belakang (non-blocking), sinkronkan detail pertanyaan jika ada perubahan terbaru
+    try {
       const examData = await examService.getExamById(selected.id);
       if (examData.exam) {
-        setExamSettings(examData.exam);
-      } else {
-        setExamSettings(selected);
+        setExamSettings((prev) => (prev.id === selected.id ? { ...prev, ...examData.exam } : prev));
       }
       if (examData.questions) {
         setQuestions(examData.questions);
       }
-      setStudents([]);
-      setGrades([]);
-      setViolationLogs([]);
     } catch (err) {
-      console.warn('handleSelectExamForProctoring error:', err);
+      console.warn('handleSelectExamForProctoring background refresh error:', err);
     }
   };
 
