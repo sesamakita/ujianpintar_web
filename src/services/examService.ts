@@ -28,6 +28,54 @@ export const formatScheduleTime = (timeStr?: string): string => {
   return clean;
 };
 
+/**
+ * Helper to reliably dispatch Supabase Realtime broadcasts by ensuring channel subscription
+ */
+export async function sendRealtimeBroadcast(channelName: string, event: string, payload: any): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const channel = supabase.channel(channelName);
+    let isHandled = false;
+
+    const timeout = setTimeout(() => {
+      if (!isHandled) {
+        isHandled = true;
+        try { supabase.removeChannel(channel); } catch {}
+        resolve();
+      }
+    }, 2500);
+
+    channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED' && !isHandled) {
+        try {
+          await channel.send({
+            type: 'broadcast',
+            event,
+            payload,
+          });
+        } catch (err) {
+          console.warn(`sendRealtimeBroadcast ${event} error:`, err);
+        } finally {
+          if (!isHandled) {
+            isHandled = true;
+            clearTimeout(timeout);
+            setTimeout(() => {
+              try { supabase.removeChannel(channel); } catch {}
+              resolve();
+            }, 300);
+          }
+        }
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (!isHandled) {
+          isHandled = true;
+          clearTimeout(timeout);
+          try { supabase.removeChannel(channel); } catch {}
+          resolve();
+        }
+      }
+    });
+  });
+}
+
 export const examService = {
   /**
    * Helper to format time into HH:mm (removing seconds)
@@ -1064,46 +1112,37 @@ export const examService = {
    */
   async sendWarningToStudent(studentNisn: string, studentName: string, message: string, examId?: string) {
     try {
+      const cleanNisn = (studentNisn || '').trim();
       const nowStr = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const warningText = message.trim();
 
-      // 1. Insert into violation_logs for persistent audit trail
+      // 1. Insert into violation_logs for persistent audit trail & postgres_changes trigger
       await supabase.from('violation_logs').insert({
         exam_id: (examId && examId !== 'all') ? examId : null,
         student_name: studentName,
-        student_nisn: studentNisn,
+        student_nisn: cleanNisn,
         timestamp: nowStr,
         message: `Peringatan Pengawas: "${warningText}"`,
         severity: 'warning',
       });
 
-      // 2. Broadcast instant real-time event to student's device
-      const alertChannel = supabase.channel(`student-alerts-${studentNisn}`);
-      await alertChannel.send({
-        type: 'broadcast',
-        event: 'teacher_warning',
-        payload: {
-          studentNisn,
-          studentName,
-          message: warningText,
-          timestamp: nowStr,
-          examId: examId || null,
-        },
+      // 2. Broadcast instant real-time event to student's personal channel
+      await sendRealtimeBroadcast(`student-alerts-${cleanNisn}`, 'teacher_warning', {
+        studentNisn: cleanNisn,
+        studentName,
+        message: warningText,
+        timestamp: nowStr,
+        examId: examId || null,
       });
 
       // Also broadcast to class-wide channel
       if (examId && examId !== 'all') {
-        const classChannel = supabase.channel(`exam-alerts-${examId}`);
-        await classChannel.send({
-          type: 'broadcast',
-          event: 'teacher_warning',
-          payload: {
-            studentNisn,
-            studentName,
-            message: warningText,
-            timestamp: nowStr,
-            examId,
-          },
+        await sendRealtimeBroadcast(`exam-alerts-${examId}`, 'teacher_warning', {
+          studentNisn: cleanNisn,
+          studentName,
+          message: warningText,
+          timestamp: nowStr,
+          examId,
         });
       }
     } catch (err: any) {
@@ -1304,15 +1343,11 @@ export const examService = {
 
       await updateQuery;
 
-      // Broadcast force submit command to student
-      const alertChannel = supabase.channel(`student-alerts-${studentNisn}`);
-      await alertChannel.send({
-        type: 'broadcast',
-        event: 'force_submit',
-        payload: {
-          studentNisn,
-          examId: validExamId,
-        },
+      // Broadcast force submit command to student reliably
+      const cleanNisn = (studentNisn || '').trim();
+      await sendRealtimeBroadcast(`student-alerts-${cleanNisn}`, 'force_submit', {
+        studentNisn: cleanNisn,
+        examId: validExamId,
       });
     } catch (err: any) {
       console.warn('forceSubmitStudent warning:', err.message);
@@ -1347,16 +1382,11 @@ export const examService = {
         }
       }
 
-      // Broadcast time extension event
+      // Broadcast time extension event reliably
       const channelName = validExamId ? `exam-alerts-${validExamId}` : 'exam-alerts-global';
-      const classChannel = supabase.channel(channelName);
-      await classChannel.send({
-        type: 'broadcast',
-        event: 'add_time',
-        payload: {
-          addedMinutes,
-          examId: validExamId,
-        },
+      await sendRealtimeBroadcast(channelName, 'add_time', {
+        addedMinutes,
+        examId: validExamId,
       });
     } catch (err: any) {
       console.warn('addGlobalTime warning:', err.message);
@@ -1386,15 +1416,10 @@ export const examService = {
 
       await query;
 
-      // Broadcast lock event
+      // Broadcast lock event reliably
       const channelName = validExamId ? `exam-alerts-${validExamId}` : 'exam-alerts-global';
-      const classChannel = supabase.channel(channelName);
-      await classChannel.send({
-        type: 'broadcast',
-        event: 'lock_exam',
-        payload: {
-          examId: validExamId,
-        },
+      await sendRealtimeBroadcast(channelName, 'lock_exam', {
+        examId: validExamId,
       });
     } catch (err: any) {
       console.warn('lockAllExams warning:', err.message);
