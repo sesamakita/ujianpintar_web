@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { ExamSettings, Question, StudentProctoring, ViolationLogItem, GradeRecord } from '../types/exam';
+import type { ExamSettings, Question, StudentProctoring, ViolationLogItem, GradeRecord, StudentAnswerDetailItem } from '../types/exam';
 
 export const isValidUUID = (str?: string): boolean => {
   return Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
@@ -844,6 +844,8 @@ export const examService = {
             timeSpentMinutes: d.time_spent_minutes || 1,
             tabViolations: d.tab_violations || 0,
             status: d.status || 'Lulus',
+            sessionId: d.session_id || undefined,
+            examId: d.exam_id || undefined,
           });
         }
       });
@@ -852,6 +854,197 @@ export const examService = {
     } catch (err: any) {
       console.warn('getGradeRecords exception:', err?.message || err);
       return [];
+    }
+  },
+
+  /**
+   * Fetch Question-by-Question detailed answers breakdown for a student
+   */
+  async getStudentAnswersDetail(
+    examId?: string,
+    studentNisn?: string,
+    sessionId?: string
+  ): Promise<{
+    studentInfo: { name: string; nisn: string; className: string; score?: number };
+    items: StudentAnswerDetailItem[];
+    summary: { totalQuestions: number; answeredCount: number; correctCount: number; wrongCount: number; doubtCount: number };
+  }> {
+    try {
+      const cleanNisn = (studentNisn || '').trim();
+      let targetExamId = (examId && examId !== 'all') ? examId : undefined;
+      let targetSessionId = sessionId;
+      let studentName = '';
+      let className = '';
+      let score: number | undefined = undefined;
+
+      // 1. If examId not provided or session not provided, look up from grade_records / student_sessions
+      if ((!targetExamId || !targetSessionId) && cleanNisn) {
+        let gQuery = supabase
+          .from('grade_records')
+          .select('exam_id, session_id, name, nisn, class_name, score')
+          .eq('nisn', cleanNisn);
+
+        if (targetExamId) gQuery = gQuery.eq('exam_id', targetExamId);
+
+        const { data: gData } = await gQuery
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (gData) {
+          if (!targetExamId && gData.exam_id) targetExamId = gData.exam_id;
+          if (!targetSessionId && gData.session_id) targetSessionId = gData.session_id;
+          studentName = gData.name || '';
+          className = gData.class_name || '';
+          score = Number(gData.score);
+        }
+      }
+
+      if (!targetSessionId && cleanNisn) {
+        let sQuery = supabase
+          .from('student_sessions')
+          .select('id, exam_id, student_name, class_name')
+          .eq('nisn', cleanNisn);
+
+        if (targetExamId) sQuery = sQuery.eq('exam_id', targetExamId);
+
+        const { data: sData } = await sQuery
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (sData) {
+          targetSessionId = sData.id;
+          if (!targetExamId && sData.exam_id) targetExamId = sData.exam_id;
+          if (!studentName) studentName = sData.student_name || '';
+          if (!className) className = sData.class_name || '';
+        }
+      }
+
+      // 2. Fetch Questions for this exam
+      let questions: any[] = [];
+      if (targetExamId) {
+        const { data: qData } = await supabase
+          .from('questions')
+          .select('*')
+          .eq('exam_id', targetExamId)
+          .order('number_order', { ascending: true });
+        if (qData) questions = qData;
+      }
+
+      // 3. Fetch Answers from student_answers
+      const answersMap = new Map<string, any>();
+      if (targetSessionId) {
+        const { data: aData } = await supabase
+          .from('student_answers')
+          .select('*')
+          .eq('session_id', targetSessionId)
+          .order('answered_at', { ascending: false });
+
+        if (aData) {
+          for (const a of aData) {
+            if (!answersMap.has(a.question_id)) {
+              answersMap.set(a.question_id, a);
+            }
+          }
+        }
+      }
+
+      // 4. Map and evaluate each question
+      let correctCount = 0;
+      let wrongCount = 0;
+      let doubtCount = 0;
+      let answeredCount = 0;
+
+      const items: StudentAnswerDetailItem[] = questions.map((q, idx) => {
+        let parsedOptions: any[] = q.options;
+        if (typeof parsedOptions === 'string') {
+          try { parsedOptions = JSON.parse(parsedOptions); } catch { parsedOptions = []; }
+        }
+        if (!Array.isArray(parsedOptions)) parsedOptions = [];
+
+        const ans = answersMap.get(q.id);
+        const selectedOptionId = ans?.selected_option_id || undefined;
+        const answerText = ans?.answer_text || undefined;
+        const isDoubt = !!ans?.is_doubt;
+        if (isDoubt) doubtCount++;
+
+        const isAnswered = !!(selectedOptionId || (answerText && answerText.trim().length > 0));
+        if (isAnswered) answeredCount++;
+
+        const selectedOpt = parsedOptions.find((o: any) => o.id === selectedOptionId);
+        const correctOpt = parsedOptions.find((o: any) => o.id === q.correct_option_id);
+
+        let isCorrect = false;
+        const qType = q.type || 'multiple_choice';
+
+        if (qType === 'multiple_choice' || qType === 'true_false') {
+          isCorrect = !!(q.correct_option_id && selectedOptionId === q.correct_option_id);
+        } else if (qType === 'short_answer') {
+          if (q.correct_answer_text && answerText) {
+            const c = q.correct_answer_text.trim().toLowerCase().replace(/,/g, '.');
+            const u = answerText.trim().toLowerCase().replace(/,/g, '.');
+            isCorrect = c === u;
+          }
+        }
+
+        if (isAnswered) {
+          if (isCorrect) correctCount++;
+          else wrongCount++;
+        }
+
+        const maxPoints = q.points || 10;
+        const pointsEarned = isCorrect ? maxPoints : 0;
+
+        return {
+          questionId: q.id,
+          number: q.number_order || idx + 1,
+          type: qType,
+          questionText: q.question_text || '',
+          latexFormula: q.latex_formula || undefined,
+          imageUrl: q.image_url || undefined,
+          options: parsedOptions.map((o: any, oIdx: number) => ({
+            id: o.id,
+            label: o.label || String.fromCharCode(65 + oIdx),
+            text: o.text || '',
+          })),
+          selectedOptionId,
+          selectedOptionLabel: selectedOpt?.label,
+          selectedOptionText: selectedOpt?.text,
+          answerText,
+          correctOptionId: q.correct_option_id || undefined,
+          correctOptionLabel: correctOpt?.label,
+          correctAnswerText: q.correct_answer_text || undefined,
+          isCorrect,
+          isDoubt,
+          pointsEarned,
+          maxPoints,
+        };
+      });
+
+      return {
+        studentInfo: {
+          name: studentName,
+          nisn: cleanNisn,
+          className,
+          score,
+        },
+        items,
+        summary: {
+          totalQuestions: questions.length,
+          answeredCount,
+          correctCount,
+          wrongCount,
+          doubtCount,
+        },
+      };
+    } catch (err: any) {
+      console.warn('getStudentAnswersDetail exception:', err);
+      return {
+        studentInfo: { name: '', nisn: studentNisn || '', className: '' },
+        items: [],
+        summary: { totalQuestions: 0, answeredCount: 0, correctCount: 0, wrongCount: 0, doubtCount: 0 },
+      };
     }
   },
 

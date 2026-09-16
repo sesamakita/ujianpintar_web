@@ -83,5 +83,28 @@ export interface GradeRecord {
   timeSpentMinutes: number;
   tabViolations: number;
   status: 'Lulus' | 'Remedial';
+  sessionId?: string;
+  examId?: string;
+}
+
+export interface StudentAnswerDetailItem {
+  questionId: string;
+  number: number;
+  type: 'multiple_choice' | 'short_answer';
+  questionText: string;
+  latexFormula?: string;
+  imageUrl?: string;
+  options: Array<{ id: string; label: string; text: string }>;
+  selectedOptionId?: string;
+  selectedOptionLabel?: string;
+  selectedOptionText?: string;
+  answerText?: string;
+  correctOptionId?: string;
+  correctOptionLabel?: string;
+  correctAnswerText?: string;
+  isCorrect: boolean;
+  isDoubt: boolean;
+  pointsEarned: number;
+  maxPoints: number;
 }
 

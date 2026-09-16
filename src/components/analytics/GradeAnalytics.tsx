@@ -15,10 +15,12 @@ import {
   RotateCcw,
   Calendar,
   Layers,
-  X
+  X,
+  Eye,
 } from 'lucide-react';
 import type { GradeRecord, ExamSettings } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
+import { StudentAnswerDetailModal } from './StudentAnswerDetailModal';
 
 interface GradeAnalyticsProps {
   grades: GradeRecord[];
@@ -70,6 +72,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'Lulus' | 'Remedial'>('all');
+  const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<GradeRecord | null>(null);
 
   // Extract unique classes sorted naturally
   const availableClasses = useMemo(() => {
@@ -530,12 +533,13 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
                 <th className="py-3 px-4">Durasi Pengerjaan</th>
                 <th className="py-3 px-4">Riwayat Pelanggaran</th>
                 <th className="py-3 px-4 text-right">Status Kelulusan</th>
+                <th className="py-3 px-4 text-center">Lembar Jawaban</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium">
               {filteredGrades.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-14 text-center text-slate-400">
+                  <td colSpan={8} className="py-14 text-center text-slate-400">
                     <div className="max-w-md mx-auto space-y-2">
                       <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-1.5">
                         <Award className="w-5 h-5" />
@@ -620,6 +624,18 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
                           {grade.status}
                         </span>
                       </td>
+
+                      <td className="py-3 px-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStudentForDetail(grade)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-display font-bold border border-blue-200 transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+                          title="Lihat Rincian Jawaban Soal Siswa"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Detail Jawaban</span>
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -628,6 +644,15 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
           </table>
         </div>
       </div>
+
+      {/* Modal Detail Jawaban Siswa */}
+      <StudentAnswerDetailModal
+        isOpen={!!selectedStudentForDetail}
+        onClose={() => setSelectedStudentForDetail(null)}
+        grade={selectedStudentForDetail}
+        examTitle={examSettings?.title}
+        examId={examSettings?.id}
+      />
     </div>
   );
 };
