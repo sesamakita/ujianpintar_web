@@ -264,3 +264,61 @@
 .liquid-btn:active .liquid-bubble {
   animation: liquid-bubble-rise 1.5s ease-out infinite;
 }
+
+/* ==========================================================================
+   Print & PDF Optimization for Official Exam Sheets & Reports
+   ========================================================================== */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 10mm 12mm 12mm 12mm;
+  }
+
+  /* Completely hide the single-page application root when printing */
+  #root {
+    display: none !important;
+  }
+
+  /* Show only the dedicated printable exam sheet portal */
+  #print-sheet-portal {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* Reset body and html layout to allow natural multi-page pagination */
+  html, body {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Prevent question items and signature blocks from breaking across pages */
+  .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Force background colors and borders in browser print preview */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+@media screen {
+  #print-sheet-portal {
+    display: none !important;
+  }
+}
+

@@ -1,4 +1,5 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   CheckCircle2,
@@ -16,6 +17,7 @@ import {
 import { examService } from '../../services/examService';
 import type { GradeRecord, StudentAnswerDetailItem } from '../../types/exam';
 import { MathRenderer } from '../common/MathRenderer';
+import { PrintableStudentExamSheet } from './PrintableStudentExamSheet';
 
 interface StudentAnswerDetailModalProps {
   isOpen: boolean;
@@ -44,6 +46,8 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
     doubtCount: 0,
   });
   const [activeFilter, setActiveFilter] = useState<FilterType>('all');
+  const [printScope, setPrintScope] = useState<'all' | 'filtered'>('all');
+  const [isPreparingPrint, setIsPreparingPrint] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !grade) {
@@ -94,8 +98,13 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
 
   const isPassed = grade.status === 'Lulus';
 
-  const handlePrint = () => {
-    window.print();
+  const handlePrint = (scope: 'all' | 'filtered' = 'all') => {
+    setPrintScope(scope);
+    setIsPreparingPrint(true);
+    setTimeout(() => {
+      window.print();
+      setIsPreparingPrint(false);
+    }, 250);
   };
 
   return (
@@ -121,15 +130,49 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-display font-medium border border-slate-700 transition-colors cursor-pointer print:hidden"
-              title="Cetak Lembar Jawaban"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Cetak / PDF</span>
-            </button>
+            {activeFilter !== 'all' ? (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handlePrint('all')}
+                  disabled={loading || items.length === 0 || isPreparingPrint}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-display font-medium border border-slate-700 transition-colors cursor-pointer print:hidden disabled:opacity-50"
+                  title="Cetak seluruh lembar soal"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Semua Soal ({items.length})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePrint('filtered')}
+                  disabled={loading || filteredItems.length === 0 || isPreparingPrint}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-display font-medium shadow-xs transition-colors cursor-pointer print:hidden disabled:opacity-50"
+                  title="Cetak hanya soal yang sedang difilter"
+                >
+                  {isPreparingPrint ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Printer className="w-3.5 h-3.5" />
+                  )}
+                  <span>Cetak / PDF ({filteredItems.length})</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handlePrint('all')}
+                disabled={loading || items.length === 0 || isPreparingPrint}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-display font-medium shadow-xs transition-colors cursor-pointer print:hidden disabled:opacity-50 active:scale-95"
+                title="Cetak Lembar Jawaban atau Simpan sebagai PDF"
+              >
+                {isPreparingPrint ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Printer className="w-3.5 h-3.5" />
+                )}
+                <span>Cetak / PDF</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -506,6 +549,29 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
           </button>
         </div>
       </div>
+
+      {/* Printable Sheet Portal for Clean Multi-page Browser Print & Save as PDF */}
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <PrintableStudentExamSheet
+            grade={grade}
+            examTitle={examTitle}
+            items={printScope === 'all' ? items : filteredItems}
+            summary={summary}
+            filterTitle={
+              printScope === 'filtered' && activeFilter !== 'all'
+                ? activeFilter === 'correct'
+                  ? 'Hanya Butir Jawaban Benar'
+                  : activeFilter === 'wrong'
+                  ? 'Hanya Butir Jawaban Salah (Remedial)'
+                  : activeFilter === 'doubt'
+                  ? 'Hanya Butir Ragu-Ragu'
+                  : 'Hanya Butir Kosong'
+                : undefined
+            }
+          />,
+          document.body
+        )}
     </div>
   );
 };
