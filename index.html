@@ -2,8 +2,16 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Favicon & Touch Icons for Browsers & Google Search Results -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#2563EB" />
     <meta name="robots" content="index, follow" />
     <meta name="description" content="UjianPintar - Platform Asesmen Digital & Pengawasan Ujian Online Berkinerja Tinggi untuk Guru dan Sekolah di Indonesia. CBT anti-curang dengan Live Proctoring dan koreksi otomatis." />
     <meta name="keywords" content="ujian online, cbt sekolah, live proctoring, aplikasi ujian siswa, portal guru hebat, penilaian harian, kurikulum merdeka, bank soal" />
@@ -31,6 +39,38 @@
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Lexend:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- KaTeX CSS for Math Formulas -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+
+    <!-- Structured Data (JSON-LD) for Google Logo, Sitelinks & Brand Knowledge -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "UjianPintar",
+      "alternateName": "UjianPintar CBT",
+      "url": "https://www.ujianpintar.online/",
+      "logo": "https://www.ujianpintar.online/icon-512.png",
+      "image": "https://www.ujianpintar.online/icon-512.png",
+      "description": "Platform Asesmen Digital & Pengawasan Ujian Online Berkinerja Tinggi untuk Guru dan Sekolah di Indonesia."
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "UjianPintar",
+      "url": "https://www.ujianpintar.online/",
+      "publisher": {
+        "@type": "Organization",
+        "name": "UjianPintar",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://www.ujianpintar.online/icon-512.png",
+          "width": 512,
+          "height": 512
+        }
+      }
+    }
+    </script>
   </head>
   <body class="bg-slate-50 text-slate-900 font-sans antialiased selection:bg-blue-100 selection:text-blue-900">
     <div id="root"></div>
