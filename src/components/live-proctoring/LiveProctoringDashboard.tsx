@@ -190,7 +190,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
 
     const stu = students.find((s) => s.id === studentId);
     if (stu) {
-      examService.forceSubmitStudent(stu.nisn, activeExam?.id);
+      examService.forceSubmitStudent(stu.nisn, activeExam?.id, stu.name);
       const newLog: ViolationLogItem = {
         id: `force-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),

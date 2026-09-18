@@ -377,15 +377,18 @@ export function App() {
       (updatedStudent) => {
         if (isCancelled) return;
         setStudents((prev) => {
-          const exists = prev.find((s) => s.nisn === updatedStudent.nisn);
+          const exists = prev.find((s) => (s.id && updatedStudent.id && s.id === updatedStudent.id) || (s.nisn === updatedStudent.nisn && s.name.trim().toLowerCase() === updatedStudent.name.trim().toLowerCase()));
           if (exists) {
-            return prev.map((s) => (s.nisn === updatedStudent.nisn ? {
-              ...s,
-              ...updatedStudent,
-              remainingSeconds: updatedStudent.status === 'submitted'
-                ? 0
-                : (s.remainingSeconds > 0 ? s.remainingSeconds : updatedStudent.remainingSeconds)
-            } : s));
+            return prev.map((s) => {
+              const isMatch = (s.id && updatedStudent.id && s.id === updatedStudent.id) || (s.nisn === updatedStudent.nisn && s.name.trim().toLowerCase() === updatedStudent.name.trim().toLowerCase());
+              return isMatch ? {
+                ...s,
+                ...updatedStudent,
+                remainingSeconds: updatedStudent.status === 'submitted'
+                  ? 0
+                  : (s.remainingSeconds > 0 ? s.remainingSeconds : updatedStudent.remainingSeconds)
+              } : s;
+            });
           }
           return [updatedStudent, ...prev];
         });
@@ -397,9 +400,12 @@ export function App() {
       (newGrade) => {
         if (isCancelled) return;
         setGrades((prev) => {
-          const exists = prev.find((g) => g.nisn === newGrade.nisn);
+          const exists = prev.find((g) => (g.sessionId && newGrade.sessionId && g.sessionId === newGrade.sessionId) || (g.nisn === newGrade.nisn && g.name.trim().toLowerCase() === newGrade.name.trim().toLowerCase()));
           if (exists) {
-            return prev.map((g) => (g.nisn === newGrade.nisn ? { ...g, ...newGrade } : g));
+            return prev.map((g) => {
+              const isMatch = (g.sessionId && newGrade.sessionId && g.sessionId === newGrade.sessionId) || (g.nisn === newGrade.nisn && g.name.trim().toLowerCase() === newGrade.name.trim().toLowerCase());
+              return isMatch ? { ...g, ...newGrade } : g;
+            });
           }
           return [newGrade, ...prev];
         });

@@ -782,12 +782,15 @@ export const examService = {
       }
       if (!data) return [];
 
-      // Deduplicate by NISN to ensure each student only appears once
+      // Deduplicate by student identity (NISN + Name, or Session ID) so students sharing a NISN are NOT lost
       const uniqueStudents = new Map<string, StudentProctoring>();
       data.forEach((row: any) => {
         const cleanNisn = (row.nisn || '').trim();
-        if (cleanNisn && !uniqueStudents.has(cleanNisn)) {
-          uniqueStudents.set(cleanNisn, {
+        const cleanName = (row.student_name || '').trim().toLowerCase();
+        // Unique per student attempt (cleanNisn + cleanName, or row.id)
+        const studentKey = row.id || `${cleanNisn}_${cleanName}`;
+        if (!uniqueStudents.has(studentKey)) {
+          uniqueStudents.set(studentKey, {
             id: row.id,
             nisn: cleanNisn,
             name: row.student_name || 'Siswa',
@@ -811,7 +814,7 @@ export const examService = {
   },
 
   /**
-   * Fetch All Grades for Analytics
+   * Fetch All Grades for Analytics (with self-healing from student_sessions & answers)
    */
   async getGradeRecords(examId?: string): Promise<GradeRecord[]> {
     try {
@@ -825,15 +828,16 @@ export const examService = {
         console.warn('getGradeRecords Supabase error:', error.message);
         return [];
       }
-      if (!data) return [];
 
-      // Deduplicate by NISN
+      // Deduplicate by record ID / session ID and (NISN + Name) so students with the same NISN are never hidden
       const uniqueGrades = new Map<string, GradeRecord>();
-      data.forEach((d: any) => {
+      (data || []).forEach((d: any) => {
         const cleanNisn = (d.nisn || '').trim();
-        if (cleanNisn && !uniqueGrades.has(cleanNisn)) {
-          uniqueGrades.set(cleanNisn, {
-            studentId: d.student_id || `stu-${cleanNisn}`,
+        const cleanName = (d.name || '').trim().toLowerCase();
+        const gradeKey = d.id || d.session_id || `${cleanNisn}_${cleanName}`;
+        if (!uniqueGrades.has(gradeKey)) {
+          uniqueGrades.set(gradeKey, {
+            studentId: d.student_id || d.id || `stu-${cleanNisn}`,
             name: d.name || 'Siswa',
             nisn: cleanNisn,
             className: d.class_name || 'Kelas X',
@@ -849,6 +853,79 @@ export const examService = {
           });
         }
       });
+
+      // Self-healing: Check student_sessions for submitted exams missing from grade_records
+      try {
+        let sessionQuery = supabase
+          .from('student_sessions')
+          .select('id, exam_id, nisn, student_name, class_name, submitted_at, started_at, violation_count')
+          .eq('status', 'submitted');
+
+        if (examId && examId !== 'all') {
+          sessionQuery = sessionQuery.eq('exam_id', examId);
+        }
+
+        const { data: submittedSessions } = await sessionQuery;
+        if (submittedSessions && submittedSessions.length > 0) {
+          for (const s of submittedSessions) {
+            const cleanNisn = (s.nisn || '').trim();
+            const cleanName = (s.student_name || '').trim().toLowerCase();
+            const sessionKey = s.id || `${cleanNisn}_${cleanName}`;
+
+            // If this submitted student is not in grade_records, recover their grade from student_answers
+            const alreadyHasGrade = Array.from(uniqueGrades.values()).some(
+              (g) => g.sessionId === s.id || (g.nisn === cleanNisn && g.name.trim().toLowerCase() === cleanName)
+            );
+
+            if (!alreadyHasGrade) {
+              const { data: answers } = await supabase
+                .from('student_answers')
+                .select('score_earned, is_correct')
+                .eq('session_id', s.id);
+
+              const totalScore = (answers || []).reduce((sum, a: any) => sum + (Number(a.score_earned) || 0), 0);
+              const totalAnswers = (answers || []).length;
+              const maxScore = totalAnswers > 0 ? totalAnswers * 5 : 100;
+              const status: 'Lulus' | 'Remedial' = totalScore >= 75 ? 'Lulus' : 'Remedial';
+
+              const recoveredGrade: GradeRecord = {
+                studentId: `stu-${cleanNisn}`,
+                name: s.student_name || 'Siswa',
+                nisn: cleanNisn,
+                className: s.class_name || 'Kelas X',
+                score: totalScore,
+                maxScore: maxScore,
+                submittedAt: s.submitted_at ? new Date(s.submitted_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-',
+                timeSpentMinutes: 20,
+                tabViolations: s.violation_count || 0,
+                status: status,
+                sessionId: s.id,
+                examId: s.exam_id,
+              };
+
+              uniqueGrades.set(sessionKey, recoveredGrade);
+
+              // Back-insert into grade_records so it is permanently saved
+              supabase.from('grade_records').insert({
+                exam_id: s.exam_id,
+                session_id: s.id,
+                student_id: recoveredGrade.studentId,
+                name: recoveredGrade.name,
+                nisn: cleanNisn,
+                class_name: recoveredGrade.className,
+                score: totalScore,
+                max_score: maxScore,
+                submitted_at: recoveredGrade.submittedAt,
+                time_spent_minutes: recoveredGrade.timeSpentMinutes,
+                tab_violations: recoveredGrade.tabViolations,
+                status: status,
+              });
+            }
+          }
+        }
+      } catch (recoveryErr) {
+        console.warn('Grade self-healing notice:', recoveryErr);
+      }
 
       return Array.from(uniqueGrades.values());
     } catch (err: any) {
@@ -1399,14 +1476,15 @@ export const examService = {
    * Gatekeeper: Check if a student is allowed to enter or resume an exam session
    * Blocks students who have already submitted or were expelled until the teacher resets the session
    */
-  async checkStudentSessionAccess(examId: string, studentNisn: string): Promise<{
+  async checkStudentSessionAccess(examId: string, studentNisn: string, studentName?: string): Promise<{
     allowed: boolean;
-    reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working' | 'capacity_exceeded';
+    reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working' | 'capacity_exceeded' | 'conflict';
     message?: string;
     existingSession?: any;
   }> {
     try {
       const cleanNisn = studentNisn.trim();
+      const cleanName = (studentName || '').trim().toLowerCase();
       let query = supabase
         .from('student_sessions')
         .select('*')
@@ -1416,10 +1494,26 @@ export const examService = {
         query = query.eq('exam_id', examId);
       }
 
-      const { data: sessions, error } = await query.order('created_at', { ascending: false }).limit(1);
+      const { data: sessions, error } = await query.order('created_at', { ascending: false });
 
       // Jika siswa sudah pernah masuk sebelumnya, periksa status sesinya
       if (!error && sessions && sessions.length > 0) {
+        if (cleanName) {
+          const conflictingSession = sessions.find((s: any) => {
+            const sName = (s.student_name || '').trim().toLowerCase();
+            return sName && sName !== cleanName;
+          });
+
+          if (conflictingSession) {
+            return {
+              allowed: false,
+              reason: 'conflict',
+              message: `Nomor NIS/NISN '${cleanNisn}' sudah digunakan oleh siswa lain (${conflictingSession.student_name}). Harap periksa kembali dan masukkan NIS/NISN Anda sendiri.`,
+              existingSession: conflictingSession,
+            };
+          }
+        }
+
         const session = sessions[0];
 
         if (session.status === 'submitted') {
@@ -1516,7 +1610,7 @@ export const examService = {
   /**
    * Force submit student in Supabase & Broadcast
    */
-  async forceSubmitStudent(studentNisn: string, examId?: string) {
+  async forceSubmitStudent(studentNisn: string, examId?: string, studentName?: string) {
     try {
       const isValidUUID = (str?: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str || '');
       const validExamId = (examId && isValidUUID(examId)) ? examId : null;
@@ -1532,6 +1626,9 @@ export const examService = {
 
       if (validExamId) {
         updateQuery = updateQuery.eq('exam_id', validExamId);
+      }
+      if (studentName) {
+        updateQuery = updateQuery.eq('student_name', studentName.trim());
       }
 
       await updateQuery;
