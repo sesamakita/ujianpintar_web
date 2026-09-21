@@ -22,6 +22,7 @@ import type { Question } from '../../types/exam';
 import { aiQuestionService, type AIGenerateParams } from '../../services/aiQuestionService';
 import { MathRenderer } from '../common/MathRenderer';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { formatClassName } from '../../utils/formatters';
 
 interface AIGeneratorModalProps {
   isOpen: boolean;
@@ -144,7 +145,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
 
     const params: AIGenerateParams = {
       subject: subject.trim() || 'Mata Pelajaran',
-      gradeLevel: gradeLevel.trim() || 'Kelas X',
+      gradeLevel: formatClassName(gradeLevel, false).trim() || 'Kelas X',
       topic: topic.trim(),
       difficulty,
       count,
@@ -386,8 +387,9 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                   <input
                     type="text"
                     value={gradeLevel}
-                    onChange={(e) => setGradeLevel(e.target.value)}
-                    placeholder="Contoh: Kelas X (Fase E)"
+                    onChange={(e) => setGradeLevel(formatClassName(e.target.value, true))}
+                    onBlur={() => setGradeLevel(formatClassName(gradeLevel, false))}
+                    placeholder="Contoh: XI Ips 1 atau X-A"
                     className="w-full px-3.5 py-2.5 text-xs font-sans bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-900"
                   />
                 </div>

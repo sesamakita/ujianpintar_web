@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileEdit,
   Plus,
@@ -18,12 +18,19 @@ import {
   Lock,
   AlertCircle,
   Loader2,
-  Sparkles
+  Sparkles,
+  Users,
+  Calendar,
+  Info,
+  X
 } from 'lucide-react';
 import type { ExamSettings } from '../../types/exam';
-import type { TeacherSubscription } from '../../types/subscription';
+import type { TeacherSubscription, MonthlySessionUsage } from '../../types/subscription';
 import { examService, generateUUID } from '../../services/examService';
+import { subscriptionService } from '../../services/subscriptionService';
+import { supabase } from '../../lib/supabase';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { formatClassName } from '../../utils/formatters';
 
 interface ExamBankListProps {
   exams: ExamSettings[];
@@ -82,6 +89,38 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
   // Modern UI Delete Confirmation State
   const [deleteTargetExam, setDeleteTargetExam] = useState<ExamSettings | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Monthly Session Quota Usage State (>10 students per class & date)
+  const [monthlyUsage, setMonthlyUsage] = useState<MonthlySessionUsage | null>(null);
+  const [isUsageLoading, setIsUsageLoading] = useState(false);
+  const [showUsageDetailModal, setShowUsageDetailModal] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchUsage = async () => {
+      try {
+        setIsUsageLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user?.id) {
+          const usage = await subscriptionService.getTeacherMonthlySessionUsage(user.id);
+          if (isMounted) {
+            setMonthlyUsage(usage);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load monthly session usage:', err);
+      } finally {
+        if (isMounted) {
+          setIsUsageLoading(false);
+        }
+      }
+    };
+
+    fetchUsage();
+    return () => {
+      isMounted = false;
+    };
+  }, [exams]);
 
   const handleCopyPin = (token: string, examId: string) => {
     navigator.clipboard.writeText(token);
@@ -154,10 +193,11 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
     }
     setIsDuplicating(true);
     setDuplicateError(null);
+    const cleanGrade = formatClassName(duplicateGradeLevel, false).trim() || 'X';
     const res = await examService.duplicateExam(
       duplicateTargetExam.id,
       duplicateTitle.trim(),
-      duplicateGradeLevel.trim(),
+      cleanGrade,
       duplicatePin.trim(),
       duplicateProctorPin.trim()
     );
@@ -237,7 +277,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
       id: generateUUID(),
       title: newTitle.trim(),
       subject: newSubject.trim() || 'Mata Pelajaran',
-      gradeLevel: newGradeLevel.trim() || 'Kelas X',
+      gradeLevel: formatClassName(newGradeLevel, false).trim() || 'X',
       durationMinutes: parseInt(newDuration, 10) || 60,
       scheduleDate: new Date().toISOString().split('T')[0],
       scheduleTime: '08:00',
@@ -295,17 +335,36 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Quota Badge Indicator */}
           {subscription?.tier === 'free' ? (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 border border-amber-200/80 rounded-xl text-xs">
-              <span className="font-semibold text-amber-800">
-                {exams.length}/3 Ujian Digunakan
-              </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowUsageDetailModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 hover:bg-amber-100/80 border border-amber-200/80 rounded-xl text-xs transition-colors cursor-pointer group"
+                title="Klik untuk melihat rincian sesi ujian bulan ini"
+              >
+                <Users className="w-3.5 h-3.5 text-amber-700" />
+                <span className="font-semibold text-amber-900">
+                  {monthlyUsage?.usedSessions ?? 0}/3 Sesi Ujian Bulan Ini
+                </span>
+                <span className="text-[10px] text-amber-700 underline font-bold ml-0.5 group-hover:text-amber-900">
+                  (Rincian)
+                </span>
+              </button>
+
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                <Layers className="w-3.5 h-3.5 text-slate-500" />
+                <span className="font-semibold text-slate-700">
+                  {exams.length}/3 Paket Soal
+                </span>
+              </div>
+
               <button
                 type="button"
                 onClick={() => onOpenUpgradeModal?.('Upgrade ke Guru PRO', 'Buka kuota ujian tanpa batas, kapasitas siswa tak terhingga, dan fitur raport otomatis.')}
-                className="text-blue-600 hover:text-blue-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-0.5"
+                className="text-blue-600 hover:text-blue-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-0.5 text-xs ml-1"
               >
                 <span>Upgrade PRO</span>
                 <span>→</span>
@@ -327,6 +386,28 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Monthly Session Quota Limit Alert Banner for Free Tier */}
+      {subscription?.tier === 'free' && monthlyUsage && monthlyUsage.usedSessions >= 3 && (
+        <div className="p-4 bg-amber-50/90 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950 shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="leading-relaxed">
+              <span className="font-bold text-amber-900">Batas Kuota Sesi Ujian Bulan Ini Telah Tercapai (3/3 Sesi): </span>
+              <span className="text-amber-800 font-sans">
+                Akun Guru Basic telah menyelenggarakan 3 sesi ujian resmi (&gt;10 siswa) bulan ini. Sesi kelas baru berikutnya dibatasi maksimal 10 siswa untuk simulasi/remedial. Tingkatkan ke <strong>Guru PRO</strong> untuk menyelenggarakan ujian tanpa batas sesi dan siswa unlimited.
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpenUpgradeModal?.('Upgrade ke Guru PRO', 'Buka kuota sesi ujian tanpa batas, kapasitas siswa tak terhingga, dan fitur analisis nilai otomatis.')}
+            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold font-display flex-shrink-0 cursor-pointer shadow-xs transition-colors whitespace-nowrap"
+          >
+            Upgrade PRO
+          </button>
+        </div>
+      )}
 
       {/* Main Bank Soal List Table */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
@@ -773,8 +854,9 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                   <input
                     type="text"
                     value={newGradeLevel}
-                    onChange={(e) => setNewGradeLevel(e.target.value)}
-                    placeholder="Contoh: Kelas X (Fase E)"
+                    onChange={(e) => setNewGradeLevel(formatClassName(e.target.value, true))}
+                    onBlur={() => setNewGradeLevel(formatClassName(newGradeLevel, false))}
+                    placeholder="Contoh: XI Ips 1 atau X-A"
                     className="w-full px-3.5 py-2 text-xs font-sans bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-900"
                   />
                 </div>
@@ -910,8 +992,9 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                 <input
                   type="text"
                   value={duplicateGradeLevel}
-                  onChange={(e) => setDuplicateGradeLevel(e.target.value)}
-                  placeholder="Contoh: Kelas X-A, Kelas 7B, XII MIPA 1"
+                  onChange={(e) => setDuplicateGradeLevel(formatClassName(e.target.value, true))}
+                  onBlur={() => setDuplicateGradeLevel(formatClassName(duplicateGradeLevel, false))}
+                  placeholder="Contoh: X-A, 7B, XII MIPA 1"
                   className="w-full px-3.5 py-2.5 text-xs font-sans font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-slate-900"
                 />
               </div>
@@ -1132,6 +1215,154 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                     <span>Ya, Acak Baru</span>
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Session Quota Usage Detail Modal */}
+      {showUsageDetailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full border border-slate-200 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center font-bold">
+                  <Users className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-slate-900 text-sm">
+                    Rincian Kuota Sesi Ujian Bulan Ini
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-sans">
+                    Dihitung otomatis per kombinasi Modul, Kelas, &amp; Tanggal
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUsageDetailModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-4 max-h-[70vh] overflow-y-auto">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-2xl">
+                  <span className="text-[11px] text-amber-800 font-medium block">Sesi Resmi Digunakan</span>
+                  <span className="text-xl font-bold font-display text-amber-950 mt-0.5 block">
+                    {monthlyUsage?.usedSessions ?? 0} / 3 <span className="text-xs font-normal text-amber-800">Sesi</span>
+                  </span>
+                  <span className="text-[10px] text-amber-700 block mt-1">
+                    Peserta &gt; 10 siswa per kelas
+                  </span>
+                </div>
+                <div className="p-3.5 bg-blue-50/70 border border-blue-200/80 rounded-2xl">
+                  <span className="text-[11px] text-blue-800 font-medium block">Sisa Kuota Sesi</span>
+                  <span className="text-xl font-bold font-display text-blue-950 mt-0.5 block">
+                    {monthlyUsage?.remainingSessions ?? 3} <span className="text-xs font-normal text-blue-800">Sesi</span>
+                  </span>
+                  <span className="text-[10px] text-blue-700 block mt-1">
+                    Reset otomatis awal bulan
+                  </span>
+                </div>
+              </div>
+
+              {/* Policy Explainer */}
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-2 text-xs text-slate-600">
+                <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <div className="leading-relaxed text-[11px]">
+                  <strong>Aturan Perhitungan Kuota:</strong> 1 sesi ujian resmi sah dihitung jika jumlah siswa dalam 1 kelas dan tanggal pelaksanaan mencapai <strong>lebih dari 10 siswa (&gt;10)</strong>. Sesi uji coba atau remedial kecil (≤10 siswa) <strong>bebas tanpa mengurangi kuota</strong>.
+                </div>
+              </div>
+
+              {/* Session History List */}
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-slate-800 block">
+                  Riwayat Pelaksanaan Sesi Bulan Ini:
+                </span>
+
+                {isUsageLoading ? (
+                  <div className="py-6 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                    <span>Memeriksa riwayat sesi...</span>
+                  </div>
+                ) : !monthlyUsage?.sessionGroups || monthlyUsage.sessionGroups.length === 0 ? (
+                  <div className="py-6 text-center bg-slate-50 border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
+                    Belum ada sesi ujian yang diselenggarakan pada bulan ini.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {monthlyUsage.sessionGroups.map((group, idx) => (
+                      <div
+                        key={group.key || idx}
+                        className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                          group.isQualifying
+                            ? 'bg-amber-50/50 border-amber-200 text-amber-950'
+                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <div className="space-y-0.5">
+                          <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                            <span>{group.className}</span>
+                            <span className="text-slate-400 font-normal">•</span>
+                            <span className="font-medium text-slate-600 truncate max-w-[160px]">{group.examTitle}</span>
+                          </div>
+                          <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400" />
+                              {group.dateStr}
+                            </span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <Users className="w-3 h-3 text-slate-400" />
+                              {group.studentCount} Siswa
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          {group.isQualifying ? (
+                            <span className="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-lg text-[10px] whitespace-nowrap">
+                              ✓ Sesi Resmi (&gt;10 Siswa)
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-slate-200 text-slate-600 font-medium rounded-lg text-[10px] whitespace-nowrap">
+                              Simulasi (≤10 Siswa, Bebas Kuota)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setShowUsageDetailModal(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold font-display cursor-pointer transition-colors"
+              >
+                Tutup
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUsageDetailModal(false);
+                  onOpenUpgradeModal?.('Upgrade ke Guru PRO', 'Buka kuota sesi ujian tanpa batas, kapasitas siswa tak terhingga, dan fitur raport otomatis.');
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold font-display shadow-md shadow-blue-500/20 cursor-pointer transition-all"
+              >
+                Tingkatkan ke Guru PRO →
               </button>
             </div>
           </div>

@@ -24,6 +24,7 @@ import {
 import type { ExamSettings, Question, StudentProctoring, GradeRecord, ViolationLogItem } from '../../types/exam';
 import { MathRenderer } from '../common/MathRenderer';
 import { RustEngineBridge } from '../../wasm/rustEngine';
+import { formatPersonName } from '../../utils/formatters';
 
 // Default interactive demo questions for simulation preview when accessed from Landing Page or clean editor
 export const DEFAULT_DEMO_QUESTIONS: Question[] = [
@@ -625,7 +626,8 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                                 <input
                                   type="text"
                                   value={name}
-                                  onChange={(e) => setName(e.target.value)}
+                                  onChange={(e) => setName(formatPersonName(e.target.value))}
+                                  onBlur={() => setName(formatPersonName(name).trim())}
                                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                   placeholder="Nama lengkap"
                                 />

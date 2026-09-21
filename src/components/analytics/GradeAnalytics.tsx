@@ -437,7 +437,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
                 <option value="all">Semua Kelas ({availableClasses.length})</option>
                 {availableClasses.map((cls) => (
                   <option key={cls} value={cls}>
-                    Kelas {cls}
+                    Kelas {cls.replace(/^kelas\s*/i, '')}
                   </option>
                 ))}
               </select>
@@ -580,7 +580,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
 
                       <td className="py-3 px-4">
                         <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-display font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                          {grade.className || '-'}
+                          {grade.className ? grade.className.replace(/^kelas\s*/i, '') : '-'}
                         </span>
                       </td>
 

@@ -74,3 +74,23 @@ export interface TransactionRecord {
     transferProofUrl?: string;
   };
 }
+
+export interface MonthlySessionGroup {
+  key: string;
+  examId: string;
+  examTitle: string;
+  className: string;
+  dateStr: string; // YYYY-MM-DD
+  studentCount: number;
+  isQualifying: boolean; // true if studentCount > 10
+}
+
+export interface MonthlySessionUsage {
+  tier: SubscriptionTier;
+  usedSessions: number; // Jumlah sesi yang memiliki > 10 siswa
+  maxSessions: number; // 3 untuk free, -1 untuk pro/school
+  remainingSessions: number; // maxSessions - usedSessions (atau 999 jika unlimited)
+  isLimitReached: boolean;
+  qualifyingSessionKeys: string[];
+  sessionGroups: MonthlySessionGroup[];
+}

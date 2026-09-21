@@ -6,7 +6,9 @@ import type {
   PaymentMethodOption, 
   PaymentChannel, 
   BillingCycle,
-  SubscriptionTier 
+  SubscriptionTier,
+  MonthlySessionGroup,
+  MonthlySessionUsage
 } from '../types/subscription';
 
 export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
@@ -19,8 +21,9 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
     priceYearly: 0,
     description: 'Cocok untuk guru yang baru memulai ujian digital berbasis kelas.',
     features: [
-      'Maksimal 3 sesi ujian aktif per bulan',
-      'Kapasitas hingga 40 siswa per ujian (1 Kelas)',
+      'Maksimal 3 sesi ujian per bulan (>10 siswa/kelas)',
+      'Uji coba simulasi & remedial ≤10 siswa tanpa kuota (Gratis)',
+      'Kapasitas hingga 40 siswa per kelas ujian',
       'Bank soal pilihan ganda, B/S, & isian',
       'Simulasi pengerjaan smartphone siswa',
       'Ekspor rekap nilai standar (.csv)',
@@ -101,6 +104,19 @@ export const PAYMENT_METHODS: PaymentMethodOption[] = [
     instruction: 'Pindai kode QRIS menggunakan DANA, BCA, Mandiri, BRI, GoPay, OVO, ShopeePay, dll.',
   },
 ];
+
+/**
+ * Format a date into Asia/Jakarta (WIB) YYYY-MM-DD string
+ */
+export function getWibDateString(dateInput: string | Date = new Date()): string {
+  try {
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (isNaN(d.getTime())) return new Date().toISOString().substring(0, 10);
+    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  } catch {
+    return (typeof dateInput === 'string' ? dateInput : dateInput.toISOString()).substring(0, 10);
+  }
+}
 
 export const subscriptionService = {
   /**
@@ -665,6 +681,182 @@ Saya telah mentransfer tepat sejumlah *${formatRupiah(transaction.totalAmount)}*
     }
 
     return true;
+  },
+
+  /**
+   * Calculate monthly exam session quota usage for a teacher based on (exam + class + date) groups.
+   * A group only counts as 1 qualifying session IF student count > 10.
+   * Sessions with <= 10 students are free trial/remedials and do not consume quota.
+   */
+  async getTeacherMonthlySessionUsage(teacherId: string, targetDate?: Date): Promise<MonthlySessionUsage> {
+    try {
+      // 1. Get teacher's subscription profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('subscription_tier, subscription_expires_at')
+        .eq('id', teacherId)
+        .maybeSingle();
+
+      let isUnlimited = false;
+      let tier: SubscriptionTier = 'free';
+      if (profile && (profile.subscription_tier === 'pro' || profile.subscription_tier === 'school')) {
+        tier = profile.subscription_tier;
+        if (profile.subscription_expires_at) {
+          const expiry = new Date(profile.subscription_expires_at).getTime();
+          if (expiry > Date.now()) {
+            isUnlimited = true;
+          } else {
+            tier = 'free'; // expired
+          }
+        } else {
+          isUnlimited = true;
+        }
+      }
+
+      const maxSessions = isUnlimited ? -1 : 3;
+
+      // 2. Get all exams belonging to this teacher
+      const { data: teacherExams, error: examErr } = await supabase
+        .from('exams')
+        .select('id, title')
+        .eq('teacher_id', teacherId);
+
+      if (examErr || !teacherExams || teacherExams.length === 0) {
+        return {
+          tier,
+          usedSessions: 0,
+          maxSessions,
+          remainingSessions: isUnlimited ? 999 : 3,
+          isLimitReached: false,
+          qualifyingSessionKeys: [],
+          sessionGroups: [],
+        };
+      }
+
+      const examMap = new Map<string, string>();
+      const examIds: string[] = [];
+      teacherExams.forEach((e) => {
+        examMap.set(e.id, e.title || 'Ujian');
+        examIds.push(e.id);
+      });
+
+      // 3. Compute calendar month range (covers WIB +7)
+      const now = targetDate || new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth(); // 0-indexed
+      const startOfMonth = new Date(Date.UTC(year, month, 1, 0, 0, 0) - 12 * 3600 * 1000).toISOString();
+      const endOfMonth = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999) + 14 * 3600 * 1000).toISOString();
+
+      // 4. Query student_sessions for all exams in this range
+      const { data: rawSessions, error: sessionErr } = await supabase
+        .from('student_sessions')
+        .select('id, exam_id, class_name, nisn, student_name, created_at, started_at')
+        .in('exam_id', examIds)
+        .gte('created_at', startOfMonth)
+        .lte('created_at', endOfMonth);
+
+      if (sessionErr || !rawSessions || rawSessions.length === 0) {
+        return {
+          tier,
+          usedSessions: 0,
+          maxSessions,
+          remainingSessions: isUnlimited ? 999 : 3,
+          isLimitReached: false,
+          qualifyingSessionKeys: [],
+          sessionGroups: [],
+        };
+      }
+
+      // 5. Group by (exam_id + class_name + date)
+      const groupsMap = new Map<string, {
+        examId: string;
+        examTitle: string;
+        className: string;
+        dateStr: string;
+        nisns: Set<string>;
+      }>();
+
+      const currentMonthPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+      for (const row of rawSessions) {
+        const examId = row.exam_id;
+        const normClass = (row.class_name || 'Kelas X').trim().toUpperCase();
+        const dateStr = getWibDateString(row.started_at || row.created_at);
+
+        // Filter to ensure only dates within the target month are counted
+        if (!dateStr.startsWith(currentMonthPrefix)) {
+          continue;
+        }
+
+        const key = `${examId}_${normClass}_${dateStr}`;
+        const cleanNisn = (row.nisn || row.student_name || row.id).trim().toLowerCase();
+
+        let grp = groupsMap.get(key);
+        if (!grp) {
+          grp = {
+            examId,
+            examTitle: examMap.get(examId) || 'Ujian',
+            className: row.class_name ? row.class_name.trim() : 'Kelas X',
+            dateStr,
+            nisns: new Set<string>(),
+          };
+          groupsMap.set(key, grp);
+        }
+        if (cleanNisn) {
+          grp.nisns.add(cleanNisn);
+        }
+      }
+
+      // 6. Evaluate qualifying sessions (> 10 students)
+      const sessionGroups: MonthlySessionGroup[] = [];
+      const qualifyingSessionKeys: string[] = [];
+      let usedSessions = 0;
+
+      for (const [key, grp] of groupsMap.entries()) {
+        const studentCount = grp.nisns.size;
+        const isQualifying = studentCount > 10;
+        if (isQualifying) {
+          usedSessions++;
+          qualifyingSessionKeys.push(key);
+        }
+        sessionGroups.push({
+          key,
+          examId: grp.examId,
+          examTitle: grp.examTitle,
+          className: grp.className,
+          dateStr: grp.dateStr,
+          studentCount,
+          isQualifying,
+        });
+      }
+
+      // Sort session groups by date descending
+      sessionGroups.sort((a, b) => b.dateStr.localeCompare(a.dateStr));
+
+      const isLimitReached = !isUnlimited && usedSessions >= 3;
+      const remainingSessions = isUnlimited ? 999 : Math.max(0, 3 - usedSessions);
+
+      return {
+        tier,
+        usedSessions,
+        maxSessions,
+        remainingSessions,
+        isLimitReached,
+        qualifyingSessionKeys,
+        sessionGroups,
+      };
+    } catch (err: any) {
+      console.warn('getTeacherMonthlySessionUsage error:', err);
+      return {
+        tier: 'free',
+        usedSessions: 0,
+        maxSessions: 3,
+        remainingSessions: 3,
+        isLimitReached: false,
+        qualifyingSessionKeys: [],
+        sessionGroups: [],
+      };
+    }
   },
 };
 

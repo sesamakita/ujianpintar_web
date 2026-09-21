@@ -15,6 +15,7 @@ import {
 import type { ExamSettings } from '../../types/exam';
 import { TimePickerModal } from './TimePickerModal';
 import { formatScheduleTime } from '../../services/examService';
+import { formatClassName } from '../../utils/formatters';
 
 interface ExamSettingsPanelProps {
   settings: ExamSettings;
@@ -77,9 +78,10 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
           </label>
           <input
             type="text"
-            placeholder="Contoh: Kelas X MIPA 1, Kelas XI IPA 2, dll..."
+            placeholder="Contoh: XI Ips 1, X MIPA 2, dll..."
             value={settings.gradeLevel}
-            onChange={(e) => handleTextChange('gradeLevel', e.target.value)}
+            onChange={(e) => handleTextChange('gradeLevel', formatClassName(e.target.value, true))}
+            onBlur={(e) => handleTextChange('gradeLevel', formatClassName(e.target.value, false))}
             className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-sm font-sans font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           />
         </div>

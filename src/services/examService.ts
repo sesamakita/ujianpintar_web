@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { ExamSettings, Question, StudentProctoring, ViolationLogItem, GradeRecord, StudentAnswerDetailItem } from '../types/exam';
+import { subscriptionService, getWibDateString } from './subscriptionService';
 
 export const isValidUUID = (str?: string): boolean => {
   return Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
@@ -1476,7 +1477,7 @@ export const examService = {
    * Gatekeeper: Check if a student is allowed to enter or resume an exam session
    * Blocks students who have already submitted or were expelled until the teacher resets the session
    */
-  async checkStudentSessionAccess(examId: string, studentNisn: string, studentName?: string): Promise<{
+  async checkStudentSessionAccess(examId: string, studentNisn: string, studentName?: string, className?: string): Promise<{
     allowed: boolean;
     reason?: 'submitted' | 'violation_flagged' | 'timed_out' | 'active_working' | 'capacity_exceeded' | 'conflict';
     message?: string;
@@ -1551,7 +1552,7 @@ export const examService = {
         };
       }
 
-      // Siswa BARU yang mencoba bergabung: Periksa batasan kuota kapasitas peserta (Paket Free: Max 40 siswa)
+      // Siswa BARU yang mencoba bergabung: Periksa batasan kuota kapasitas peserta (Paket Free)
       if (examId && isValidUUID(examId)) {
         try {
           const { data: examData } = await supabase
@@ -1579,8 +1580,9 @@ export const examService = {
               }
             }
 
-            // Jika akun guru adalah Free (Basic), batasi maksimal 40 siswa per ujian
+            // Jika akun guru adalah Free (Basic):
             if (!isUnlimited) {
+              // 1. Batasi kapasitas maksimal 40 siswa per kelas/ujian
               const { count, error: countErr } = await supabase
                 .from('student_sessions')
                 .select('id', { count: 'exact', head: true })
@@ -1592,6 +1594,33 @@ export const examService = {
                   reason: 'capacity_exceeded',
                   message: 'Kapasitas Ujian Penuh: Sesi ujian ini telah mencapai batas maksimal 40 siswa (Paket Guru Basic). Silakan hubungi guru pengawas Anda untuk meng-upgrade ke akun Guru PRO agar kapasitas peserta menjadi tanpa batas (Unlimited).',
                 };
+              }
+
+              // 2. Batasi kuota maksimal 3 sesi ujian per bulan (>10 siswa per sesi)
+              try {
+                const usage = await subscriptionService.getTeacherMonthlySessionUsage(examData.teacher_id);
+                const todayStr = getWibDateString();
+                const normClass = (className || 'Kelas X').trim().toUpperCase();
+                const currentGroupKey = `${examId}_${normClass}_${todayStr}`;
+
+                const isAlreadyQualifyingSession = usage.qualifyingSessionKeys.includes(currentGroupKey);
+
+                // Jika guru sudah memakai 3 sesi resmi dan sesi ini BELUM masuk dalam 3 sesi tersebut:
+                if (!isAlreadyQualifyingSession && usage.usedSessions >= 3) {
+                  const currentGroup = usage.sessionGroups.find((g) => g.key === currentGroupKey);
+                  const currentCount = currentGroup ? currentGroup.studentCount : 0;
+
+                  // Sesi baru diizinkan maksimal 10 siswa (mode simulasi/remedial kecil)
+                  if (currentCount >= 10) {
+                    return {
+                      allowed: false,
+                      reason: 'capacity_exceeded',
+                      message: 'Batas Kuota Guru Tercapai: Akun guru Anda telah menggunakan batas maksimal 3 sesi ujian (>10 siswa) untuk bulan ini pada paket Guru Basic. Sesi baru dibatasi maksimal 10 siswa untuk mode simulasi/remedial. Silakan hubungi guru pengawas Anda untuk meningkatkan akun ke Guru PRO.',
+                    };
+                  }
+                }
+              } catch (quotaErr) {
+                console.warn('Quota session evaluation exception:', quotaErr);
               }
             }
           }
