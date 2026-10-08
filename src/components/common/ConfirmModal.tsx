@@ -94,6 +94,9 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Konfirmasi Tindakan"
       className={`fixed inset-0 z-50 flex items-center justify-center p-4 select-none font-sans animate-in fade-in duration-150 ${
         flat ? 'bg-slate-900/60' : 'bg-slate-950/70 backdrop-blur-xs'
       }`}

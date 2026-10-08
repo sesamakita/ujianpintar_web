@@ -21,6 +21,7 @@ import { subscriptionService, SUBSCRIPTION_PLANS } from '../../services/subscrip
 import { SubscriptionPlanCard } from './SubscriptionPlanCard';
 import { PaymentCheckoutModal } from './PaymentCheckoutModal';
 import { SchoolLicenseRedeemCard } from './SchoolLicenseRedeemCard';
+import { formatRupiah } from '../../utils/formatters';
 
 interface SubscriptionSettingsTabProps {
   currentUser: {
@@ -55,9 +56,6 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
     setIsTrialActivating(false);
     onSubscriptionUpdated(trialSub);
   };
-
-  const formatRupiah = (num: number) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
   return (
     <div className="space-y-8 font-sans select-none animate-in fade-in duration-200">
@@ -209,7 +207,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
               }`}
             >
               <span>Tagihan Tahunan</span>
-              <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded font-black ${
+              <span className={`text-[11px] font-mono px-1.5 py-0.5 rounded font-black ${
                 billingCycle === 'yearly' ? 'bg-blue-800 text-blue-200' : 'bg-emerald-100 text-emerald-700'
               }`}>
                 Hemat 25%
@@ -292,7 +290,7 @@ export const SubscriptionSettingsTab: React.FC<SubscriptionSettingsTabProps> = (
                     <td className="py-3 px-3">{trx.paymentChannelName}</td>
                     <td className="py-3 px-3 font-bold text-emerald-700">{formatRupiah(trx.totalAmount)}</td>
                     <td className="py-3 px-3">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold uppercase bg-emerald-100 text-emerald-800">
                         <CheckCircle2 className="w-3 h-3" /> Lunas
                       </span>
                     </td>

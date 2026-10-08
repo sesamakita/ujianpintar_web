@@ -47,7 +47,16 @@ node telegram-payment-bot.js
 ## 3. Konfigurasi Bot Token & Chat ID
 - Nomor DANA: `0821-9692-9193` (a.n. Deni Indrayana)
 - Nomor WhatsApp Hotline: `0821-9692-9193`
-- Default Bot Token: `8985971390:AAEaHQtLFM08EVh5MIAMKlbfPrGIdgraku0`
-- Default Admin Chat ID: `8971674377`
 
-*Catatan: Jika Anda membuat bot Telegram baru di @BotFather, Anda cukup mengganti token & chat ID di file `telegram-payment-bot.js` dan di `src/services/subscriptionService.ts` (`DANA_CONFIG`).*
+Semua rahasia bot diisi melalui file `.env` (salin dari [.env.example](./.env.example)):
+
+| Variabel | Keterangan |
+|---|---|
+| `TELEGRAM_BOT_TOKEN` | Token bot dari @BotFather (wajib) |
+| `ADMIN_CHAT_ID` | ID chat Telegram admin (wajib) |
+| `SUPABASE_URL` | URL Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Service role key Supabase (wajib, rahasia) |
+| `WAHA_BASE_URL` | Endpoint WAHA WhatsApp API |
+| `WAHA_API_KEY` | API key WAHA |
+
+*Catatan: Jika Anda membuat bot Telegram baru di @BotFather, Anda cukup mengganti token & chat ID di file `.env`, dan secara opsional di `src/services/subscriptionService.ts` (`DANA_CONFIG`) untuk tautan pembayaran di web.*

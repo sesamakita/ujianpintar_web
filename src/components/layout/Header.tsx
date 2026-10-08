@@ -10,14 +10,15 @@ import type { TeacherSubscription } from '../../types/subscription';
 import { schoolLicenseService } from '../../services/schoolLicenseService';
 
 interface HeaderProps {
-  activeTab: string;
+  activeTab: 'builder' | 'proctoring' | 'analytics' | 'media' | 'subscription' | 'settings';
   examSettings: ExamSettings;
   violationCount: number;
   teacherName?: string;
   avatarUrl?: string;
   subscription?: TeacherSubscription;
+  isMobileOpen?: boolean;
   onOpenUpgradeModal?: () => void;
-  onNavigateTab?: (tab: 'builder' | 'proctoring' | 'analytics' | 'settings' | 'subscription') => void;
+  onNavigateTab?: (tab: 'builder' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription') => void;
   onToggleMobileMenu?: () => void;
 }
 
@@ -26,6 +27,7 @@ export const Header: React.FC<HeaderProps> = ({
   violationCount,
   teacherName,
   avatarUrl,
+  isMobileOpen = false,
   onNavigateTab,
   onToggleMobileMenu,
 }) => {
@@ -56,6 +58,8 @@ export const Header: React.FC<HeaderProps> = ({
     switch (activeTab) {
       case 'builder':
         return 'Question Builder & Jadwal Ujian';
+      case 'media':
+        return 'Koleksi Foto & Galeri Soal VPS';
       case 'proctoring':
         return 'Real-Time Live Proctoring';
       case 'analytics':
@@ -77,6 +81,9 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onToggleMobileMenu}
             className="lg:hidden p-2 -ml-1 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer flex items-center justify-center flex-shrink-0"
             title="Buka Menu Navigasi"
+            aria-label="Buka Menu Navigasi"
+            aria-expanded={isMobileOpen}
+            aria-controls="sidebar-nav-drawer"
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -94,6 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={() => onNavigateTab?.('subscription')}
             title="Lihat Detail Lisensi Sekolah & Info Paket"
+            aria-label="Lihat Detail Lisensi Sekolah & Info Paket"
             className="hidden lg:inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100/80 border border-emerald-200 rounded-xl text-xs shadow-2xs transition-colors cursor-pointer text-left"
           >
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
@@ -123,6 +131,7 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'border-slate-200 hover:bg-slate-50 text-slate-600'
             }`}
             title={violationCount > 0 ? `${violationCount} Peringatan Pelanggaran: Buka Live Proctoring` : 'Notifikasi & Live Proctoring'}
+            aria-label={violationCount > 0 ? `${violationCount} Peringatan Pelanggaran: Buka Live Proctoring` : 'Notifikasi & Live Proctoring'}
           >
             <Bell className="w-4 h-4" />
             {violationCount > 0 && (
@@ -139,6 +148,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onNavigateTab?.('settings')}
           className="p-0.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer flex items-center"
           title={`Profil Guru: ${teacherName || 'Pengaturan'}`}
+          aria-label={`Profil Guru: ${teacherName || 'Pengaturan'}`}
         >
           {avatarUrl ? (
             <img

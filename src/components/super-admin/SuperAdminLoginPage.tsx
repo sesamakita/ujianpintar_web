@@ -104,12 +104,12 @@ export const SuperAdminLoginPage: React.FC<SuperAdminLoginPageProps> = ({
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-display font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+              <label htmlFor="saf-1" className="block text-xs font-display font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                 Email Super Admin
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
+                <input id="saf-1"
                   type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -121,12 +121,12 @@ export const SuperAdminLoginPage: React.FC<SuperAdminLoginPageProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-display font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+              <label htmlFor="saf-2" className="block text-xs font-display font-bold text-slate-300 uppercase tracking-wider mb-1.5">
                 Kunci Keamanan / Password
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
+                <input id="saf-2"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

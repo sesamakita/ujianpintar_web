@@ -14,6 +14,7 @@ import { ViolationFeed } from './ViolationFeed';
 import { StudentActionModal } from './StudentActionModal';
 import { ConfirmModal } from '../common/ConfirmModal';
 import { examService } from '../../services/examService';
+import { isAppExitViolation } from '../../utils/formatters';
 import type { StudentProctoring, ViolationLogItem, ExamSettings } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
 
@@ -26,6 +27,7 @@ interface LiveProctoringDashboardProps {
   allExams?: ExamSettings[];
   activeExam?: ExamSettings;
   subscription?: TeacherSubscription;
+  realtimeMode?: 'live' | 'fallback';
   onOpenUpgradeModal?: (title?: string, description?: string) => void;
   onSelectExam?: (exam: ExamSettings) => void;
   onToggleExamAccess?: (examId: string, newStatus: 'published' | 'closed') => Promise<void>;
@@ -40,6 +42,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
   allExams = [],
   activeExam,
   subscription,
+  realtimeMode = 'live',
   onOpenUpgradeModal,
   onSelectExam,
   onToggleExamAccess,
@@ -50,13 +53,16 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
   const [copiedProctorPin, setCopiedProctorPin] = useState(false);
   const [showProjectorModal, setShowProjectorModal] = useState(false);
   const [isLockAllConfirmOpen, setIsLockAllConfirmOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionBusy, setActionBusy] = useState<'none' | 'addTime' | 'lock' | 'reset' | 'force'>('none');
 
   // Live Timer Countdown simulation
   useEffect(() => {
     const timer = setInterval(() => {
       setStudents((prev) =>
         prev.map((s) => {
-          if (s.status === 'submitted') return s;
+          if (s.status === 'submitted' || s.status === 'ready') return s;
+          if (!s.startedAt) return s; // Do not count down if student has not started yet
           if (s.remainingSeconds === undefined || s.remainingSeconds === null || s.remainingSeconds <= 0) return s;
           const newSec = Math.max(0, s.remainingSeconds - 1);
           return {
@@ -71,74 +77,131 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
   }, [setStudents]);
 
   // Global Time Extension
-  const handleAddGlobalTime = (minutes: number) => {
-    const addedSec = minutes * 60;
-    setStudents((prev) =>
-      prev.map((s) => ({
-        ...s,
-        remainingSeconds: s.status !== 'submitted' ? s.remainingSeconds + addedSec : s.remainingSeconds,
-      }))
-    );
+  const handleAddGlobalTime = async (minutes: number) => {
+    if (actionBusy !== 'none') return;
+    setActionError(null);
+    setActionBusy('addTime');
+    try {
+      const result = await examService.addGlobalTime(minutes, activeExam?.id);
+      if (!result.success) {
+        setActionError(result.error || 'Gagal menambah waktu serentak.');
+        return;
+      }
+      // Only apply locally & log once the server confirmed
+      const addedSec = minutes * 60;
+      setStudents((prev) =>
+        prev.map((s) => ({
+          ...s,
+          remainingSeconds: s.status !== 'submitted' ? (s.remainingSeconds || 0) + addedSec : s.remainingSeconds,
+        }))
+      );
 
-    examService.addGlobalTime(minutes, activeExam?.id);
-
-    const newLog: ViolationLogItem = {
-      id: `ext-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      studentName: 'Semua Siswa',
-      studentNisn: '-',
-      message: `Guru menambahkan waktu ujian serentak (+${minutes} menit)`,
-      severity: 'info',
-    };
-    setViolationLogs([newLog, ...violationLogs]);
+      const newLog: ViolationLogItem = {
+        id: `ext-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        studentName: 'Semua Siswa',
+        studentNisn: '-',
+        message: `Guru menambahkan waktu ujian serentak (+${minutes} menit)`,
+        severity: 'info',
+      };
+      setViolationLogs([newLog, ...violationLogs]);
+    } catch (e: any) {
+      setActionError(e?.message || 'Gagal menambah waktu serentak.');
+    } finally {
+      setActionBusy('none');
+    }
   };
 
   // Global Lock/Close All Exams
   const handleLockAllExams = () => {
+    setActionError(null);
     setIsLockAllConfirmOpen(true);
   };
 
-  const handleExecuteLockAllExams = () => {
-    setStudents((prev) =>
-      prev.map((s) => ({
-        ...s,
-        remainingSeconds: 0,
-        status: 'submitted',
-      }))
-    );
+  const handleExecuteLockAllExams = async () => {
+    if (actionBusy !== 'none') return;
+    setActionError(null);
+    setActionBusy('lock');
+    try {
+      const result = await examService.lockAllExams(activeExam?.id);
+      if (!result.success) {
+        setActionError(result.error || 'Gagal mengunci seluruh ujian.');
+        return; // keep modal open so teacher sees the failure
+      }
+      setStudents((prev) =>
+        prev.map((s) => ({
+          ...s,
+          remainingSeconds: 0,
+          status: 'submitted',
+        }))
+      );
 
-    examService.lockAllExams(activeExam?.id);
-
-    const newLog: ViolationLogItem = {
-      id: `lock-${Date.now()}`,
-      timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      studentName: 'Sistem Pengawas',
-      studentNisn: '-',
-      message: 'Ujian telah dikunci dan ditutup serentak oleh guru.',
-      severity: 'danger',
-    };
-    setViolationLogs([newLog, ...violationLogs]);
-    setIsLockAllConfirmOpen(false);
+      const newLog: ViolationLogItem = {
+        id: `lock-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        studentName: 'Sistem Pengawas',
+        studentNisn: '-',
+        message: 'Ujian telah dikunci dan ditutup serentak oleh guru.',
+        severity: 'danger',
+      };
+      setViolationLogs([newLog, ...violationLogs]);
+      setIsLockAllConfirmOpen(false);
+    } catch (e: any) {
+      setActionError(e?.message || 'Gagal mengunci seluruh ujian.');
+    } finally {
+      setActionBusy('none');
+    }
   };
 
   // Reset Individual Student Session
-  const handleResetSession = (studentId: string) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId
-          ? {
-              ...s,
-              status: 'working',
-              connectionStatus: 'online',
-              violationCount: 0,
-            }
-          : s
-      )
-    );
-
+  const handleResetSession = async (studentId: string): Promise<{ success: boolean; error?: string }> => {
+    if (actionBusy !== 'none') return { success: false, error: 'Aksi lain sedang berjalan. Tunggu sebentar.' };
+    setActionError(null);
     const stu = students.find((s) => s.id === studentId);
-    if (stu) {
-      examService.resetStudentSession(stu.nisn, activeExam?.id, stu.name);
+    if (!stu) return { success: false, error: 'Data siswa tidak ditemukan.' };
+    setActionBusy('reset');
+    try {
+      const targetExamId = stu.examId || (activeExam?.id !== 'all' ? activeExam?.id : undefined);
+      const result = await examService.resetStudentSession(stu.nisn, targetExamId, stu.name);
+      if (!result.success) {
+        setActionError(result.error || 'Gagal reset sesi siswa.');
+        return { success: false, error: result.error || 'Gagal reset sesi siswa.' };
+      }
+      const matchedExam = (stu.examId ? allExams.find((e) => e.id === stu.examId) : null) || (activeExam?.id !== 'all' ? activeExam : null);
+      const examDurationSec = ((matchedExam?.durationMinutes || activeExam?.durationMinutes || 60) * 60);
+
+      // 1. Purge this student's old violation logs from local UI state
+      setViolationLogs((prev) =>
+        prev.filter((l) => {
+          const matchNisn = l.studentNisn && l.studentNisn.trim() === stu.nisn.trim();
+          const matchName =
+            (l.studentName && l.studentName.trim().toLowerCase() === stu.name.trim().toLowerCase()) ||
+            (l.studentName && l.studentName.trim() === stu.nisn.trim());
+          return !matchNisn && !matchName;
+        })
+      );
+
+      // 2. Reset student state in UI (violations back to 0, away metrics cleared)
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId
+            ? {
+                ...s,
+                status: 'ready',
+                connectionStatus: 'offline',
+                violationCount: 0,
+                progressCount: 0,
+                startedAt: undefined,
+                remainingSeconds: examDurationSec,
+                isAway: false,
+                leftAt: undefined,
+                lastAwaySeconds: 0,
+                totalAwaySeconds: 0,
+              }
+            : s
+        )
+      );
+
       const newLog: ViolationLogItem = {
         id: `reset-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -147,7 +210,13 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
         message: `Sesi ujian direset oleh guru. Siswa dapat login kembali.`,
         severity: 'info',
       };
-      setViolationLogs([newLog, ...violationLogs]);
+      setViolationLogs((prev) => [newLog, ...prev]);
+      return { success: true };
+    } catch (e: any) {
+      setActionError(e?.message || 'Gagal reset sesi siswa.');
+      return { success: false, error: e?.message || 'Gagal reset sesi siswa.' };
+    } finally {
+      setActionBusy('none');
     }
   };
 
@@ -158,10 +227,11 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
   };
 
   // Send Warning
-  const handleSendWarning = (studentId: string, message: string) => {
+  const handleSendWarning = async (studentId: string, message: string) => {
     const stu = students.find((s) => s.id === studentId);
     if (stu) {
-      examService.sendWarningToStudent(stu.nisn, stu.name, message, activeExam?.id);
+      const targetExamId = stu.examId || (activeExam?.id !== 'all' ? activeExam?.id : undefined);
+      await examService.sendWarningToStudent(stu.nisn, stu.name, message, targetExamId);
       const newLog: ViolationLogItem = {
         id: `warn-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -170,27 +240,36 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
         message: `Peringatan dikirim: "${message}"`,
         severity: 'warning',
       };
-      setViolationLogs([newLog, ...violationLogs]);
+      setViolationLogs((prev) => [newLog, ...prev]);
     }
   };
 
   // Force Submit Single Student
-  const handleForceSubmit = (studentId: string) => {
-    setStudents((prev) =>
-      prev.map((s) =>
-        s.id === studentId
-          ? {
-              ...s,
-              remainingSeconds: 0,
-              status: 'submitted',
-            }
-          : s
-      )
-    );
-
+  const handleForceSubmit = async (studentId: string): Promise<{ success: boolean; error?: string }> => {
+    if (actionBusy !== 'none') return { success: false, error: 'Aksi lain sedang berjalan. Tunggu sebentar.' };
+    setActionError(null);
     const stu = students.find((s) => s.id === studentId);
-    if (stu) {
-      examService.forceSubmitStudent(stu.nisn, activeExam?.id, stu.name);
+    if (!stu) return { success: false, error: 'Data siswa tidak ditemukan.' };
+    setActionBusy('force');
+    try {
+      const targetExamId = stu.examId || (activeExam?.id !== 'all' ? activeExam?.id : undefined);
+      const result = await examService.forceSubmitStudent(stu.nisn, targetExamId, stu.name);
+      if (!result.success) {
+        setActionError(result.error || 'Gagal submit paksa siswa.');
+        return { success: false, error: result.error || 'Gagal submit paksa siswa.' };
+      }
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === studentId
+            ? {
+                ...s,
+                remainingSeconds: 0,
+                status: 'submitted',
+              }
+            : s
+        )
+      );
+
       const newLog: ViolationLogItem = {
         id: `force-${Date.now()}`,
         timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -200,6 +279,12 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
         severity: 'danger',
       };
       setViolationLogs([newLog, ...violationLogs]);
+      return { success: true };
+    } catch (e: any) {
+      setActionError(e?.message || 'Gagal submit paksa siswa.');
+      return { success: false, error: e?.message || 'Gagal submit paksa siswa.' };
+    } finally {
+      setActionBusy('none');
     }
   };
 
@@ -222,6 +307,46 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
 
   return (
     <div className="p-6 space-y-5 max-w-7xl mx-auto">
+      {/* Action Error Banner */}
+      {actionError && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="flex items-start justify-between gap-2.5 px-4 py-3 rounded-2xl bg-rose-50 border border-rose-300 text-rose-900 text-xs font-medium animate-in fade-in"
+        >
+          <span className="leading-relaxed">
+            <strong>Gagal menjalankan aksi: </strong>
+            {actionError}
+          </span>
+          <button
+            type="button"
+            onClick={() => setActionError(null)}
+            aria-label="Tutup pesan peringatan"
+            className="flex-shrink-0 px-2 py-1 text-rose-500 hover:text-rose-800 rounded-md hover:bg-rose-100 transition-colors cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Realtime Connection Health Banner */}
+      {realtimeMode === 'fallback' && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-start gap-2.5 px-4 py-3 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-medium animate-in fade-in"
+        >
+          <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse mt-1 flex-shrink-0" />
+          <div className="leading-relaxed">
+            <strong>Mode cadangan aktif:</strong> koneksi real-time (WebSocket) belum tersambung, jadi data siswa
+            diperbarui lewat penyegaran berkala (~5 detik). Pelanggaran dan nilai tetap terpantau — hanya tidak
+            se-instannya koneksi langsung.
+            {' '}
+            <span className="text-amber-700/80">Jika ini berlanjut, hubungi admin untuk mengaktifkan Realtime di server.</span>
+          </div>
+        </div>
+      )}
+
       {/* Active Exam Class Session Banner & Switcher */}
       {activeExam && (
         <div className="bg-white px-4 py-3 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3 relative">
@@ -235,7 +360,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
                 <h3 className="font-display font-bold text-slate-900 text-sm tracking-tight">
                   {activeExam.id === 'all' ? '🌐 Pemantauan Serentak (Semua Kelas)' : activeExam.title}
                 </h3>
-                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200/60 rounded-md text-[10px] font-display font-semibold">
+                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200/60 rounded-md text-[11px] font-display font-semibold">
                   {activeExam.id === 'all' ? `${allExams.length} Kelas Berlangsung` : `${activeExam.subject} • ${activeExam.gradeLevel}`}
                 </span>
               </div>
@@ -251,7 +376,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
             {/* Student Exam Token Pill (Only if specific exam) */}
             {activeExam.id !== 'all' && (
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-900 text-white rounded-xl border border-slate-800 shadow-inner">
-                <span className="text-[10px] uppercase font-display font-bold text-slate-400">Token Siswa:</span>
+                <span className="text-[11px] uppercase font-display font-bold text-slate-400">Token Siswa:</span>
                 <span className="font-mono font-black text-sm tracking-widest text-blue-400">
                   {activeExam.token}
                 </span>
@@ -269,7 +394,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
             {/* Teacher Proctor PIN Pill (Only if specific exam) */}
             {activeExam.id !== 'all' && (
               <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-amber-950 text-white rounded-xl border border-amber-800 shadow-inner">
-                <span className="text-[10px] uppercase font-display font-bold text-amber-400 flex items-center gap-1">
+                <span className="text-[11px] uppercase font-display font-bold text-amber-400 flex items-center gap-1">
                   <Lock className="w-3 h-3 text-amber-400" /> PIN Pengawas:
                 </span>
                 <span className="font-mono font-black text-sm tracking-widest text-amber-300">
@@ -349,7 +474,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
 
                 {isExamDropdownOpen && (
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-40 animate-in fade-in slide-in-from-top-2 duration-150">
-                    <span className="block px-2.5 py-1 text-[10px] font-display font-bold uppercase tracking-wider text-slate-400">
+                    <span className="block px-2.5 py-1 text-[11px] font-display font-bold uppercase tracking-wider text-slate-400">
                       Pilih Filter Sesi Pemantauan:
                     </span>
                     <div className="max-h-72 overflow-y-auto space-y-1 mt-1">
@@ -386,12 +511,12 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
                           <Layers className="w-4 h-4 text-blue-600 flex-shrink-0" />
                           <div>
                             <div className="font-bold">🌐 Semua Kelas (Lintas Kelas)</div>
-                            <div className="text-[10px] text-slate-400 font-sans font-normal">
+                            <div className="text-[11px] text-slate-400 font-sans font-normal">
                               Pantau seluruh siswa ({allExams.length} kelas) serentak
                             </div>
                           </div>
                         </div>
-                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-display font-bold text-[10px] rounded-md flex-shrink-0">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-display font-bold text-[11px] rounded-md flex-shrink-0">
                           SEMUA
                         </span>
                       </button>
@@ -415,7 +540,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
                           >
                             <div className="truncate mr-2">
                               <div className="truncate font-semibold">{ex.title}</div>
-                              <div className="text-[10px] text-slate-400 font-sans font-normal mt-0.5">
+                              <div className="text-[11px] text-slate-400 font-sans font-normal mt-0.5">
                                 {ex.gradeLevel || 'Kelas X'} • PIN: {ex.proctorPin || ex.antiCheat?.proctorPin || '-'}
                               </div>
                             </div>
@@ -449,6 +574,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
         <div className="lg:col-span-8">
           <StudentMonitoringTable
             students={students}
+            violationLogs={violationLogs}
             onSelectStudent={(stu) => setSelectedStudent(stu)}
             activeTotalQuestions={activeTotalQuestions}
           />
@@ -465,13 +591,36 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
       </div>
 
       {/* Student Management Action Modal */}
-      <StudentActionModal
-        student={selectedStudent}
-        onClose={() => setSelectedStudent(null)}
-        onResetSession={handleResetSession}
-        onSendWarning={handleSendWarning}
-        onForceSubmit={handleForceSubmit}
-      />
+      {selectedStudent && (
+        <StudentActionModal
+          student={{
+            ...selectedStudent,
+            violationLogs: (selectedStudent.violationLogs && selectedStudent.violationLogs.length > 0)
+              ? selectedStudent.violationLogs.filter((l: any) => isAppExitViolation({ message: l.reason }))
+              : (violationLogs || [])
+                  .filter(
+                    (l) =>
+                      isAppExitViolation(l) &&
+                      ((l.studentNisn && l.studentNisn.trim() === selectedStudent.nisn.trim()) ||
+                      (l.studentName && (l.studentName.trim() === selectedStudent.nisn.trim() || l.studentName.trim().toLowerCase() === selectedStudent.name.trim().toLowerCase())))
+                  )
+                  .map((l) => ({ timestamp: l.timestamp, reason: l.message })),
+            violationCount: Math.max(
+              selectedStudent.violationCount || 0,
+              (violationLogs || []).filter(
+                (l) =>
+                  isAppExitViolation(l) &&
+                  ((l.studentNisn && l.studentNisn.trim() === selectedStudent.nisn.trim()) ||
+                  (l.studentName && (l.studentName.trim() === selectedStudent.nisn.trim() || l.studentName.trim().toLowerCase() === selectedStudent.name.trim().toLowerCase())))
+              ).length
+            ),
+          }}
+          onClose={() => setSelectedStudent(null)}
+          onResetSession={handleResetSession}
+          onSendWarning={handleSendWarning}
+          onForceSubmit={handleForceSubmit}
+        />
+      )}
 
       {/* Modal Proyektor Token Ujian Siswa */}
       {showProjectorModal && activeExam && (
@@ -494,7 +643,7 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
 
             {/* Display Big Token */}
             <div className="my-5 p-6 bg-slate-900 rounded-2xl text-white shadow-inner flex flex-col items-center">
-              <span className="text-[10px] uppercase tracking-widest text-slate-400 font-display font-bold mb-1">
+              <span className="text-[11px] uppercase tracking-widest text-slate-400 font-display font-bold mb-1">
                 TOKEN UJIAN SISWA
               </span>
               <div className="text-5xl font-mono font-black tracking-widest text-blue-400 my-1">
@@ -529,14 +678,22 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
       {/* Modern Confirm Lock All Modal */}
       <ConfirmModal
         isOpen={isLockAllConfirmOpen}
-        onClose={() => setIsLockAllConfirmOpen(false)}
+        onClose={() => {
+          setIsLockAllConfirmOpen(false);
+          setActionError(null);
+        }}
         onConfirm={handleExecuteLockAllExams}
         title="Kunci & Selesaikan Seluruh Ujian?"
-        message="Seluruh pengerjaan ujian siswa yang sedang berlangsung akan otomatis disubmit dan diselesaikan saat ini juga. Sesi pengerjaan siswa akan ditutup secara serentak."
+        message={
+          actionError
+            ? `Gagal mengunci: ${actionError}`
+            : 'Seluruh pengerjaan ujian siswa yang sedang berlangsung akan otomatis disubmit dan diselesaikan saat ini juga. Sesi pengerjaan siswa akan ditutup secara serentak.'
+        }
         confirmText="Ya, Kunci Ujian Sekarang"
         cancelText="Batal"
         variant="warning"
         iconType="lock"
+        isLoading={actionBusy === 'lock'}
       />
     </div>
   );

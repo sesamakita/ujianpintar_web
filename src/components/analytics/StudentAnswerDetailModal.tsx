@@ -13,6 +13,7 @@ import {
   Printer,
   Loader2,
   Filter,
+  Sparkles,
 } from 'lucide-react';
 import { examService } from '../../services/examService';
 import type { GradeRecord, StudentAnswerDetailItem } from '../../types/exam';
@@ -108,7 +109,7 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+    <div role="dialog" aria-modal="true" aria-label="Detail Jawaban Siswa" className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
       <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-150">
         {/* Modal Header */}
         <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
@@ -211,7 +212,7 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
                   {grade.score}
                 </span>
                 <span className="text-xs text-slate-500 font-mono">/ {grade.maxScore}</span>
-                <span className={`ml-auto text-[10px] font-display font-bold px-1.5 py-0.5 rounded ${
+                <span className={`ml-auto text-[11px] font-display font-bold px-1.5 py-0.5 rounded ${
                   isPassed ? 'bg-emerald-200/60 text-emerald-800' : 'bg-amber-200/60 text-amber-800'
                 }`}>
                   {grade.status}
@@ -228,7 +229,7 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
               <p className="font-display font-bold text-slate-900 text-sm mt-0.5">
                 {grade.timeSpentMinutes} Menit
               </p>
-              <span className="text-[10px] text-slate-400">Selesai: {grade.submittedAt}</span>
+              <span className="text-[11px] text-slate-400">Selesai: {grade.submittedAt}</span>
             </div>
 
             {/* Violations */}
@@ -242,7 +243,7 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
               }`}>
                 {grade.tabViolations > 0 ? `${grade.tabViolations}x Pelanggaran` : 'Tertib (0)'}
               </p>
-              <span className="text-[10px] text-slate-400">Peralihan aplikasi</span>
+              <span className="text-[11px] text-slate-400">Peralihan aplikasi</span>
             </div>
           </div>
 
@@ -374,10 +375,16 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
                         {q.number}
                       </span>
                       <span className="text-xs font-display font-bold text-slate-700">
-                        {q.type === 'short_answer' ? 'Isian Singkat' : 'Pilihan Ganda'}
+                        {q.type === 'short_answer'
+                          ? 'Isian Singkat'
+                          : q.type === 'true_false'
+                          ? 'Benar / Salah'
+                          : q.type === 'essay'
+                          ? 'Uraian / Esai'
+                          : 'Pilihan Ganda'}
                       </span>
                       {q.isDoubt && (
-                        <span className="inline-flex items-center gap-1 text-[10px] font-display font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-display font-bold bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-md">
                           <AlertTriangle className="w-2.5 h-2.5" />
                           Ragu-Ragu
                         </span>
@@ -389,6 +396,11 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-display font-bold bg-slate-100 text-slate-600 border border-slate-200">
                           <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
                           Tidak Dijawab
+                        </span>
+                      ) : q.type === 'essay' && !q.isGraded ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-display font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                          <Clock className="w-3.5 h-3.5 text-amber-600" />
+                          Menunggu Penilaian Guru
                         </span>
                       ) : q.isCorrect ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-display font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -427,8 +439,14 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
                   {q.type !== 'short_answer' && q.options && q.options.length > 0 && (
                     <div className="space-y-2 mt-3">
                       {q.options.map((opt) => {
-                        const isStudentChoice = q.selectedOptionId === opt.id;
-                        const isCorrectKey = q.correctOptionId === opt.id;
+                        const isStudentChoice = !!(
+                          (q.selectedOptionId && (q.selectedOptionId === opt.id || q.selectedOptionId === opt.label)) ||
+                          (q.selectedOptionLabel && q.selectedOptionLabel === opt.label)
+                        );
+                        const isCorrectKey = !!(
+                          (q.correctOptionId && (q.correctOptionId === opt.id || q.correctOptionId === opt.label)) ||
+                          (q.correctOptionLabel && q.correctOptionLabel === opt.label)
+                        );
 
                         let cardStyle = 'bg-slate-50/80 border-slate-200 text-slate-700';
                         let badge = null;
@@ -527,6 +545,68 @@ export const StudentAnswerDetailModal: React.FC<StudentAnswerDetailModalProps> =
                           {q.correctAnswerText || '-'}
                         </p>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Essay Answer Display */}
+                  {q.type === 'essay' && (
+                    <div className="space-y-3 mt-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Student Answer */}
+                        <div className={`p-3.5 rounded-xl border ${
+                          !isAnswered
+                            ? 'bg-slate-50 border-slate-200 text-slate-500'
+                            : q.isGraded
+                            ? 'bg-blue-50/70 border-blue-200 text-slate-900'
+                            : 'bg-amber-50/50 border-amber-200 text-slate-900'
+                        }`}>
+                          <div className="text-[11px] font-display font-bold uppercase tracking-wider text-slate-600 mb-1 flex items-center justify-between">
+                            <span>Jawaban Siswa:</span>
+                            {q.isGraded && (
+                              <span className="font-mono font-bold text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded text-xs">
+                                Skor: {q.pointsEarned} / {q.maxPoints} Poin
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs font-sans whitespace-pre-wrap leading-relaxed">
+                            {q.answerText || <span className="italic text-slate-400">Tidak ada jawaban</span>}
+                          </p>
+                        </div>
+
+                        {/* Model / Rubric Answer */}
+                        <div className="p-3.5 rounded-xl border border-violet-200 bg-violet-50/40 text-slate-800">
+                          <div className="text-[11px] font-display font-bold uppercase tracking-wider text-violet-700 mb-1 flex items-center gap-1">
+                            <Sparkles className="w-3.5 h-3.5 text-violet-600" />
+                            <span>Rubrik / Model Jawaban Acuan:</span>
+                          </div>
+                          <div className="text-xs font-sans leading-relaxed">
+                            {q.correctAnswerText ? (
+                              <MathRenderer text={q.correctAnswerText} />
+                            ) : (
+                              <span className="italic text-slate-400">Kesesuaian konsep ilmiah dan penalaran logis</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Feedback / Evaluasi Guru & AI (Jika Ada) */}
+                      {(q.teacherFeedback || q.aiFeedback) && (
+                        <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-950 space-y-1">
+                          <span className="font-bold text-amber-900 text-[11px] block">
+                            Catatan Evaluasi:
+                          </span>
+                          {q.teacherFeedback && (
+                            <p className="text-slate-800">
+                              <strong>Guru:</strong> {q.teacherFeedback}
+                            </p>
+                          )}
+                          {q.aiFeedback && (
+                            <p className="text-slate-700 text-[11px]">
+                              <strong>Analisis AI:</strong> {q.aiFeedback}
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

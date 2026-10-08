@@ -14,12 +14,22 @@ import {
   Lock,
   BookOpen,
   Camera,
-  Trash2
+  Trash2,
+  Database,
+  HardDrive,
+  Clock,
+  Sparkles,
+  Search
 } from 'lucide-react';
 import { authService } from '../../services/authService';
+import { examService } from '../../services/examService';
+import { SchoolDirectoryModal } from '../common/SchoolDirectoryModal';
+import type { DataRetentionStats } from '../../types/exam';
+import type { TeacherSubscription } from '../../types/subscription';
 
 interface SystemSettingsProps {
   currentUser: {
+    id?: string;
     name: string;
     email: string;
     school: string;
@@ -29,6 +39,8 @@ interface SystemSettingsProps {
     npsn?: string;
     avatarUrl?: string;
   };
+  subscription?: TeacherSubscription;
+  onOpenUpgradeModal?: (title?: string, description?: string) => void;
   onProfileUpdated?: (updated: {
     name: string;
     school: string;
@@ -42,6 +54,8 @@ interface SystemSettingsProps {
 
 export const SystemSettings: React.FC<SystemSettingsProps> = ({
   currentUser,
+  subscription,
+  onOpenUpgradeModal,
   onProfileUpdated,
 }) => {
   const [name, setName] = useState(currentUser.name || '');
@@ -51,6 +65,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [npsn, setNpsn] = useState(currentUser.npsn || '');
   const [subject, setSubject] = useState(currentUser.subject || '');
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
+  const [isSchoolModalOpen, setIsSchoolModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [saved, setSaved] = useState(false);
@@ -64,6 +79,45 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Data Retention & Storage state
+  const [retentionStats, setRetentionStats] = useState<DataRetentionStats | null>(null);
+  const [isLoadingRetention, setIsLoadingRetention] = useState(false);
+  const [isCleaning, setIsCleaning] = useState(false);
+  const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
+  const isPro = Boolean(subscription?.tier === 'pro' || subscription?.tier === 'school' || retentionStats?.isPro);
+
+  useEffect(() => {
+    if (currentUser.id) {
+      setIsLoadingRetention(true);
+      examService.getDataRetentionStats(currentUser.id).then((stats) => {
+        setRetentionStats(stats);
+      }).finally(() => {
+        setIsLoadingRetention(false);
+      });
+    }
+  }, [currentUser.id]);
+
+  const handleManualCleanup = async () => {
+    if (!currentUser.id || isCleaning) return;
+    const confirmClean = window.confirm(
+      'Apakah Anda yakin ingin memeriksa dan membersihkan riwayat sesi lama (>30 hari) serta rekap nilai (>90 hari)? Data yang dihapus tidak dapat dipulihkan kembali. Pastikan Anda telah mengunduh rekap nilai (.csv) jika masih diperlukan.'
+    );
+    if (!confirmClean) return;
+
+    setIsCleaning(true);
+    setCleanupMessage(null);
+    try {
+      const res = await examService.cleanupExpiredData(currentUser.id);
+      setCleanupMessage(res.message);
+      const updated = await examService.getDataRetentionStats(currentUser.id);
+      setRetentionStats(updated);
+    } catch (err: any) {
+      setCleanupMessage(`Gagal membersihkan data: ${err.message}`);
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   // Compress image to lightweight base64
   const compressImage = (file: File): Promise<string> => {
@@ -231,22 +285,38 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
         </div>
       )}
 
+
       {/* Peringatan Lengkapi Biodata jika belum terisi */}
-      {(!school || school.trim() === '') && (
-        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/90 text-amber-900 animate-in fade-in flex items-start gap-3.5 shadow-xs">
-          <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0 mt-0.5">
-            <Building2 className="w-5 h-5" />
+      {(() => {
+        const missing: { field: string; label: string }[] = [];
+        if (!school || school.trim() === '' || school === 'Satuan Pendidikan') missing.push({ field: 'school', label: 'Nama Sekolah' });
+        if (!nip || nip.trim() === '') missing.push({ field: 'nip', label: 'NIP Guru' });
+        if (!npsn || npsn.trim() === '') missing.push({ field: 'npsn', label: 'NPSN Sekolah' });
+        if (missing.length === 0) return null;
+        return (
+          <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/90 text-amber-900 animate-in fade-in flex items-start gap-3.5 shadow-xs">
+            <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700 flex-shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div className="space-y-1.5">
+              <h4 className="text-xs font-display font-bold text-amber-900 uppercase tracking-wide">
+                Data Profil Belum Lengkap — {missing.length} Field Wajib Kosong
+              </h4>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                Field berikut masih kosong:{' '}
+                {missing.map((m, i) => (
+                  <span key={m.field}>
+                    <strong>{m.label}</strong>{i < missing.length - 1 ? ', ' : '.'}
+                  </span>
+                ))}
+                {' '}Data ini digunakan untuk mengisi <strong>kop surat</strong> dan <strong>SKHU / Rapor PDF</strong> siswa secara otomatis. Harap lengkapi sebelum mencetak laporan.
+              </p>
+            </div>
           </div>
-          <div>
-            <h4 className="text-xs font-display font-bold text-amber-900 uppercase tracking-wide">
-              Lengkapi Biodata Sekolah & Guru
-            </h4>
-            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
-              Selamat datang! Akun Google Anda telah terhubung. Silakan lengkapi <strong>Nama Sekolah</strong>, <strong>Mata Pelajaran</strong>, dan nomor kontak Anda di bawah ini agar kop naskah ujian dan kartu peserta ujian siswa dapat terisi secara otomatis.
-            </p>
-          </div>
-        </div>
-      )}
+        );
+      })()}
+
+
 
       <form onSubmit={handleSave} className="space-y-4">
         {/* Card 1: Profil Guru Penguji */}
@@ -318,10 +388,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
             <div>
-              <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+              <label htmlFor="set-1" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
                 Nama Lengkap & Gelar
               </label>
-              <input
+              <input id="set-1"
                 type="text"
                 required
                 value={name}
@@ -332,11 +402,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+              <label htmlFor="set-2" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
                 Mata Pelajaran (Mapel)
               </label>
               <div className="relative">
-                <input
+                <input id="set-2"
                   type="text"
                   required
                   value={subject}
@@ -349,24 +419,28 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             </div>
 
             <div>
-              <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+              <label htmlFor="set-3" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
                 NIP / NUPTK Guru
+                {(!nip || nip.trim() === '') && (
+                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold normal-case tracking-normal">Belum diisi</span>
+                )}
               </label>
-              <input
+              <input id="set-3"
                 type="text"
                 value={nip}
                 onChange={(e) => setNip(e.target.value)}
                 placeholder="19850412 200902 1 004"
-                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3.5 font-mono text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                className={`w-full h-10 bg-slate-50 border rounded-xl px-3.5 font-mono text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${!nip || nip.trim() === '' ? 'border-amber-300' : 'border-slate-200'}`}
               />
             </div>
 
+
             <div>
-              <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+              <label htmlFor="set-4" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
                 No. WhatsApp Guru
               </label>
               <div className="relative">
-                <input
+                <input id="set-4"
                   type="tel"
                   required
                   value={whatsapp}
@@ -382,47 +456,65 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
         {/* Card 2: Satuan Pendidikan & Mapel */}
         <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-          <div className="flex items-center gap-2.5 pb-2.5 border-b border-slate-100">
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
-              <Building2 className="w-4 h-4" />
+          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 flex-wrap gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="font-display font-bold text-slate-900 text-sm tracking-tight">
+                  Satuan Pendidikan / Sekolah
+                </h4>
+                <p className="text-[11px] text-slate-400 font-sans">
+                  Data institusi sekolah penyelenggara asesmen
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="font-display font-bold text-slate-900 text-sm tracking-tight">
-                Satuan Pendidikan / Sekolah
-              </h4>
-              <p className="text-[11px] text-slate-400 font-sans">
-                Data institusi sekolah penyelenggara asesmen
-              </p>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsSchoolModalOpen(true)}
+              className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200/80 rounded-xl text-xs font-display font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Cari Sekolah &amp; NPSN Resmi</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="md:col-span-2">
-              <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+              <label htmlFor="set-5" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
                 Nama Sekolah
+                {(!school || school.trim() === '' || school === 'Satuan Pendidikan') && (
+                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold normal-case tracking-normal">Belum diisi</span>
+                )}
               </label>
-              <input
+              <input id="set-5"
                 type="text"
                 required
                 value={school}
                 onChange={(e) => setSchool(e.target.value)}
                 placeholder="Contoh: SMA Negeri 1 Indonesia"
-                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-sm font-sans font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                className={`w-full h-10 bg-slate-50 border rounded-xl px-3.5 text-sm font-sans font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${!school || school.trim() === '' ? 'border-amber-300' : 'border-slate-200'}`}
               />
             </div>
 
             <div>
-              <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+              <label htmlFor="set-6" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
                 NPSN Sekolah
+                {(!npsn || npsn.trim() === '') && (
+                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold normal-case tracking-normal">Belum diisi</span>
+                )}
               </label>
-              <input
+              <input id="set-6"
                 type="text"
                 value={npsn}
                 onChange={(e) => setNpsn(e.target.value)}
                 placeholder="Contoh: 20104829"
-                className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3.5 font-mono text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                className={`w-full h-10 bg-slate-50 border rounded-xl px-3.5 font-mono text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${!npsn || npsn.trim() === '' ? 'border-amber-300' : 'border-slate-200'}`}
               />
             </div>
+
           </div>
         </div>
 
@@ -490,11 +582,11 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3.5">
               <div>
-                <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+                <label htmlFor="set-7" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
                   Kata Sandi Baru
                 </label>
                 <div className="relative">
-                  <input
+                  <input id="set-7"
                     type={showPassword ? 'text' : 'password'}
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
@@ -512,10 +604,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               </div>
 
               <div>
-                <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+                <label htmlFor="set-8" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
                   Ulangi Kata Sandi
                 </label>
-                <input
+                <input id="set-8"
                   type={showPassword ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
@@ -537,6 +629,141 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           </div>
         </div>
 
+        {/* Manajemen Penyimpanan & Retensi Riwayat */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0 border border-purple-200 shadow-xs">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-slate-900 text-sm tracking-tight flex items-center gap-2">
+                  <span>Manajemen Penyimpanan &amp; Retensi Riwayat</span>
+                </h3>
+                <p className="text-xs text-slate-500 font-sans mt-0.5">
+                  Pemantauan kapasitas data riwayat sesi ujian, log pengawasan, dan rekap nilai siswa
+                </p>
+              </div>
+            </div>
+
+            {isPro ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Penyimpanan Permanen (PRO)</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-xl text-xs font-bold">
+                <Clock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Retensi Otomatis (Guru Basic)</span>
+              </span>
+            )}
+          </div>
+
+          {/* Statistik Data Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                Sesi Ujian Siswa
+              </span>
+              <div className="text-lg font-black text-slate-900 font-display">
+                {isLoadingRetention ? '...' : retentionStats?.sessionCount || 0}
+              </div>
+              <span className="text-[11px] text-slate-500 block mt-0.5">
+                {isPro ? 'Tersimpan permanen' : 'Batas retensi 30 hari'}
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                Rekap Nilai
+              </span>
+              <div className="text-lg font-black text-slate-900 font-display">
+                {isLoadingRetention ? '...' : retentionStats?.gradeCount || 0}
+              </div>
+              <span className="text-[11px] text-slate-500 block mt-0.5">
+                {isPro ? 'Tersimpan permanen' : 'Batas retensi 90 hari'}
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                Jawaban Soal
+              </span>
+              <div className="text-lg font-black text-slate-900 font-display">
+                {isLoadingRetention ? '...' : retentionStats?.answerCount || 0}
+              </div>
+              <span className="text-[11px] text-slate-500 block mt-0.5">
+                Mengikuti siklus sesi
+              </span>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-xl">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
+                Log Pengawasan
+              </span>
+              <div className="text-lg font-black text-slate-900 font-display">
+                {isLoadingRetention ? '...' : retentionStats?.violationCount || 0}
+              </div>
+              <span className="text-[11px] text-slate-500 block mt-0.5">
+                {isPro ? 'Tersimpan permanen' : 'Batas retensi 14 hari'}
+              </span>
+            </div>
+          </div>
+
+          {/* Policy Information Box */}
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600 space-y-1.5 leading-relaxed">
+            <p className="font-semibold text-slate-800 flex items-center gap-1.5">
+              <HardDrive className="w-3.5 h-3.5 text-slate-500" />
+              <span>Kebijakan Penyimpanan Data:</span>
+            </p>
+            <ul className="list-disc list-inside space-y-1 text-slate-600 pl-1 text-[11.5px]">
+              <li>
+                <strong>Akun Guru Basic (Gratis):</strong> Sesi telemetri live disimpan selama <strong>30 hari</strong>, rekap nilai kelulusan disimpan <strong>90 hari</strong>, dan log pengawasan <strong>14 hari</strong>. Setelah melewati masa retensi, data lama dibersihkan secara otomatis.
+              </li>
+              <li>
+                <strong>Fitur Ekspor:</strong> Pastikan Anda telah mengunduh rekap nilai ke format <strong>.CSV</strong> (tersedia gratis di menu Rekap Nilai) sebelum masa simpan berakhir.
+              </li>
+              <li>
+                <strong>Akun Guru PRO &amp; Lisensi Sekolah:</strong> Seluruh riwayat ujian, butir soal, jawaban esai, dan rekap raport Excel (.xlsx) disimpan <strong>permanen tanpa batas waktu</strong>.
+              </li>
+            </ul>
+          </div>
+
+          {cleanupMessage && (
+            <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-xs font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-blue-600 flex-shrink-0" />
+              <span>{cleanupMessage}</span>
+            </div>
+          )}
+
+          {/* Action Row */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={handleManualCleanup}
+              disabled={isCleaning || isLoadingRetention}
+              className="h-9 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-display font-bold text-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-slate-500" />
+              <span>{isCleaning ? 'Memeriksa & Membersihkan...' : 'Bersihkan Sesi & Data Kadaluarsa'}</span>
+            </button>
+
+            {!isPro && onOpenUpgradeModal && (
+              <button
+                type="button"
+                onClick={() => onOpenUpgradeModal(
+                  'Buka Penyimpanan Data Permanen',
+                  'Tingkatkan ke Guru PRO untuk menyimpan seluruh riwayat ujian, jawaban uraian, dan rekap nilai siswa secara permanen tanpa batas masa retensi.'
+                )}
+                className="h-9 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl font-display font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-200 fill-amber-200" />
+                <span>Upgrade ke PRO (Simpan Permanen)</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Save Button */}
         <div className="pt-2">
           <button
@@ -549,6 +776,17 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
           </button>
         </div>
       </form>
+
+      {/* School Directory Modal */}
+      <SchoolDirectoryModal
+        isOpen={isSchoolModalOpen}
+        onClose={() => setIsSchoolModalOpen(false)}
+        currentSchoolName={school}
+        onSelectSchool={(s) => {
+          setSchool(s.schoolName);
+          setNpsn(s.npsn);
+        }}
+      />
     </div>
   );
 };

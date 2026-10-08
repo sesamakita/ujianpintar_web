@@ -1,17 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
 // ==============================================================================
-// KONFIGURASI BOT & SERVICE VPS
+// KONFIGURASI BOT & SERVICE VPS (wajib via environment variable, lihat .env.example)
 // ==============================================================================
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '8946135531:AAF7XxekBfzesHM5RxAOgP_EgotKSOFXh_s';
-const ADMIN_CHAT_ID = parseInt(process.env.ADMIN_CHAT_ID || '8971674377', 10);
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const ADMIN_CHAT_ID = parseInt(process.env.ADMIN_CHAT_ID || '', 10);
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://api.ujianpintar.online';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3ODc5MTY0MjQsImV4cCI6MjEwMzI3NjQyNH0.-Zu1ZjsJ4wDzMVh00MunYCVwPaVnwbOJdLe58NSmpQg';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 // WAHA (Otomatis mendeteksi jika dijalankan di Laptop Windows atau di VPS Linux)
 const WAHA_BASE_URL = process.env.WAHA_BASE_URL || (process.platform === 'win32' ? 'http://103.150.226.233:3080' : 'http://localhost:3080');
-const WAHA_API_KEY = process.env.WAHA_API_KEY || 'WahaUjianPintar2026';
+const WAHA_API_KEY = process.env.WAHA_API_KEY || '';
+
+if (!TELEGRAM_BOT_TOKEN || !ADMIN_CHAT_ID || !SUPABASE_KEY) {
+  console.error('❌ Environment tidak lengkap. Salin .env.example ke .env dan isi TELEGRAM_BOT_TOKEN, ADMIN_CHAT_ID, SUPABASE_SERVICE_ROLE_KEY, dan WAHA_API_KEY.');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: false }

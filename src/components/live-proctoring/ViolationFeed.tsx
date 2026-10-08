@@ -32,13 +32,18 @@ export const ViolationFeed: React.FC<ViolationFeedProps> = ({ logs, students = [
             Live Violation Feed
           </h4>
         </div>
-        <span className="text-[10px] bg-rose-50 text-rose-700 font-display font-bold px-2 py-0.5 rounded-full border border-rose-200">
+        <span className="text-[11px] bg-rose-50 text-rose-700 font-display font-bold px-2.5 py-0.5 rounded-full border border-rose-200">
           {logs.length} Log
         </span>
       </div>
 
       {/* Log Items Stream */}
-      <div className="space-y-2.5 overflow-y-auto max-h-[500px] pr-1 flex-1 scrollbar-hover">
+      <div
+        aria-live="polite"
+        role="log"
+        aria-label="Aliran log pelanggaran ujian"
+        className="space-y-2.5 overflow-y-auto max-h-[500px] pr-1 flex-1 scrollbar-hover"
+      >
         {logs.length === 0 ? (
           <div className="text-center py-12 text-slate-400 space-y-2">
             <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto" />
@@ -71,11 +76,11 @@ export const ViolationFeed: React.FC<ViolationFeedProps> = ({ logs, students = [
                     : 'bg-slate-50 border-slate-200 text-slate-800'
                 }`}
               >
-                <div className="flex items-center justify-between font-mono text-[10px] text-slate-500">
+                <div className="flex items-center justify-between font-mono text-[11px] text-slate-500">
                   <span className="flex items-center gap-1 font-bold">
                     <Clock className="w-3 h-3" /> {log.timestamp}
                   </span>
-                  <span className={`px-1.5 py-0.2 rounded font-mono font-bold uppercase text-[9px] ${
+                  <span className={`px-1.5 py-0.2 rounded font-mono font-bold uppercase text-[10px] ${
                     isDanger ? 'bg-rose-200 text-rose-800' : 'bg-amber-200 text-amber-800'
                   }`}>
                     {log.severity}

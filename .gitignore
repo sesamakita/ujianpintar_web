@@ -11,10 +11,15 @@ node_modules
 dist
 dist-ssr
 *.zip
+*.apk
 *.local
 .env
 .env.*
 !.env.example
+
+# Rust / WASM build artifacts
+crates/*/target/
+crates/*/Cargo.lock
 
 # Editor directories and files
 .vscode/*

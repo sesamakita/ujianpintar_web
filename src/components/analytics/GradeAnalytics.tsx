@@ -17,15 +17,19 @@ import {
   Layers,
   X,
   Eye,
+  Clock,
 } from 'lucide-react';
-import type { GradeRecord, ExamSettings } from '../../types/exam';
+import type { GradeRecord, ExamSettings, Question } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
 import { StudentAnswerDetailModal } from './StudentAnswerDetailModal';
+import { EssayGradingModal } from './EssayGradingModal';
+import { examService } from '../../services/examService';
 
 interface GradeAnalyticsProps {
   grades: GradeRecord[];
   examSettings: ExamSettings;
   subscription?: TeacherSubscription;
+  questions?: Question[];
   onOpenUpgradeModal?: (title?: string, desc?: string) => void;
 }
 
@@ -66,29 +70,45 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
   grades,
   examSettings,
   subscription,
+  questions,
   onOpenUpgradeModal,
 }) => {
+  const [liveGrades, setLiveGrades] = useState<GradeRecord[]>(grades);
+  const [isEssayGradingOpen, setIsEssayGradingOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedClass, setSelectedClass] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'Lulus' | 'Remedial'>('all');
   const [selectedStudentForDetail, setSelectedStudentForDetail] = useState<GradeRecord | null>(null);
 
+  React.useEffect(() => {
+    setLiveGrades(grades);
+  }, [grades]);
+
+  const handleRefreshGrades = async () => {
+    if (examSettings?.id) {
+      const fresh = await examService.getGradeRecords(examSettings.id);
+      if (fresh) {
+        setLiveGrades(fresh);
+      }
+    }
+  };
+
   // Extract unique classes sorted naturally
   const availableClasses = useMemo(() => {
     const set = new Set<string>();
-    grades.forEach((g) => {
+    liveGrades.forEach((g) => {
       if (g.className && g.className.trim()) {
         set.add(g.className.trim());
       }
     });
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
-  }, [grades]);
+  }, [liveGrades]);
 
   // Extract unique dates sorted descending (newest first)
   const availableDates = useMemo(() => {
     const map = new Map<string, string>();
-    grades.forEach((g) => {
+    liveGrades.forEach((g) => {
       const { key, label } = getDateInfo(g);
       if (key && key !== 'unknown') {
         map.set(key, label);
@@ -97,11 +117,11 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
     return Array.from(map.entries())
       .map(([key, label]) => ({ key, label }))
       .sort((a, b) => b.key.localeCompare(a.key));
-  }, [grades]);
+  }, [liveGrades]);
 
   // Filtered dataset according to all active criteria
   const filteredGrades = useMemo(() => {
-    return grades.filter((g) => {
+    return liveGrades.filter((g) => {
       // 1. Search query (name, NISN, or class)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -129,11 +149,11 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
 
       return true;
     });
-  }, [grades, searchQuery, selectedClass, selectedDate, filterStatus]);
+  }, [liveGrades, searchQuery, selectedClass, selectedDate, filterStatus]);
 
   // Dynamic KPI calculations based on filtered dataset
   const totalFiltered = filteredGrades.length;
-  const totalAll = grades.length;
+  const totalAll = liveGrades.length;
   const avgScore = totalFiltered > 0 
     ? Math.round(filteredGrades.reduce((sum, g) => sum + g.score, 0) / totalFiltered) 
     : 0;
@@ -285,6 +305,17 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Tombol Koreksi Soal Uraian (AI & Manual) */}
+          <button
+            type="button"
+            onClick={() => setIsEssayGradingOpen(true)}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white rounded-xl text-xs font-display font-bold transition-all shadow-xs shadow-indigo-500/20 cursor-pointer whitespace-nowrap hover:scale-[1.02] active:scale-95"
+            title="Buka Ruang Koreksi Jawaban Uraian Siswa (Berbantuan AI & Manual)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-300 fill-amber-300 animate-pulse flex-shrink-0" />
+            <span>Koreksi Soal Uraian</span>
+          </button>
+
           {/* Ekspor CSV Standar (Gratis untuk semua, mengikuti filter aktif) */}
           <button
             type="button"
@@ -294,7 +325,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
           >
             <FileSpreadsheet className="w-3.5 h-3.5 text-slate-600 flex-shrink-0" />
             <span>Ekspor Standar (.CSV)</span>
-            <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded text-[10px] font-mono font-bold">
+            <span className="px-1.5 py-0.2 bg-slate-200 text-slate-700 rounded text-[11px] font-mono font-bold">
               {totalFiltered}
             </span>
           </button>
@@ -317,11 +348,11 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
             )}
             <span>Raport Excel (.XLSX)</span>
             {subscription?.tier === 'free' ? (
-              <span className="px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded text-[9px] font-mono font-black">
+              <span className="px-1.5 py-0.5 bg-amber-200/80 text-amber-900 rounded text-[10px] font-mono font-black">
                 PRO
               </span>
             ) : (
-              <span className="px-1.5 py-0.2 bg-emerald-500/80 text-white rounded text-[10px] font-mono font-bold">
+              <span className="px-1.5 py-0.2 bg-emerald-500/80 text-white rounded text-[11px] font-mono font-bold">
                 {totalFiltered}
               </span>
             )}
@@ -329,12 +360,44 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
         </div>
       </div>
 
+      {/* Free Tier Data Retention Notice */}
+      {subscription?.tier === 'free' && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900 shadow-2xs animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 flex-shrink-0">
+              <Clock className="w-4 h-4 text-amber-700" />
+            </div>
+            <div>
+              <p className="font-display font-bold text-amber-950 text-xs">
+                Masa Simpan Riwayat Nilai: 90 Hari (Paket Guru Basic)
+              </p>
+              <p className="text-[11px] text-amber-800 font-sans mt-0.5">
+                Pastikan Anda mengunduh <strong>Ekspor Standar (.CSV)</strong> sebelum masa retensi 90 hari berakhir untuk arsip sekolah, atau upgrade ke <strong>Guru PRO</strong> untuk penyimpanan permanen.
+              </p>
+            </div>
+          </div>
+          {onOpenUpgradeModal && (
+            <button
+              type="button"
+              onClick={() => onOpenUpgradeModal(
+                'Buka Penyimpanan Data Permanen',
+                'Simpan seluruh hasil ujian, lembar jawaban uraian, dan analitik nilai siswa selamanya tanpa batas masa retensi dengan akun Guru PRO.'
+              )}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-display font-bold text-xs rounded-xl shadow-xs transition-all cursor-pointer whitespace-nowrap"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-200 fill-amber-200" />
+              <span>Simpan Permanen (PRO)</span>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* KPI Cards Grid - Mengikuti Hasil Filter */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         {/* Rata-rata */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div className="space-y-0.5">
-            <span className="text-[10px] font-display font-bold text-slate-400 uppercase tracking-wider block">
+            <span className="text-[11px] font-display font-bold text-slate-400 uppercase tracking-wider block">
               Rata-rata Nilai
             </span>
             <div className="text-xl font-display font-black text-slate-900 tracking-tight leading-tight">
@@ -352,7 +415,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
         {/* Nilai Tertinggi */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div className="space-y-0.5">
-            <span className="text-[10px] font-display font-bold text-slate-400 uppercase tracking-wider block">
+            <span className="text-[11px] font-display font-bold text-slate-400 uppercase tracking-wider block">
               Nilai Tertinggi
             </span>
             <div className="text-xl font-display font-black text-emerald-700 tracking-tight leading-tight">
@@ -368,7 +431,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
         {/* Nilai Terendah */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div className="space-y-0.5">
-            <span className="text-[10px] font-display font-bold text-slate-400 uppercase tracking-wider block">
+            <span className="text-[11px] font-display font-bold text-slate-400 uppercase tracking-wider block">
               Nilai Terendah
             </span>
             <div className="text-xl font-display font-black text-amber-700 tracking-tight leading-tight">
@@ -384,7 +447,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
         {/* Tingkat Kelulusan */}
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
           <div className="space-y-0.5">
-            <span className="text-[10px] font-display font-bold text-slate-400 uppercase tracking-wider block">
+            <span className="text-[11px] font-display font-bold text-slate-400 uppercase tracking-wider block">
               Tingkat Kelulusan
             </span>
             <div className="text-xl font-display font-black text-blue-700 tracking-tight leading-tight">
@@ -481,6 +544,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
               <button
                 type="button"
                 onClick={() => setFilterStatus('all')}
+                aria-pressed={filterStatus === 'all'}
                 className={`px-3 py-1.5 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center justify-center ${
                   filterStatus === 'all'
                     ? 'bg-blue-600 text-white shadow-xs'
@@ -493,6 +557,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
               <button
                 type="button"
                 onClick={() => setFilterStatus('Lulus')}
+                aria-pressed={filterStatus === 'Lulus'}
                 className={`px-3 py-1.5 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center justify-center ${
                   filterStatus === 'Lulus'
                     ? 'bg-emerald-600 text-white shadow-xs'
@@ -505,6 +570,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
               <button
                 type="button"
                 onClick={() => setFilterStatus('Remedial')}
+                aria-pressed={filterStatus === 'Remedial'}
                 className={`px-3 py-1.5 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center justify-center ${
                   filterStatus === 'Remedial'
                     ? 'bg-amber-600 text-white shadow-xs'
@@ -525,7 +591,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs font-sans">
             <thead>
-              <tr className="bg-slate-50/80 text-slate-500 font-display font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
+              <tr className="bg-slate-50/80 text-slate-500 font-display font-bold uppercase tracking-wider text-[11px] border-b border-slate-200">
                 <th className="py-3 px-4">Nama Siswa & NISN</th>
                 <th className="py-3 px-4">Kelas</th>
                 <th className="py-3 px-4">Nilai Akhir</th>
@@ -651,7 +717,18 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
         onClose={() => setSelectedStudentForDetail(null)}
         grade={selectedStudentForDetail}
         examTitle={examSettings?.title}
-        examId={examSettings?.id}
+        examId={selectedStudentForDetail?.examId || (examSettings?.id && examSettings.id !== 'all' ? examSettings.id : '') || (grades.length > 0 ? grades[0]?.examId : '')}
+      />
+
+      {/* Modal Koreksi Soal Uraian (AI & Manual) */}
+      <EssayGradingModal
+        isOpen={isEssayGradingOpen}
+        onClose={() => setIsEssayGradingOpen(false)}
+        examId={(examSettings?.id && examSettings.id !== 'all' ? examSettings.id : '') || (grades.length > 0 ? grades[0]?.examId : '') || ''}
+        examTitle={examSettings?.title || ''}
+        onGradesUpdated={handleRefreshGrades}
+        fallbackQuestions={questions}
+        grades={liveGrades}
       />
     </div>
   );

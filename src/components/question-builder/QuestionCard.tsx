@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Trash2, 
   Copy, 
@@ -8,10 +8,15 @@ import {
   CheckCircle2,
   Check,
   Eye,
-  Pencil
+  Pencil,
+  FolderOpen,
+  X,
+  Maximize2
 } from 'lucide-react';
 import type { Question, QuestionType } from '../../types/exam';
+import type { TeacherSubscription } from '../../types/subscription';
 import { MathRenderer } from '../common/MathRenderer';
+import { MediaPickerModal } from '../media/MediaPickerModal';
 
 interface QuestionCardProps {
   question: Question;
@@ -21,6 +26,10 @@ interface QuestionCardProps {
   onDuplicate: (q: Question) => void;
   isSelected?: boolean;
   onToggleSelect?: (id: string) => void;
+  currentUserEmail?: string;
+  currentUserId?: string;
+  subscription?: TeacherSubscription;
+  onOpenUpgradeModal?: () => void;
 }
 
 export const QuestionCard: React.FC<QuestionCardProps> = ({
@@ -31,11 +40,31 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
   onDuplicate,
   isSelected = false,
   onToggleSelect,
+  currentUserEmail,
+  currentUserId,
+  subscription,
+  onOpenUpgradeModal,
 }) => {
   const [showFormulaInput, setShowFormulaInput] = useState(!!question.latexFormula);
   const [showImageInput, setShowImageInput] = useState(!!question.imageUrl);
+  const [isMediaPickerOpen, setIsMediaPickerOpen] = useState(false);
+  const [previewFullImage, setPreviewFullImage] = useState(false);
   const [isEditingQuestion, setIsEditingQuestion] = useState(false);
   const [editingOptionId, setEditingOptionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && previewFullImage) {
+        setPreviewFullImage(false);
+      }
+    };
+    if (previewFullImage) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [previewFullImage]);
 
   const handleTypeChange = (newType: QuestionType) => {
     let newOptions = [...question.options];
@@ -151,13 +180,21 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
               type="number"
               min="1"
               max="100"
-              value={question.points}
-              onChange={(e) => onUpdate({ ...question, points: parseInt(e.target.value) || 10 })}
+              value={question.points || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                onUpdate({ ...question, points: val === '' ? ('' as any) : Math.max(1, parseInt(val) || 1) });
+              }}
+              onBlur={() => {
+                if (!question.points || typeof question.points !== 'number' || question.points <= 0) {
+                  onUpdate({ ...question, points: 10 });
+                }
+              }}
               className="w-10 bg-transparent font-mono font-black text-xs text-blue-700 text-right focus:outline-none"
             />
           </div>
 
-          <button
+          <button type="button"
             onClick={() => onDuplicate(question)}
             className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             title="Duplikat Butir Soal Ini"
@@ -165,7 +202,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             <Copy className="w-3.5 h-3.5" />
           </button>
 
-          <button
+          <button type="button"
             onClick={() => onDelete(question.id)}
             className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
             title="Hapus Butir Soal Ini"
@@ -178,7 +215,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
       {/* Main Question Text Area */}
       <div className="space-y-2.5">
         <div className="flex items-center justify-between">
-          <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
+          <label htmlFor="qcd-1" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
             Teks Butir Pertanyaan
           </label>
           <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg text-[11px]">
@@ -224,7 +261,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             ) : (
               <span className="text-slate-400 italic text-xs">Klik untuk mengetikkan teks butir pertanyaan...</span>
             )}
-            <span className="absolute right-2.5 top-2.5 opacity-0 group-hover:opacity-100 text-[10px] bg-slate-200 text-slate-700 font-semibold px-2 py-0.5 rounded-md transition-opacity flex items-center gap-1">
+            <span className="absolute right-2.5 top-2.5 opacity-0 group-hover:opacity-100 text-[11px] bg-slate-200 text-slate-700 font-semibold px-2 py-0.5 rounded-md transition-opacity flex items-center gap-1">
               <Pencil className="w-2.5 h-2.5" /> Edit
             </span>
           </div>
@@ -245,7 +282,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
             />
             {question.questionText && (question.questionText.includes('$') || question.questionText.includes('\\')) && (
               <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-slate-800">
-                <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block mb-0.5">Pratinjau Langsung:</span>
+                <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block mb-0.5">Pratinjau Langsung:</span>
                 <MathRenderer text={question.questionText} />
               </div>
             )}
@@ -253,31 +290,47 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
         )}
 
         {/* Action Pills for LaTeX / Media */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={() => setShowFormulaInput(!showFormulaInput)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-display font-semibold transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-display font-semibold transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
               showFormulaInput
                 ? 'bg-indigo-100 text-indigo-800 border border-indigo-200 shadow-xs'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
             }`}
           >
-            <Code2 className="w-4 h-4 flex-shrink-0" />
+            <Code2 className="w-3.5 h-3.5 flex-shrink-0" />
             <span>Rumus LaTeX</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setShowImageInput(!showImageInput)}
-            className={`px-3.5 py-2 rounded-xl text-xs font-display font-semibold transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
-              showImageInput
+            onClick={() => {
+              if (!showImageInput && !question.imageUrl) {
+                setShowImageInput(true);
+              } else {
+                setShowImageInput(!showImageInput);
+              }
+            }}
+            className={`px-3 py-1.5 rounded-xl text-xs font-display font-semibold transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              showImageInput || question.imageUrl
                 ? 'bg-blue-100 text-blue-800 border border-blue-200 shadow-xs'
                 : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
             }`}
           >
-            <ImageIcon className="w-4 h-4 flex-shrink-0" />
-            <span>Sisipkan Gambar</span>
+            <ImageIcon className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>{question.imageUrl ? 'Lampiran Gambar (Aktif)' : 'Sisipkan Gambar'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsMediaPickerOpen(true)}
+            className="px-3 py-1.5 rounded-xl text-xs font-display font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap shadow-2xs"
+            title="Pilih langsung dari Koleksi Foto Soal di Database VPS"
+          >
+            <FolderOpen className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+            <span>Pilih dari Koleksi</span>
           </button>
         </div>
 
@@ -290,7 +343,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                 Contoh: \frac&#123;-b \pm \sqrt&#123;D&#125;&#125;&#123;2a&#125;
               </span>
             </div>
-            <input
+            <input id="qcd-1"
               type="text"
               value={question.latexFormula || ''}
               onChange={(e) => onUpdate({ ...question, latexFormula: e.target.value })}
@@ -305,22 +358,119 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
           </div>
         )}
 
-        {/* Image URL Input */}
-        {showImageInput && (
-          <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
-            <label className="block text-xs font-display font-bold text-blue-950 uppercase tracking-wider">
-              URL Gambar Diagram / Ilustrasi
-            </label>
-            <input
-              type="text"
-              value={question.imageUrl || ''}
-              onChange={(e) => onUpdate({ ...question, imageUrl: e.target.value })}
-              placeholder="https://example.com/gambar-diagram.png"
-              className="w-full h-10 bg-white border border-blue-200 rounded-xl px-3.5 text-sm font-sans text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
+        {/* Image Attachment & Media Picker Box */}
+        {(showImageInput || question.imageUrl) && (
+          <div className="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="qcd-2" className="block text-xs font-display font-bold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                Gambar / Diagram Soal
+              </label>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsMediaPickerOpen(true)}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-display font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                >
+                  <FolderOpen className="w-3 h-3" />
+                  <span>Koleksi Foto</span>
+                </button>
+
+                {question.imageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUpdate({ ...question, imageUrl: '' });
+                      setShowImageInput(false);
+                    }}
+                    className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-display font-bold transition-colors cursor-pointer flex items-center gap-1"
+                    title="Hapus lampiran gambar ini"
+                  >
+                    <Trash2 className="w-3 h-3 text-rose-600" />
+                    <span>Hapus Gambar</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Input URL for manual / external URL option */}
+            <div className="space-y-1">
+              <input id="qcd-2"
+                type="text"
+                value={question.imageUrl || ''}
+                onChange={(e) => onUpdate({ ...question, imageUrl: e.target.value })}
+                placeholder="Pilih dari Koleksi Foto atau tempel URL: https://example.com/gambar.png"
+                className="w-full h-9 bg-white border border-blue-200 rounded-xl px-3 text-xs font-sans text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+
+            {/* Image Preview Box */}
+            {question.imageUrl && (
+              <div className="p-3 bg-white rounded-xl border border-blue-100 flex flex-col items-center justify-center gap-2 shadow-2xs">
+                <div
+                  onClick={() => setPreviewFullImage(true)}
+                  className="relative group/img cursor-zoom-in max-h-56 max-w-full flex items-center justify-center overflow-hidden rounded-lg"
+                  title="Klik untuk melihat gambar dalam ukuran penuh"
+                >
+                  <img
+                    src={question.imageUrl}
+                    alt="Lampiran Soal"
+                    className="max-h-56 max-w-full object-contain rounded-lg border border-slate-100 group-hover/img:scale-105 transition-transform duration-200"
+                  />
+                  <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-bold rounded-lg backdrop-blur-2xs">
+                    <Maximize2 className="w-4 h-4" />
+                    <span>Perbesar Gambar</span>
+                  </div>
+                </div>
+                <span className="text-[11px] text-slate-500 font-sans">
+                  Gambar akan tampil pada lembar soal siswa & preview simulasi. (Klik foto untuk melihat ukuran penuh)
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Full Image Zoom Modal for Question Card */}
+      {previewFullImage && question.imageUrl && (
+        <div
+          onClick={() => setPreviewFullImage(false)}
+          className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-between p-4 sm:p-6 animate-in fade-in select-none"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="flex items-center justify-between gap-4 bg-slate-900/80 border border-white/10 rounded-2xl px-4 py-3 text-white backdrop-blur-md max-w-4xl w-full mx-auto shadow-2xl"
+          >
+            <div className="flex items-center gap-2.5">
+              <ImageIcon className="w-4 h-4 text-blue-400" />
+              <span className="text-xs sm:text-sm font-display font-bold">Pratinjau Gambar Soal #{index + 1}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPreviewFullImage(false)}
+              className="p-1.5 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative max-w-4xl max-h-[78vh] flex items-center justify-center p-2 my-auto"
+          >
+            <img
+              src={question.imageUrl}
+              alt="Lampiran Soal Penuh"
+              className="max-h-[75vh] max-w-[85vw] object-contain rounded-xl shadow-2xl border border-white/10 bg-slate-900/50 p-2"
+            />
+          </div>
+
+          <div className="text-xs text-slate-400 bg-slate-900/80 border border-white/10 rounded-xl px-4 py-2 backdrop-blur-md">
+            Tekan <kbd className="px-1.5 py-0.5 bg-white/10 rounded text-[10px] text-slate-300 font-mono">ESC</kbd> atau klik di luar untuk menutup
+          </div>
+        </div>
+      )}
 
       {/* Answer Options & Key Section */}
       <div className="pt-4 border-t border-slate-100">
@@ -370,7 +520,7 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
                         <div className="flex-1">
                           <MathRenderer text={opt.text} />
                         </div>
-                        <span className="opacity-0 group-hover:opacity-100 text-[10px] text-slate-400 flex items-center gap-0.5 flex-shrink-0 ml-2">
+                        <span className="opacity-0 group-hover:opacity-100 text-[11px] text-slate-400 flex items-center gap-0.5 flex-shrink-0 ml-2">
                           <Pencil className="w-2.5 h-2.5" /> Edit
                         </span>
                       </div>
@@ -459,10 +609,10 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
 
         {question.type === 'short_answer' && (
           <div className="space-y-2">
-            <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
+            <label htmlFor="qcd-3" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
               Kunci Jawaban Singkat (Exact Text Match)
             </label>
-            <input
+            <input id="qcd-3"
               type="text"
               value={question.correctAnswerText || ''}
               onChange={(e) => onUpdate({ ...question, correctAnswerText: e.target.value })}
@@ -481,6 +631,20 @@ export const QuestionCard: React.FC<QuestionCardProps> = ({
           </div>
         )}
       </div>
+
+      {/* Media Picker Modal from VPS Database Photo Collection */}
+      <MediaPickerModal
+        isOpen={isMediaPickerOpen}
+        onClose={() => setIsMediaPickerOpen(false)}
+        onSelectImage={(imageUrl) => {
+          onUpdate({ ...question, imageUrl });
+          setShowImageInput(true);
+        }}
+        currentUserEmail={currentUserEmail}
+        currentUserId={currentUserId}
+        subscription={subscription}
+        onOpenUpgradeModal={onOpenUpgradeModal}
+      />
     </div>
   );
 };

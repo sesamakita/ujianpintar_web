@@ -23,7 +23,8 @@ interface DownloadApkModalProps {
   isDarkMode?: boolean;
 }
 
-const DEFAULT_APK_URL = 'https://api.ujianpintar.online/storage/v1/object/public/Mobile%20Apk%20UjianPintar/UjianPintar-v1.0-Android.apk';
+const PRIMARY_APK_URL = '/UjianPintar-v1.0-Android.apk?v=1.0.1';
+const CLOUD_STORAGE_APK_URL = 'https://api.ujianpintar.online/storage/v1/object/public/Mobile%20Apk%20UjianPintar/UjianPintar-v1.0-Android.apk?v=1.0.1';
 
 export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
   isOpen,
@@ -120,10 +121,8 @@ export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
 
       // 3. Pemicu Unduh File APK Otomatis di Browser
       const downloadLink = document.createElement('a');
-      downloadLink.href = DEFAULT_APK_URL;
-      downloadLink.download = 'UjianPintar-v1.0-Android.apk';
-      downloadLink.target = '_blank';
-      downloadLink.rel = 'noopener noreferrer';
+      downloadLink.href = PRIMARY_APK_URL;
+      downloadLink.setAttribute('download', 'UjianPintar-v1.0-Android.apk');
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
@@ -132,8 +131,8 @@ export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
       setIsDownloaded(true);
     } catch (err) {
       console.error('Download error:', err);
-      // Tetap trigger unduhan langsung jika ada kendala script
-      window.open(DEFAULT_APK_URL, '_blank');
+      // Fallback unduhan langsung
+      window.location.href = PRIMARY_APK_URL;
       setIsDownloaded(true);
     } finally {
       setIsSubmitting(false);
@@ -143,7 +142,7 @@ export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div role="dialog" aria-modal="true" aria-label="Unduh Aplikasi Siswa" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
         className={`relative w-full max-w-md rounded-3xl shadow-2xl border transition-all overflow-hidden ${
           isDarkMode 
@@ -205,14 +204,14 @@ export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
 
               {/* Input Email */}
               <div>
-                <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                <label htmlFor="dap-1" className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                   Alamat Email (Siswa / Guru)
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <Mail className="w-4 h-4" />
                   </div>
-                  <input
+                  <input id="dap-1"
                     type="email"
                     required
                     value={email}
@@ -234,14 +233,14 @@ export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
 
               {/* Input WhatsApp dengan Verifikasi Real-time */}
               <div>
-                <label className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
+                <label htmlFor="dap-2" className={`block text-xs font-semibold mb-1.5 ${isDarkMode ? 'text-slate-300' : 'text-slate-700'}`}>
                   Nomor WhatsApp Aktif
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                     <Phone className="w-4 h-4" />
                   </div>
-                  <input
+                  <input id="dap-2"
                     type="tel"
                     required
                     value={whatsapp}
@@ -359,16 +358,29 @@ export const DownloadApkModal: React.FC<DownloadApkModalProps> = ({
                   Selesai & Tutup
                 </button>
 
-                <a
-                  href={DEFAULT_APK_URL}
-                  download="UjianPintar-v1.0-Android.apk"
-                  className={`inline-flex items-center gap-1 text-[11px] font-semibold underline underline-offset-2 ${
-                    isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
-                  }`}
-                >
-                  <span>File tidak terunduh otomatis? Klik di sini untuk mengunduh ulang</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
+                <div className="flex flex-col items-center gap-1.5 pt-1">
+                  <a
+                    href={PRIMARY_APK_URL}
+                    download="UjianPintar-v1.0-Android.apk"
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold underline underline-offset-2 ${
+                      isDarkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'
+                    }`}
+                  >
+                    <span>File tidak terunduh otomatis? Klik di sini untuk mengunduh langsung (Server Utama)</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  <a
+                    href={CLOUD_STORAGE_APK_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`inline-flex items-center gap-1 text-[10px] ${
+                      isDarkMode ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    <span>Link Cadangan (Supabase Cloud Storage Mirror)</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
               </div>
             </div>
           )}

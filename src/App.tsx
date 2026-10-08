@@ -6,16 +6,20 @@ import { LiveProctoringDashboard } from './components/live-proctoring/LiveProcto
 import { GradeAnalytics } from './components/analytics/GradeAnalytics';
 import { SystemSettings } from './components/settings/SystemSettings';
 import { SubscriptionAndAboutPage } from './components/subscription/SubscriptionAndAboutPage';
+import { MediaGalleryPage } from './components/media/MediaGalleryPage';
 import { SuperAdminPortal } from './components/super-admin/SuperAdminPortal';
 import { MobilePreviewModal } from './components/question-builder/MobilePreviewModal';
 import { UpgradePromptModal } from './components/subscription/UpgradePromptModal';
 import { AuthPage } from './components/auth/AuthPage';
 import { LandingPage } from './components/landing/LandingPage';
+import { StudentResultPortalModal } from './components/portal/StudentResultPortalModal';
 import { AppLogoIcon } from './components/common/AppLogo';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { authService } from './services/authService';
 import { examService, generateUUID } from './services/examService';
 import { subscriptionService } from './services/subscriptionService';
 import { supabase } from './lib/supabase';
+import { isAppExitViolation } from './utils/formatters';
 import { 
   initialExamSettings, 
   initialQuestions, 
@@ -59,6 +63,12 @@ export function App() {
   });
 
   const [authInitialMode, setAuthInitialMode] = useState<'login' | 'signup'>('login');
+  const [isStudentPortalOpen, setIsStudentPortalOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    return path.startsWith('/cek-nilai') || hash.includes('cek-nilai');
+  });
 
   useEffect(() => {
     const checkRoute = () => {
@@ -71,6 +81,10 @@ export function App() {
         hash.includes('super-admin') ||
         hash.includes('admin')
       );
+
+      if (path.startsWith('/cek-nilai') || hash.includes('cek-nilai')) {
+        setIsStudentPortalOpen(true);
+      }
 
       if (path.startsWith('/login') || path.startsWith('/auth') || hash.includes('login') || hash.includes('auth')) {
         setCurrentView('auth');
@@ -115,7 +129,7 @@ export function App() {
     nip: '19850412 200902 1 004',
     npsn: '20104829',
   });
-  const [activeTab, setActiveTab] = useState<'builder' | 'proctoring' | 'analytics' | 'settings' | 'subscription'>('builder');
+  const [activeTab, setActiveTab] = useState<'builder' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription'>('builder');
   const [builderView, setBuilderView] = useState<'list' | 'editor'>('list');
   const [allExams, setAllExams] = useState<ExamSettings[]>([]);
   const [isExamsLoading, setIsExamsLoading] = useState<boolean>(false);
@@ -124,6 +138,7 @@ export function App() {
   const [students, setStudents] = useState<StudentProctoring[]>(initialStudents);
   const [violationLogs, setViolationLogs] = useState<ViolationLogItem[]>(initialViolationLogs);
   const [grades, setGrades] = useState<GradeRecord[]>(initialGradeRecords);
+  const [realtimeMode, setRealtimeMode] = useState<'live' | 'fallback'>('live');
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
   const [upgradeModalConfig, setUpgradeModalConfig] = useState<{
     isOpen: boolean;
@@ -233,6 +248,13 @@ export function App() {
           if (!isMounted) return;
           setIsExamsLoading(false);
 
+          // 3. Silent background data retention cleanup (Non-blocking)
+          if (user.id) {
+            examService.cleanupExpiredData(user.id).catch((err) => {
+              console.warn('[DataRetention] Silent cleanup notice:', err);
+            });
+          }
+
           if (teacherExams && teacherExams.length > 0) {
             setAllExams(teacherExams);
             const firstExam = teacherExams[0];
@@ -316,7 +338,23 @@ export function App() {
     let isCancelled = false;
     let unsubscribe: (() => void) | undefined;
     let pollInterval: any = null;
+    let realtimeHealthy = false;
     const targetExamId = examSettings.id === 'all' ? undefined : examSettings.id;
+
+    // Fallback detector: WebSocket handshake 403 (Realtime) TIDAK memicu callback status subscribe,
+    // jadi gunakan watchdog timeout — jika tidak ada status 'live' dalam 8 detik, anggap Realtime
+    // tidak tersambung, aktifkan fast-polling, dan tutup channel agar retry WebSocket 403 berhenti.
+    let receivedLive = false;
+    let fallbackTimer: any = null;
+
+    const startPolling = (intervalMs: number) => {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(() => {
+        if (!isCancelled) {
+          fetchLatestData();
+        }
+      }, intervalMs);
+    };
 
     const fetchLatestData = async () => {
       try {
@@ -334,11 +372,12 @@ export function App() {
             return remoteStudents.map((rs) => {
               const existing = prev.find((p) => p.nisn === rs.nisn);
               if (existing) {
+                const keepLocalTimer = rs.status === 'working' && existing.remainingSeconds > 0 && !!rs.startedAt;
                 return {
                   ...rs,
                   remainingSeconds: rs.status === 'submitted' 
                     ? 0 
-                    : (existing.remainingSeconds > 0 ? existing.remainingSeconds : rs.remainingSeconds),
+                    : (keepLocalTimer ? existing.remainingSeconds : rs.remainingSeconds),
                 };
               }
               return rs;
@@ -363,15 +402,12 @@ export function App() {
     // 1. Initial immediate fetch for this exam / class session
     fetchLatestData();
 
-    // 2. Setup polling fallback: 2.5 detik jika sedang di tab proctoring/analytics, 10 detik di tab lain
-    const intervalTime = (activeTab === 'proctoring' || activeTab === 'analytics') ? 2500 : 10000;
-    pollInterval = setInterval(() => {
-      if (!isCancelled) {
-        fetchLatestData();
-      }
-    }, intervalTime);
+    // 2. Adaptive polling: fast (5s) as fallback when Realtime is down,
+    //    slow (20s) as heartbeat when Realtime is live (primary channel).
+    startPolling(5000);
 
     // 3. Realtime WebSockets listener for instant updates strictly for this exam (or all exams)
+    //    The channel reports live/error; when it fails we rely on fast polling (5s).
     unsubscribe = examService.subscribeToLiveProctoring(
       targetExamId,
       (updatedStudent) => {
@@ -396,6 +432,23 @@ export function App() {
       (newLog) => {
         if (isCancelled) return;
         setViolationLogs((prev) => [newLog, ...prev]);
+        if (isAppExitViolation(newLog)) {
+          setStudents((prev) =>
+            prev.map((s) => {
+              const isMatch =
+                (newLog.studentNisn && s.nisn.trim() === newLog.studentNisn.trim()) ||
+                (newLog.studentName && (s.name.trim().toLowerCase() === newLog.studentName.trim().toLowerCase() || s.nisn.trim() === newLog.studentName.trim()));
+              if (isMatch) {
+                return {
+                  ...s,
+                  violationCount: (s.violationCount || 0) + 1,
+                  status: newLog.severity === 'danger' ? 'violation_flagged' : s.status,
+                };
+              }
+              return s;
+            })
+          );
+        }
       },
       (newGrade) => {
         if (isCancelled) return;
@@ -409,13 +462,54 @@ export function App() {
           }
           return [newGrade, ...prev];
         });
+      },
+      (status) => {
+        if (isCancelled) return;
+        if (status === 'live' && !receivedLive) {
+          receivedLive = true;
+          if (fallbackTimer) {
+            clearTimeout(fallbackTimer);
+            fallbackTimer = null;
+          }
+        }
+        const isLive = status === 'live';
+        if (isLive !== realtimeHealthy) {
+          realtimeHealthy = isLive;
+          setRealtimeMode(isLive ? 'live' : 'fallback');
+        }
+        if (isLive) {
+          startPolling(20000);
+        } else if (status === 'error') {
+          startPolling(5000);
+        }
       }
     );
 
+    // Mulai watchdog: jika dalam 8 detik tidak ada konfirmasi 'live' dari Realtime,
+    // berarti WebSocket gagal handshake (mis. 403) — beralih ke fallback polling
+    // dan lepaskan channel agar retry internal library berhenti (hentikan spam 403).
+    fallbackTimer = setTimeout(() => {
+      if (isCancelled) return;
+      if (!receivedLive) {
+        realtimeHealthy = false;
+        setRealtimeMode('fallback');
+        startPolling(5000);
+        try {
+          if (unsubscribe) unsubscribe();
+          // Jangan biarkan channel tersambung ulang secara internal — lepaskan dari klien.
+          supabase.removeAllChannels();
+        } catch (err) {
+          console.warn('Realtime cleanup warning:', err);
+        }
+      }
+    }, 8000);
+
     return () => {
       isCancelled = true;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
       if (pollInterval) clearInterval(pollInterval);
       if (unsubscribe) unsubscribe();
+      setRealtimeMode('live');
     };
   }, [isAuthenticated, examSettings?.id, activeTab, allExams.length]);
 
@@ -436,6 +530,30 @@ export function App() {
     } catch (err) {
       console.warn('handleSelectExamForEdit error:', err);
     }
+  };
+
+  const reconcileStudentsWithLogs = (studentsList: StudentProctoring[], logsList: ViolationLogItem[]): StudentProctoring[] => {
+    if (!logsList || logsList.length === 0) return studentsList;
+    const countByNisn = new Map<string, number>();
+    const countByName = new Map<string, number>();
+    logsList.forEach((log) => {
+      if (!isAppExitViolation(log)) return;
+      const n = (log.studentNisn || '').trim();
+      const nm = (log.studentName || '').trim().toLowerCase();
+      if (n) countByNisn.set(n, (countByNisn.get(n) || 0) + 1);
+      if (nm) countByName.set(nm, (countByName.get(nm) || 0) + 1);
+    });
+
+    return (studentsList || []).map((s) => {
+      const fromN = countByNisn.get(s.nisn.trim()) || 0;
+      const fromNm = countByName.get(s.name.trim().toLowerCase()) || 0;
+      const logCount = Math.max(fromN, fromNm);
+      return {
+        ...s,
+        violationCount: Math.max(s.violationCount || 0, logCount),
+        status: (logCount > 0 && s.status === 'working') ? 'violation_flagged' : s.status,
+      };
+    });
   };
 
   const handleSetActiveExamForProctoring = async (selectedExam: ExamSettings) => {
@@ -466,7 +584,7 @@ export function App() {
         setQuestions(data.questions);
       }
       if (remoteStudents && remoteStudents.length > 0) {
-        setStudents(remoteStudents);
+        setStudents(reconcileStudentsWithLogs(remoteStudents, remoteLogs || []));
       }
       if (remoteGrades && remoteGrades.length > 0) {
         setGrades(remoteGrades);
@@ -606,13 +724,25 @@ export function App() {
     setBuilderView('list');
   };
 
-  const handleStudentSubmit = (newStudent: StudentProctoring, newGrade: GradeRecord, newLogs: ViolationLogItem[]) => {
+  const handleStudentSubmit = (
+    newStudent: StudentProctoring,
+    newGrade: GradeRecord,
+    newLogs: ViolationLogItem[],
+    answers?: Array<{
+      questionId: string;
+      selectedOptionId?: string;
+      answerText?: string;
+      isDoubt?: boolean;
+      isCorrect?: boolean;
+      scoreEarned?: number;
+    }>
+  ) => {
     setStudents((prev) => [newStudent, ...prev.filter((s) => s.nisn !== newStudent.nisn)]);
     setGrades((prev) => [newGrade, ...prev.filter((g) => g.nisn !== newGrade.nisn)]);
     if (newLogs && newLogs.length > 0) {
       setViolationLogs((prev) => [...newLogs, ...prev]);
     }
-    examService.recordStudentSubmission(newStudent, newGrade, examSettings.id);
+    examService.recordStudentSubmission(newStudent, newGrade, examSettings.id, answers);
   };
 
   // Super Admin Dedicated Standalone Route & Portal
@@ -674,6 +804,9 @@ export function App() {
           onOpenMobileSimulation={() => {
             setIsMobilePreviewOpen(true);
           }}
+          onOpenStudentPortal={() => {
+            setIsStudentPortalOpen(true);
+          }}
         />
 
         {/* Modal Simulasi Ujian Mobile Siswa yang bisa diakses langsung dari Landing Page */}
@@ -683,6 +816,17 @@ export function App() {
           examSettings={examSettings}
           questions={questions}
           onStudentSubmit={handleStudentSubmit}
+        />
+
+        {/* Modal Portal Cek Hasil Ujian Siswa Mandiri berbasis NISN */}
+        <StudentResultPortalModal
+          isOpen={isStudentPortalOpen}
+          onClose={() => {
+            setIsStudentPortalOpen(false);
+            if (window.location.hash.includes('cek-nilai')) {
+              window.history.pushState(null, '', window.location.pathname);
+            }
+          }}
         />
       </>
     );
@@ -738,7 +882,7 @@ export function App() {
           examService.getGradeRecords(undefined),
           examService.getViolationLogs(undefined),
         ]);
-        if (remoteStudents) setStudents(remoteStudents);
+        if (remoteStudents) setStudents(reconcileStudentsWithLogs(remoteStudents, remoteLogs || []));
         if (remoteGrades) setGrades(remoteGrades);
         if (remoteLogs) setViolationLogs(remoteLogs);
       } catch (err) {
@@ -771,7 +915,7 @@ export function App() {
         setQuestions(examData.questions);
       }
       if (remoteStudents && remoteStudents.length > 0) {
-        setStudents(remoteStudents);
+        setStudents(reconcileStudentsWithLogs(remoteStudents, remoteLogs || []));
       }
       if (remoteGrades && remoteGrades.length > 0) {
         setGrades(remoteGrades);
@@ -817,106 +961,134 @@ export function App() {
           teacherName={currentUser.name}
           avatarUrl={currentUser.avatarUrl}
           subscription={subscription}
+          isMobileOpen={isMobileSidebarOpen}
           onOpenUpgradeModal={() => handleOpenUpgradeModal()}
           onNavigateTab={(tab) => setActiveTab(tab)}
           onToggleMobileMenu={() => setIsMobileSidebarOpen((prev) => !prev)}
         />
 
-        {/* Banner Pengingat Lengkapi Biodata Sekolah */}
-        {(!currentUser.school || currentUser.school.trim() === '') && activeTab !== 'settings' && (
-          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-2.5 flex items-center justify-between shadow-xs text-xs font-medium animate-in fade-in">
-            <div className="flex items-center gap-2.5">
-              <span className="text-base">📢</span>
-              <span><strong>Biodata Sekolah Belum Lengkap:</strong> Harap lengkapi Nama Sekolah dan Mata Pelajaran Anda di Pengaturan Sekolah agar kop soal dan kartu ujian siswa terisi otomatis.</span>
+        {/* Banner Pengingat Lengkapi Profil Sekolah */}
+        {(() => {
+          const missingFields: string[] = [];
+          if (!currentUser.school || currentUser.school.trim() === '' || currentUser.school === 'Satuan Pendidikan') missingFields.push('Nama Sekolah');
+          if (!currentUser.nip || currentUser.nip.trim() === '') missingFields.push('NIP');
+          if (!currentUser.npsn || currentUser.npsn.trim() === '') missingFields.push('NPSN');
+          if (missingFields.length === 0 || activeTab === 'settings') return null;
+          return (
+            <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 flex items-center justify-between gap-3 shadow-sm text-xs font-medium animate-in fade-in shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-base shrink-0">⚠️</span>
+                <span className="leading-tight">
+                  <strong>Profil Sekolah Belum Lengkap</strong>
+                  {' — '}
+                  Data <strong>{missingFields.join(', ')}</strong> masih kosong.
+                  {' '}Kop surat dan SKHU PDF siswa tidak akan terisi dengan benar.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab('settings')}
+                className="px-3 py-1 bg-white text-amber-900 rounded-lg font-bold text-xs hover:bg-amber-50 active:bg-amber-100 transition-colors shadow-sm whitespace-nowrap cursor-pointer flex items-center gap-1 shrink-0"
+              >
+                <span>Lengkapi →</span>
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab('settings')}
-              className="px-3 py-1 bg-white text-amber-900 rounded-lg font-bold text-xs hover:bg-amber-50 transition-colors shadow-2xs whitespace-nowrap cursor-pointer flex items-center gap-1"
-            >
-              <span>Lengkapi Sekarang</span>
-              <span>→</span>
-            </button>
-          </div>
-        )}
+          );
+        })()}
+
 
         <main className="flex-1 overflow-y-auto">
-          {activeTab === 'builder' && (
-            <QuestionBuilder
-              examSettings={examSettings}
-              setExamSettings={setExamSettings}
-              questions={questions}
-              setQuestions={setQuestions}
-              allExams={allExams}
-              subscription={subscription}
-              onOpenUpgradeModal={handleOpenUpgradeModal}
-              onRefreshExams={async () => {
-                await refreshTeacherExams();
-              }}
-              onSelectExamForEdit={handleSelectExamForEdit}
-              onSetActiveExamForProctoring={handleSetActiveExamForProctoring}
-              onCreateNewExam={handleCreateNewExam}
-              onDeleteExam={handleDeleteExam}
-              builderView={builderView}
-              setBuilderView={setBuilderView}
-              isExamsLoading={isExamsLoading}
-              onOpenMobilePreview={() => setIsMobilePreviewOpen(true)}
-              isMobilePreviewOpen={isMobilePreviewOpen}
-              setIsMobilePreviewOpen={setIsMobilePreviewOpen}
-              onStudentSubmit={handleStudentSubmit}
-              onToggleExamAccess={handleToggleExamAccess}
-            />
-          )}
+          <ErrorBoundary fallbackTitle="Terjadi Kendala pada Menu Ini">
+            {activeTab === 'builder' && (
+              <QuestionBuilder
+                examSettings={examSettings}
+                setExamSettings={setExamSettings}
+                questions={questions}
+                setQuestions={setQuestions}
+                allExams={allExams}
+                currentUser={currentUser}
+                subscription={subscription}
+                onOpenUpgradeModal={handleOpenUpgradeModal}
+                onRefreshExams={async () => {
+                  await refreshTeacherExams();
+                }}
+                onSelectExamForEdit={handleSelectExamForEdit}
+                onSetActiveExamForProctoring={handleSetActiveExamForProctoring}
+                onCreateNewExam={handleCreateNewExam}
+                onDeleteExam={handleDeleteExam}
+                builderView={builderView}
+                setBuilderView={setBuilderView}
+                isExamsLoading={isExamsLoading}
+                onOpenMobilePreview={() => setIsMobilePreviewOpen(true)}
+                isMobilePreviewOpen={isMobilePreviewOpen}
+                setIsMobilePreviewOpen={setIsMobilePreviewOpen}
+                onStudentSubmit={handleStudentSubmit}
+                onToggleExamAccess={handleToggleExamAccess}
+              />
+            )}
 
-          {activeTab === 'proctoring' && (
-            <LiveProctoringDashboard
-              students={students}
-              setStudents={setStudents}
-              violationLogs={violationLogs}
-              setViolationLogs={setViolationLogs}
-              activeTotalQuestions={questions.length}
-              allExams={allExams}
-              activeExam={examSettings}
-              subscription={subscription}
-              onOpenUpgradeModal={handleOpenUpgradeModal}
-              onSelectExam={handleSelectExamForProctoring}
-              onToggleExamAccess={handleToggleExamAccess}
-            />
-          )}
+            {activeTab === 'media' && (
+              <MediaGalleryPage
+                currentUser={currentUser}
+                subscription={subscription}
+                onOpenUpgradeModal={() => handleOpenUpgradeModal('Koleksi Foto Soal VPS', 'Tingkatkan ke paket Guru PRO untuk menyimpan hingga 20 foto soal di database VPS.')}
+              />
+            )}
 
-          {activeTab === 'analytics' && (
-            <GradeAnalytics
-              grades={grades}
-              examSettings={examSettings}
-              subscription={subscription}
-              onOpenUpgradeModal={handleOpenUpgradeModal}
-            />
-          )}
+            {activeTab === 'proctoring' && (
+              <LiveProctoringDashboard
+                students={students}
+                setStudents={setStudents}
+                violationLogs={violationLogs}
+                setViolationLogs={setViolationLogs}
+                activeTotalQuestions={questions.length}
+                allExams={allExams}
+                activeExam={examSettings}
+                subscription={subscription}
+                realtimeMode={realtimeMode}
+                onOpenUpgradeModal={handleOpenUpgradeModal}
+                onSelectExam={handleSelectExamForProctoring}
+                onToggleExamAccess={handleToggleExamAccess}
+              />
+            )}
 
-          {activeTab === 'subscription' && (
-            <SubscriptionAndAboutPage
-              currentUser={currentUser}
-              subscription={subscription}
-              onSubscriptionUpdated={(updatedSub) => {
-                setSubscription(updatedSub);
-              }}
-            />
-          )}
+            {activeTab === 'analytics' && (
+              <GradeAnalytics
+                grades={grades}
+                examSettings={examSettings}
+                subscription={subscription}
+                questions={questions}
+                onOpenUpgradeModal={handleOpenUpgradeModal}
+              />
+            )}
 
-          {activeTab === 'settings' && (
-            <SystemSettings
-              currentUser={currentUser}
-              onProfileUpdated={(updated) => {
-                setCurrentUser((prev) => ({ ...prev, ...updated }));
-                if (updated.subject) {
-                  setExamSettings((prev) => ({
-                    ...prev,
-                    subject: updated.subject || prev.subject,
-                  }));
-                }
-              }}
-            />
-          )}
+            {activeTab === 'subscription' && (
+              <SubscriptionAndAboutPage
+                currentUser={currentUser}
+                subscription={subscription}
+                onSubscriptionUpdated={(updatedSub) => {
+                  setSubscription(updatedSub);
+                }}
+              />
+            )}
+
+            {activeTab === 'settings' && (
+              <SystemSettings
+                currentUser={currentUser}
+                subscription={subscription}
+                onOpenUpgradeModal={handleOpenUpgradeModal}
+                onProfileUpdated={(updated) => {
+                  setCurrentUser((prev) => ({ ...prev, ...updated }));
+                  if (updated.subject) {
+                    setExamSettings((prev) => ({
+                      ...prev,
+                      subject: updated.subject || prev.subject,
+                    }));
+                  }
+                }}
+              />
+            )}
+          </ErrorBoundary>
         </main>
       </div>
 
@@ -939,6 +1111,17 @@ export function App() {
         }}
         featureTitle={upgradeModalConfig.title}
         featureDescription={upgradeModalConfig.description}
+      />
+
+      {/* Global Student Result Portal Modal */}
+      <StudentResultPortalModal
+        isOpen={isStudentPortalOpen}
+        onClose={() => {
+          setIsStudentPortalOpen(false);
+          if (window.location.hash.includes('cek-nilai')) {
+            window.history.pushState(null, '', window.location.pathname);
+          }
+        }}
       />
     </div>
   );

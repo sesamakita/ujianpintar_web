@@ -180,7 +180,7 @@ export const PrintableStudentExamSheet: React.FC<PrintableStudentExamSheetProps>
                     No. {q.number}
                   </span>
                   <span className="text-slate-600 font-semibold">
-                    {q.type === 'short_answer' ? 'Isian Singkat' : 'Pilihan Ganda'}
+                    {q.type === 'short_answer' ? 'Isian Singkat' : q.type === 'true_false' ? 'Benar / Salah' : q.type === 'essay' ? 'Uraian' : 'Pilihan Ganda'}
                   </span>
                   {q.isDoubt && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-900 border border-amber-300 rounded">
@@ -229,8 +229,14 @@ export const PrintableStudentExamSheet: React.FC<PrintableStudentExamSheetProps>
               {q.type !== 'short_answer' && q.options && q.options.length > 0 && (
                 <div className="space-y-1.5 mt-2">
                   {q.options.map((opt) => {
-                    const isStudentChoice = q.selectedOptionId === opt.id;
-                    const isCorrectKey = q.correctOptionId === opt.id;
+                    const isStudentChoice = !!(
+                      (q.selectedOptionId && (q.selectedOptionId === opt.id || q.selectedOptionId === opt.label)) ||
+                      (q.selectedOptionLabel && q.selectedOptionLabel === opt.label)
+                    );
+                    const isCorrectKey = !!(
+                      (q.correctOptionId && (q.correctOptionId === opt.id || q.correctOptionId === opt.label)) ||
+                      (q.correctOptionLabel && q.correctOptionLabel === opt.label)
+                    );
 
                     let rowStyle = 'bg-white border-slate-200 text-slate-700';
                     let badgeLabel = null;
@@ -314,6 +320,46 @@ export const PrintableStudentExamSheet: React.FC<PrintableStudentExamSheetProps>
                       {q.correctAnswerText || '-'}
                     </p>
                   </div>
+                </div>
+              )}
+
+              {/* Uraian / Esai */}
+              {q.type === 'essay' && (
+                <div className="space-y-2 mt-2 pt-2 border-t border-slate-200 text-xs">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2 rounded border border-slate-300 bg-slate-50">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="font-bold text-[10px] uppercase text-slate-500">
+                          Jawaban Siswa:
+                        </span>
+                        <span className="font-mono font-bold text-slate-700">
+                          Skor: {q.pointsEarned} / {q.maxPoints} Poin
+                        </span>
+                      </div>
+                      <p className="font-sans leading-relaxed whitespace-pre-wrap">
+                        {q.answerText || <span className="italic font-normal text-slate-400">- Tidak Diisi -</span>}
+                      </p>
+                    </div>
+
+                    <div className="p-2 rounded border border-slate-300 bg-white">
+                      <span className="font-bold text-[10px] uppercase text-slate-500 block mb-0.5">
+                        Model / Kunci Jawaban Acuan:
+                      </span>
+                      <p className="font-sans leading-relaxed">
+                        {q.correctAnswerText || <span className="italic text-slate-400">Kesesuaian konsep ilmiah</span>}
+                      </p>
+                    </div>
+                  </div>
+
+                  {(q.teacherFeedback || q.aiFeedback) && (
+                    <div className="p-2 rounded border border-slate-200 bg-slate-50 text-[11px] text-slate-700">
+                      <span className="font-bold block text-[10px] uppercase text-slate-500">
+                        Catatan Evaluasi Guru / AI:
+                      </span>
+                      {q.teacherFeedback && <p><strong>Guru:</strong> {q.teacherFeedback}</p>}
+                      {q.aiFeedback && <p><strong>AI:</strong> {q.aiFeedback}</p>}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

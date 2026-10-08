@@ -31,7 +31,13 @@ import {
   PlusCircle,
   Bookmark,
   Building2,
-  Zap
+  Zap,
+  GraduationCap,
+  Wand2,
+  FileText,
+  UploadCloud,
+  Layers,
+  Menu
 } from 'lucide-react';
 import { AppLogoBadge } from '../common/AppLogo';
 import { MathRenderer } from '../common/MathRenderer';
@@ -41,6 +47,7 @@ interface LandingPageProps {
   onNavigateToAuth: (mode: 'login' | 'signup') => void;
   onNavigateToPortal: () => void;
   onOpenMobileSimulation: () => void;
+  onOpenStudentPortal?: () => void;
   isAuthenticated: boolean;
   currentUser?: {
     name: string;
@@ -50,23 +57,59 @@ interface LandingPageProps {
   onLogout?: () => void;
 }
 
+const THEME_STORAGE_KEY = 'ujianpintar_landing_theme';
+
+const NAV_LINKS = [
+  { id: 'ekosistem', label: 'Ekosistem' },
+  { id: 'fitur', label: 'Fitur Guru & Siswa' },
+  { id: 'keamanan', label: 'Anti-Curang' },
+  { id: 'harga', label: 'Paket & Harga' },
+  { id: 'faq', label: 'FAQ' },
+] as const;
+
+const getInitialTheme = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    if (saved === 'dark') return true;
+    if (saved === 'light') return false;
+  } catch {}
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  } catch {
+    return false;
+  }
+};
+
 export const LandingPage: React.FC<LandingPageProps> = ({
   onNavigateToAuth,
   onNavigateToPortal,
   onOpenMobileSimulation,
+  onOpenStudentPortal,
   isAuthenticated,
   currentUser,
   onLogout,
 }) => {
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
-  // Default to Light Mode (Mode Cerah)
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
+  // Theme: honor OS preference first, then persisted user choice
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(getInitialTheme);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState<boolean>(false);
   const [isMobileBarDismissed, setIsMobileBarDismissed] = useState<boolean>(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState<boolean>(false);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('yearly');
   const [activeSection, setActiveSection] = useState<string>('');
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Persist theme choice and reflect it on <html> for correct native scrollbar/theme-color
+  useEffect(() => {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, isDarkMode ? 'dark' : 'light');
+    } catch {}
+    const root = document.documentElement;
+    root.classList.toggle('dark', isDarkMode);
+    root.style.colorScheme = isDarkMode ? 'dark' : 'light';
+  }, [isDarkMode]);
 
   const toggleFaq = (index: number) => {
     setActiveFaq(activeFaq === index ? null : index);
@@ -156,20 +199,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
 
           {/* Desktop Nav Links */}
-          <nav className="hidden md:flex items-center gap-1.5 text-sm font-semibold transition-colors">
-            {[
-              { id: 'ekosistem', label: 'Ekosistem' },
-              { id: 'fitur', label: 'Fitur Guru & Siswa' },
-              { id: 'keamanan', label: 'Anti-Curang' },
-              { id: 'harga', label: 'Paket & Harga' },
-              { id: 'faq', label: 'FAQ' },
-            ].map((link) => {
+          <nav aria-label="Navigasi utama" className="hidden md:flex items-center gap-1.5 text-sm font-semibold transition-colors">
+            {NAV_LINKS.map((link) => {
               const isActive = activeSection === link.id;
               return (
                 <a
                   key={link.id}
                   href={`#${link.id}`}
                   onClick={() => setActiveSection(link.id)}
+                  aria-current={isActive ? 'true' : undefined}
                   className={`px-3.5 py-1.5 rounded-xl transition-all duration-200 cursor-pointer ${
                     isActive
                       ? isDarkMode
@@ -190,7 +228,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="flex items-center gap-3">
             {/* Theme Toggle Button */}
             <button
+              type="button"
               onClick={() => setIsDarkMode(!isDarkMode)}
+              aria-label={isDarkMode ? 'Beralih ke mode cerah' : 'Beralih ke mode gelap'}
               className={`p-2.5 rounded-xl transition-all cursor-pointer ${
                 isDarkMode ? 'glass-pill-dark text-amber-300 hover:bg-slate-800' : 'glass-pill-light text-slate-700 hover:bg-white'
               }`}
@@ -199,12 +239,29 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
 
+            {/* Mobile Menu (Hamburger) */}
+            <button
+              type="button"
+              onClick={() => setIsMobileNavOpen((v) => !v)}
+              aria-label="Buka menu navigasi"
+              aria-expanded={isMobileNavOpen}
+              aria-controls="mobile-nav-drawer"
+              className={`md:hidden p-2.5 rounded-xl transition-all cursor-pointer ${
+                isDarkMode ? 'glass-pill-dark text-slate-200 hover:bg-slate-800' : 'glass-pill-light text-slate-700 hover:bg-white'
+              }`}
+            >
+              {isMobileNavOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            </button>
+
             {isAuthenticated ? (
               <div className="relative" ref={userMenuRef}>
                 {/* Person Icon Button */}
                 <button
                   type="button"
                   onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                  aria-label="Menu profil guru"
+                  aria-haspopup="menu"
+                  aria-expanded={isUserMenuOpen}
                   className={`p-1.5 rounded-xl transition-all cursor-pointer flex items-center justify-center relative ${
                     isUserMenuOpen
                       ? 'bg-blue-500/20 border-blue-400 text-blue-600 ring-2 ring-blue-500/20'
@@ -218,6 +275,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <img
                       src={currentUser.avatarUrl}
                       alt={currentUser.name || 'Guru'}
+                      width={24}
+                      height={24}
+                      loading="lazy"
                       className="w-6 h-6 rounded-lg object-cover"
                     />
                   ) : (
@@ -232,6 +292,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 {/* Standard Dropdown Card */}
                 {isUserMenuOpen && (
                   <div
+                    role="menu"
                     className={`absolute right-0 mt-2 w-64 rounded-2xl p-4 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-3 ${
                       isDarkMode
                         ? 'bg-slate-900 border border-slate-800 shadow-2xl shadow-black/60 text-slate-100'
@@ -244,6 +305,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                         <img
                           src={currentUser.avatarUrl}
                           alt={currentUser.name || 'Guru'}
+                          width={40}
+                          height={40}
+                          loading="lazy"
                           className="w-10 h-10 rounded-xl object-cover ring-2 ring-blue-500/20 flex-shrink-0"
                         />
                       ) : (
@@ -307,6 +371,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             ) : (
               <>
                 <button
+                  type="button"
                   onClick={() => onNavigateToAuth('login')}
                   className={`px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     isDarkMode 
@@ -317,6 +382,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Masuk Portal
                 </button>
                 <button
+                  type="button"
                   onClick={() => onNavigateToAuth('signup')}
                   className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md shadow-blue-600/25 transition-all flex items-center gap-2 cursor-pointer"
                 >
@@ -328,6 +394,38 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </div>
         </div>
       </header>
+
+      {/* MOBILE NAVIGATION DRAWER (accessible) */}
+      {isMobileNavOpen && (
+        <nav
+          id="mobile-nav-drawer"
+          aria-label="Navigasi mobile"
+          className={`md:hidden sticky top-20 z-40 border-b transition-colors ${
+            isDarkMode ? 'bg-slate-900/95 border-white/10' : 'bg-white/95 border-slate-200'
+          } backdrop-blur-2xl`}
+        >
+          <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col gap-1">
+            {NAV_LINKS.map((link) => {
+              const isActive = activeSection === link.id;
+              return (
+                <a
+                  key={link.id}
+                  href={`#${link.id}`}
+                  onClick={() => { setActiveSection(link.id); setIsMobileNavOpen(false); }}
+                  aria-current={isActive ? 'true' : undefined}
+                  className={`px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                    isActive
+                      ? isDarkMode ? 'text-white bg-white/10 font-bold' : 'text-blue-600 bg-blue-50/80 font-bold'
+                      : isDarkMode ? 'text-slate-300 hover:text-white hover:bg-white/10' : 'text-slate-600 hover:text-blue-600 hover:bg-slate-50'
+                  }`}
+                >
+                  {link.label}
+                </a>
+              );
+            })}
+          </div>
+        </nav>
+      )}
 
       {/* HERO SECTION */}
       <section className="relative pt-12 pb-20 md:pt-18 md:pb-28 overflow-hidden">
@@ -372,6 +470,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
               <button
+                type="button"
                 onClick={() => onNavigateToAuth('signup')}
                 className={`liquid-btn group relative w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-sm shadow-xl transition-all duration-300 flex items-center justify-center gap-2.5 cursor-pointer select-none overflow-hidden scale-100 hover:scale-[1.02] active:scale-[0.98] ${
                   isDarkMode
@@ -416,6 +515,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </button>
 
               <button
+                type="button"
                 onClick={onOpenMobileSimulation}
                 className={`liquid-btn liquid-theme-indigo group relative w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-sm shadow-xl transition-all duration-300 flex items-center justify-center gap-2.5 cursor-pointer select-none overflow-hidden scale-100 hover:scale-[1.02] active:scale-[0.98] ${
                   isDarkMode
@@ -476,6 +576,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                 <span>Koreksi Instan & Ekspor Excel</span>
               </div>
+            </div>
+
+            {/* Quick Action Banner: Cek Nilai Ujian Siswa Mandiri */}
+            <div className={`mt-8 max-w-2xl mx-auto rounded-2xl p-3.5 sm:p-4 border transition-all flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md ${
+              isDarkMode
+                ? 'bg-gradient-to-r from-blue-950/70 via-indigo-950/50 to-slate-900 border-blue-500/30'
+                : 'bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-white border-blue-200 shadow-blue-500/5'
+            }`}>
+              <div className="flex items-center gap-3 text-left">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-md shadow-blue-600/30">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className={`text-xs sm:text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                    Siswa & Wali Murid: Ingin Cek Hasil Ujian?
+                  </h4>
+                  <p className={`text-[11px] sm:text-xs ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                    Periksa rekap nilai resmi, evaluasi guru untuk soal uraian, dan unduh rapor digital via NISN.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenStudentPortal}
+                className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer flex-shrink-0"
+              >
+                <span>Cek Nilai Mandiri</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
@@ -931,7 +1060,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* DUAL ECOSYSTEM SECTION */}
-      <section id="ekosistem" className={`relative py-24 border-t transition-colors overflow-hidden ${
+      <section id="ekosistem" className={`relative py-24 border-t transition-colors overflow-hidden scroll-mt-24 ${
         isDarkMode ? 'border-white/10' : 'border-slate-200/80'
       }`}>
         {/* Vibrant Ambient Glow Orbs */}
@@ -1015,6 +1144,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               </div>
 
               <button
+                type="button"
                 onClick={() => onNavigateToAuth('signup')}
                 className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-blue-600/25"
               >
@@ -1108,7 +1238,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* CORE FEATURES */}
-      <section id="fitur" className="relative py-24 overflow-hidden">
+      <section id="fitur" className="relative py-24 overflow-hidden scroll-mt-24">
         {/* Vibrant Ambient Glows for Frosted Glass */}
         <div className={`absolute top-1/4 left-1/4 w-[600px] h-[450px] blur-[80px] rounded-full pointer-events-none -z-10 ${
           isDarkMode ? 'bg-gradient-to-r from-teal-500/25 via-blue-500/25 to-indigo-500/25' : 'bg-gradient-to-r from-teal-300/40 via-blue-300/40 to-indigo-300/35'
@@ -1132,93 +1262,165 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             
-            {/* Feature 1 */}
-            <div className={`p-6 rounded-2xl ${
-              isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
-            }`}>
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-400/30 flex items-center justify-center mb-4 shadow-sm">
-                <Eye className="w-6 h-6" />
-              </div>
-              <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                Live Proctoring Radar
-              </h3>
-              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Pantau seluruh peserta secara live. Ketahui siapa yang sedang menjawab nomor berapa, sisa waktu, dan siswa yang terindikasi melanggar.
-              </p>
-            </div>
-
-            {/* Feature 2 */}
-            <div className={`p-6 rounded-2xl ${
-              isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
-            }`}>
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-400/30 flex items-center justify-center mb-4 shadow-sm">
-                <FileSpreadsheet className="w-6 h-6" />
-              </div>
-              <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                Koreksi Instan & Ekspor Excel
-              </h3>
-              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Begitu siswa menekan tombol selesai, nilai langsung terhitung otomatis. Rekap nilai siap cetak atau ekspor ke file Excel.
-              </p>
-            </div>
-
-            {/* Feature 3 */}
+            {/* Feature 1: AI Question Generator */}
             <div className={`p-6 rounded-2xl ${
               isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
             }`}>
               <div className="w-12 h-12 rounded-2xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-400/30 flex items-center justify-center mb-4 shadow-sm">
-                <Cpu className="w-6 h-6" />
+                <Wand2 className="w-6 h-6" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 mb-2 border border-indigo-400/20">
+                <Sparkles className="w-3 h-3" /> AI Powered
               </div>
               <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                Dukungan Rumus Eksakta (KaTeX)
+                AI Soal Generator & Level HOTS
               </h3>
               <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Mengetik soal matematika, fisika, kimia, atau bahasa Arab tidak lagi rumit. Rumus pecahan, integral, dan akar tampil jernih di semua gawai.
+                Buat puluhan butir soal berkualitas tinggi dalam hitungan detik. Cukup masukkan topik materi atau KD, AI otomatis menyusun soal, opsi jawaban, pembahasan, serta taksonomi kognitif (LOTS/HOTS C1–C6).
               </p>
             </div>
 
-            {/* Feature 4 */}
+            {/* Feature 2: AI Auto-Grading Essay */}
             <div className={`p-6 rounded-2xl ${
               isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
             }`}>
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-400/30 flex items-center justify-center mb-4 shadow-sm">
-                <Lock className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-400/30 flex items-center justify-center mb-4 shadow-sm">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-2 border border-emerald-400/20">
+                <CheckCircle2 className="w-3 h-3" /> Koreksi Cerdas
               </div>
               <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                Token Ujian Dinamis
+                AI Auto-Grading Esai & Uraian
               </h3>
               <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Cegah kebocoran soal dengan kode token unik yang bisa diubah oleh pengawas setiap saat atau diset kedaluwarsa secara otomatis.
+                Koreksi jawaban esai siswa tanpa repot baca ratusan lembar. AI menganalisis kesesuaian makna dan kata kunci, memberikan skor rekomendasi transparan yang tetap dapat disetujui atau disesuaikan oleh guru.
               </p>
             </div>
 
-            {/* Feature 5 */}
+            {/* Feature 3: Exambro Kiosk Lock */}
             <div className={`p-6 rounded-2xl ${
               isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
             }`}>
               <div className="w-12 h-12 rounded-2xl bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-400/30 flex items-center justify-center mb-4 shadow-sm">
                 <ShieldCheck className="w-6 h-6" />
               </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-500/10 text-rose-600 dark:text-rose-400 mb-2 border border-rose-400/20">
+                <Lock className="w-3 h-3" /> Anti-Cheating
+              </div>
               <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                Acak Soal & Opsi Jawaban
+                Exambro Kiosk Lock (Android)
               </h3>
               <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Tiap siswa menerima urutan butir soal dan opsi jawaban yang berbeda, sehingga siswa yang duduk berdampingan tidak bisa saling contek huruf opsi.
+                Aplikasi mobile mengunci layar penuh HP siswa (*Kiosk Mode*), memblokir split-screen, screenshot, screen recorder, recent apps, serta tombol navigasi untuk mencegah siswa membuka browser atau AI lain.
               </p>
             </div>
 
-            {/* Feature 6 */}
+            {/* Feature 4: Live Proctoring Radar */}
+            <div className={`p-6 rounded-2xl ${
+              isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
+            }`}>
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-400/30 flex items-center justify-center mb-4 shadow-sm">
+                <Eye className="w-6 h-6" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-blue-500/10 text-blue-600 dark:text-blue-400 mb-2 border border-blue-400/20">
+                <Radio className="w-3 h-3" /> Realtime WebSocket
+              </div>
+              <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                Live Proctoring & Radar Pengawas
+              </h3>
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                Pantau pengerjaan siswa secara langsung: nomor yang sedang dikerjakan, sisa waktu, dan log pelanggaran detik demi detik. Guru dapat mengirim peringatan layar, mengunci sesi, atau diskualifikasi langsung.
+              </p>
+            </div>
+
+            {/* Feature 5: 5 Assessment Formats & KaTeX */}
+            <div className={`p-6 rounded-2xl ${
+              isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
+            }`}>
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-400/30 flex items-center justify-center mb-4 shadow-sm">
+                <Layers className="w-6 h-6" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/10 text-amber-600 dark:text-amber-400 mb-2 border border-amber-400/20">
+                <Cpu className="w-3 h-3" /> Standar AKM
+              </div>
+              <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                5 Format Soal & Rumus KaTeX
+              </h3>
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                Mendukung Pilihan Ganda, PG Kompleks, Menjodohkan, Isian Singkat, dan Uraian. Dilengkapi editor rumus matematika/fisika LaTeX (KaTeX) jernih serta audio listening test untuk ujian bahasa.
+              </p>
+            </div>
+
+            {/* Feature 6: Item Analysis & Remedial */}
             <div className={`p-6 rounded-2xl ${
               isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
             }`}>
               <div className="w-12 h-12 rounded-2xl bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-400/30 flex items-center justify-center mb-4 shadow-sm">
                 <BarChart3 className="w-6 h-6" />
               </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-teal-500/10 text-teal-600 dark:text-teal-400 mb-2 border border-teal-400/20">
+                <Award className="w-3 h-3" /> Evaluasi Tuntas
+              </div>
               <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                Analisis Daya Serap & Remedial
+                Analisis Butir Soal & Remedial
               </h3>
               <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Ketahui butir soal mana yang paling banyak dijawab salah oleh siswa untuk evaluasi pembelajaran tuntas dan bahan tindak lanjut remedial.
+                Otomatis menguji validitas soal: Tingkat Kesukaran, Daya Pembeda, dan Efektivitas Pengecoh (Distraktor). Guru mendapatkan rekomendasi daftar siswa yang membutuhkan remedial atau pengayaan.
+              </p>
+            </div>
+
+            {/* Feature 7: Smart Importer */}
+            <div className={`p-6 rounded-2xl ${
+              isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
+            }`}>
+              <div className="w-12 h-12 rounded-2xl bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-400/30 flex items-center justify-center mb-4 shadow-sm">
+                <UploadCloud className="w-6 h-6" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-sky-500/10 text-sky-600 dark:text-sky-400 mb-2 border border-sky-400/20">
+                <FileText className="w-3 h-3" /> Import Cepat
+              </div>
+              <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                Smart Importer (Word, Excel, Quizizz)
+              </h3>
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                Pindahkan bank soal lama Anda tanpa repot ketik ulang. Cukup upload file Microsoft Word (.docx), Excel (.xlsx), atau format Quizizz & Google Forms, sistem langsung mengubahnya menjadi ujian digital siap pakai.
+              </p>
+            </div>
+
+            {/* Feature 8: Instant Grading & Export */}
+            <div className={`p-6 rounded-2xl ${
+              isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
+            }`}>
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/15 text-purple-600 dark:text-purple-400 border border-purple-400/30 flex items-center justify-center mb-4 shadow-sm">
+                <FileSpreadsheet className="w-6 h-6" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 mb-2 border border-purple-400/20">
+                <Award className="w-3 h-3" /> Rekap Lengkap
+              </div>
+              <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                Cetak Raport, LJK & Ekspor Excel
+              </h3>
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                Nilai akhir siswa dihitung instan begitu ujian disubmit. Dilengkapi fitur cetak Lembar Jawaban Siswa (LJK digital), cetak Kartu Nilai / Raport Mini perorangan, dan ekspor rekapitulasi nilai siap olah ke Excel.
+              </p>
+            </div>
+
+            {/* Feature 9: Auto-Save Realtime & Resilient Cloud Sync */}
+            <div className={`p-6 rounded-2xl ${
+              isDarkMode ? 'glass-panel-interactive-dark' : 'glass-panel-interactive-light'
+            }`}>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-400/30 flex items-center justify-center mb-4 shadow-sm">
+                <Wifi className="w-6 h-6" />
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-2 border border-emerald-400/20">
+                <Zap className="w-3 h-3" /> Anti Kehilangan Data
+              </div>
+              <h3 className={`text-base font-bold mb-2 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                Auto-Save Realtime & Cloud Sync
+              </h3>
+              <p className={`text-xs leading-relaxed ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                Setiap jawaban siswa otomatis tersimpan detik demi detik ke cloud. Jika gawai siswa kehabisan baterai, aplikasi tertutup, atau internet mati mendadak, siswa dapat langsung melanjutkan ujian tanpa kehilangan riwayat jawaban.
               </p>
             </div>
 
@@ -1227,7 +1429,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* ANTI-CHEAT DEEP DIVE */}
-      <section id="keamanan" className={`relative py-24 border-t transition-colors overflow-hidden ${
+      <section id="keamanan" className={`relative py-24 border-t transition-colors overflow-hidden scroll-mt-24 ${
         isDarkMode ? 'border-white/10' : 'border-slate-200/80'
       }`}>
         {/* Ambient Glow */}
@@ -1290,6 +1492,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   Ujian yang adil menghasilkan pemetaan kompetensi belajar siswa yang sesungguhnya.
                 </p>
                 <button
+                  type="button"
                   onClick={() => onNavigateToAuth('signup')}
                   className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs transition-all w-full cursor-pointer shadow-md shadow-blue-600/20"
                 >
@@ -1302,7 +1505,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* PRICING & INFO APLIKASI SECTION */}
-      <section id="harga" className={`relative py-24 border-t transition-colors overflow-hidden ${
+      <section id="harga" className={`relative py-24 border-t transition-colors overflow-hidden scroll-mt-24 ${
         isDarkMode ? 'border-white/10' : 'border-slate-200/80'
       }`}>
         {/* Ambient Glow */}
@@ -1653,7 +1856,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* FAQ SECTION */}
-      <section id="faq" className={`relative py-24 border-t transition-colors overflow-hidden ${
+      <section id="faq" className={`relative py-24 border-t transition-colors overflow-hidden scroll-mt-24 ${
         isDarkMode ? 'border-white/10' : 'border-slate-200/80'
       }`}>
         {/* Ambient Glow */}
@@ -1701,7 +1904,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 }`}
               >
                 <button
+                  type="button"
                   onClick={() => toggleFaq(idx)}
+                  aria-expanded={activeFaq === idx}
+                  aria-controls={`faq-panel-${idx}`}
                   className="w-full px-5 py-4 text-left flex items-center justify-between gap-4 cursor-pointer"
                 >
                   <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{faq.q}</span>
@@ -1712,9 +1918,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   />
                 </button>
                 {activeFaq === idx && (
-                  <div className={`px-5 pb-4 text-xs leading-relaxed border-t pt-3 ${
-                    isDarkMode ? 'border-white/10 text-slate-300' : 'border-slate-100 text-slate-600'
-                  }`}>
+                  <div
+                    id={`faq-panel-${idx}`}
+                    role="region"
+                    className={`px-5 pb-4 text-xs leading-relaxed border-t pt-3 ${
+                      isDarkMode ? 'border-white/10 text-slate-300' : 'border-slate-100 text-slate-600'
+                    }`}
+                  >
                     {faq.a}
                   </div>
                 )}
@@ -1742,6 +1952,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <button
+              type="button"
               onClick={() => onNavigateToAuth('signup')}
               className="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-white hover:bg-blue-50 text-blue-700 font-bold text-sm shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
@@ -1749,6 +1960,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <ArrowRight className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => onNavigateToAuth('login')}
               className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-sm border border-white/30 backdrop-blur-md transition-all cursor-pointer shadow-sm"
             >
@@ -1759,7 +1971,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* FOOTER */}
-      <footer className={`border-t py-12 text-xs transition-colors ${
+      <footer className={`border-t py-12 pb-28 sm:pb-12 text-xs transition-colors ${
         isDarkMode ? 'bg-slate-950 border-slate-800 text-slate-500' : 'bg-white border-slate-200 text-slate-500'
       }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1807,11 +2019,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <div className="truncate">
                 <div className="text-xs font-bold leading-tight flex items-center gap-1.5">
                   <span className="truncate">Aplikasi Ujian Siswa</span>
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono font-bold shrink-0">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-mono font-bold shrink-0">
                     APK
                   </span>
                 </div>
-                <div className={`text-[10px] truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                <div className={`text-[11px] truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                   Ujian bebas curang di HP Anda
                 </div>
               </div>

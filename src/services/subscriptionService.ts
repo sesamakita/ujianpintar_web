@@ -79,8 +79,9 @@ export const DANA_CONFIG = {
   accountNumberRaw: '082196929193',
   accountName: 'Deni Indrayana',
   whatsappHotline: '082196929193',
-  telegramBotToken: '8946135531:AAF7XxekBfzesHM5RxAOgP_EgotKSOFXh_s',
-  telegramChatId: '8971674377',
+  // Diambil dari env (VITE_TELEGRAM_BOT_TOKEN / VITE_TELEGRAM_CHAT_ID). Jangan commit token asli.
+  telegramBotToken: (import.meta.env.VITE_TELEGRAM_BOT_TOKEN || '').trim(),
+  telegramChatId: (import.meta.env.VITE_TELEGRAM_CHAT_ID || '8971674377').trim(),
   qrisImageUrl: '/qris_dnapps.jpeg',
 };
 

@@ -60,10 +60,10 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
       {/* Mata Pelajaran & Kelas */}
       <div className="space-y-3.5">
         <div>
-          <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+          <label htmlFor="esp-1" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
             <BookOpen className="w-3.5 h-3.5 text-slate-400" /> Mata Pelajaran
           </label>
-          <input
+          <input id="esp-1"
             type="text"
             placeholder="Contoh: Matematika Wajib, Fisika, Biologi, dll..."
             value={settings.subject}
@@ -73,10 +73,10 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
         </div>
 
         <div>
-          <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+          <label htmlFor="esp-2" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
             <GraduationCap className="w-3.5 h-3.5 text-slate-400" /> Rombel / Tingkat Kelas
           </label>
-          <input
+          <input id="esp-2"
             type="text"
             placeholder="Contoh: XI Ips 1, X MIPA 2, dll..."
             value={settings.gradeLevel}
@@ -90,11 +90,11 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
       {/* Durasi & Waktu Pelaksanaan */}
       <div className="space-y-3.5 pt-3.5 border-t border-slate-100">
         <div>
-          <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+          <label htmlFor="esp-3" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-slate-400" /> Durasi Pengerjaan
           </label>
           <div className="relative">
-            <input
+            <input id="esp-3"
               type="number"
               min="10"
               max="240"
@@ -109,10 +109,10 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
         <div className="grid grid-cols-10 gap-2.5 items-end">
           {/* Kolom Tanggal: 60% Width */}
           <div className="col-span-6 min-w-0">
-            <label className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
+            <label htmlFor="esp-4" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-slate-400" /> Tanggal
             </label>
-            <input
+            <input id="esp-4"
               type="date"
               value={settings.scheduleDate}
               onChange={(e) => handleTextChange('scheduleDate', e.target.value)}
@@ -147,13 +147,13 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
             <KeyRound className="w-3.5 h-3.5 text-blue-600" /> Token PIN Akses
           </label>
           {settings.status === 'closed' ? (
-            <div className="inline-flex items-center justify-center gap-1 px-2 py-0.5 bg-rose-50 border border-rose-200 rounded-lg text-[10px] shadow-xs">
+            <div className="inline-flex items-center justify-center gap-1 px-2 py-0.5 bg-rose-50 border border-rose-200 rounded-lg text-[11px] shadow-xs">
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
               <span className="font-sans font-semibold text-rose-700">Akses:</span>
               <span className="font-mono font-bold text-rose-900">DITUTUP</span>
             </div>
           ) : (
-            <div className="inline-flex items-center justify-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[10px] shadow-xs">
+            <div className="inline-flex items-center justify-center gap-1 px-2 py-0.5 bg-emerald-50 border border-emerald-200 rounded-lg text-[11px] shadow-xs">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
               <span className="font-sans font-semibold text-emerald-700">Akses:</span>
               <span className="font-mono font-bold text-emerald-900">DIBUKA</span>
@@ -165,7 +165,7 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
           <div className="flex-1 h-11 bg-slate-900 text-blue-400 font-mono font-black text-center text-lg flex items-center justify-center rounded-xl tracking-widest border border-slate-800 shadow-inner">
             {settings.token}
           </div>
-          <button
+          <button type="button"
             onClick={onGenerateNewToken}
             className="w-11 h-11 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-xl border border-slate-200 flex items-center justify-center transition-colors cursor-pointer flex-shrink-0"
             title="Generate Token Acak Baru"
@@ -221,7 +221,7 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
           <span className="text-xs font-display font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
             <ShieldAlert className="w-3.5 h-3.5 text-rose-500" /> Proteksi Integritas
           </span>
-          <span className="text-[10px] font-display font-bold text-slate-400">Anti-Cheat</span>
+          <span className="text-[11px] font-display font-bold text-slate-400">Anti-Cheat</span>
         </div>
 
         <div className="space-y-2">

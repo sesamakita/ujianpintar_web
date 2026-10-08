@@ -92,7 +92,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" aria-label="Impor Soal" className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl p-5 max-w-2xl w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200 space-y-4 max-h-[90vh] flex flex-col">
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 flex-shrink-0">
@@ -105,7 +105,7 @@ export const ImportModal: React.FC<ImportModalProps> = ({
               <p className="text-xs text-slate-500 font-sans mt-0.5">Unggah butir soal sekaligus dari file Excel (.xlsx, .csv) atau teks</p>
             </div>
           </div>
-          <button
+          <button type="button"
             onClick={() => { handleReset(); onClose(); }}
             className="w-8 h-8 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
           >

@@ -32,7 +32,7 @@ export interface VpsTeacherUser {
 }
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://api.ujianpintar.online';
-const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const serviceRoleKey = (import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '').trim();
 
 export const supabaseAdmin: SupabaseClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: {

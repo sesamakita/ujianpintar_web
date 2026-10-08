@@ -19,7 +19,7 @@ export const UpgradePromptModal: React.FC<UpgradePromptModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 font-sans select-none animate-in fade-in duration-150">
+    <div role="dialog" aria-modal="true" aria-label="Tingkatkan Paket" className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 font-sans select-none animate-in fade-in duration-150">
       <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-700 relative overflow-hidden">
         {/* Glow decoration */}
         <div className="absolute -top-12 -right-12 w-36 h-36 bg-blue-600/30 rounded-full blur-2xl pointer-events-none" />

@@ -91,7 +91,7 @@ export const SubscriptionPlanCard: React.FC<SubscriptionPlanCardProps> = ({
               }`}>
                 {isPro ? 'Guru PRO' : isSchool ? 'Lisensi Sekolah' : plan.name}
               </h3>
-              <span className={`text-[10px] font-bold uppercase tracking-wider block -mt-0.2 ${
+              <span className={`text-[11px] font-bold uppercase tracking-wider block -mt-0.2 ${
                 isPro ? 'text-blue-300' : isSchool ? 'text-emerald-600' : 'text-slate-400'
               }`}>
                 {isPro ? 'Guru Mandiri' : isSchool ? 'Institusi (NPSN)' : 'Gratis Selamanya'}
@@ -133,7 +133,7 @@ export const SubscriptionPlanCard: React.FC<SubscriptionPlanCardProps> = ({
                 <span className="text-[11px] font-medium text-emerald-400">
                   ⚡ Setara Rp 15.000/bln
                 </span>
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[11px] font-mono font-bold">
                   Hemat 25%
                 </span>
               </div>
@@ -155,7 +155,7 @@ export const SubscriptionPlanCard: React.FC<SubscriptionPlanCardProps> = ({
             ? 'border-slate-700/80 text-slate-200' 
             : 'border-slate-200 text-slate-600'
         }`}>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
             {isPro ? 'Fitur Unggulan PRO:' : isSchool ? 'Fitur Khusus Sekolah:' : 'Fitur yang Didapatkan:'}
           </div>
 
@@ -209,7 +209,7 @@ export const SubscriptionPlanCard: React.FC<SubscriptionPlanCardProps> = ({
             </>
           )}
         </button>
-        <div className="text-center text-[10px] text-slate-400">
+        <div className="text-center text-[11px] text-slate-400">
           {isCurrent
             ? isPro
               ? '⚡ Status langganan aktif'

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Clock, 
@@ -6,21 +6,65 @@ import {
   CheckCircle, 
   ChevronRight 
 } from 'lucide-react';
-import type { StudentProctoring } from '../../types/exam';
+import type { StudentProctoring, ViolationLogItem } from '../../types/exam';
+import { isAppExitViolation } from '../../utils/formatters';
 
 interface StudentMonitoringTableProps {
   students: StudentProctoring[];
+  violationLogs?: ViolationLogItem[];
   onSelectStudent: (student: StudentProctoring) => void;
   activeTotalQuestions?: number;
 }
+ 
+const LiveAwayBadge: React.FC<{ leftAt?: string }> = ({ leftAt }) => {
+  const [elapsed, setElapsed] = useState(() => {
+    if (!leftAt) return 1;
+    const start = new Date(leftAt).getTime();
+    return isNaN(start) ? 1 : Math.max(1, Math.round((Date.now() - start) / 1000));
+  });
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!leftAt) {
+        setElapsed((prev) => prev + 1);
+        return;
+      }
+      const start = new Date(leftAt).getTime();
+      setElapsed(isNaN(start) ? 1 : Math.max(1, Math.round((Date.now() - start) / 1000)));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [leftAt]);
+
+  const m = Math.floor(elapsed / 60);
+  const s = elapsed % 60;
+  const timeStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+
+  return (
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-600 text-white rounded-lg text-xs font-display font-black border border-rose-700 shadow-xs animate-pulse">
+      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+      <span>DI LUAR: {timeStr}</span>
+    </div>
+  );
+};
 
 export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
   students,
+  violationLogs = [],
   onSelectStudent,
   activeTotalQuestions = 5,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'working' | 'submitted' | 'violation'>('all');
+
+  const getEffectiveViolationCount = (student: StudentProctoring) => {
+    const exitLogs = (violationLogs || []).filter(
+      (log) =>
+        isAppExitViolation(log) &&
+        ((log.studentNisn && log.studentNisn.trim() === student.nisn.trim()) ||
+         (log.studentName && (log.studentName.trim().toLowerCase() === student.name.trim().toLowerCase() || log.studentName.trim() === student.nisn.trim())))
+    );
+    return Math.max(student.violationCount || 0, exitLogs.length);
+  };
 
   const filteredStudents = students.filter((s) => {
     const sName = s?.name || 'Siswa';
@@ -31,9 +75,9 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
     
     if (!matchSearch) return false;
 
-    if (statusFilter === 'working') return s.status === 'working' || s.status === 'violation_flagged';
+    if (statusFilter === 'working') return s.status === 'working' || s.status === 'violation_flagged' || s.status === 'ready';
     if (statusFilter === 'submitted') return s.status === 'submitted';
-    if (statusFilter === 'violation') return s.violationCount > 0;
+    if (statusFilter === 'violation') return getEffectiveViolationCount(s) > 0;
     return true;
   });
 
@@ -50,6 +94,14 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const formatAwayDuration = (sec?: number) => {
+    if (!sec || sec <= 0) return '';
+    if (sec < 60) return `${sec}d`;
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return s > 0 ? `${m}m ${s}d` : `${m}m`;
   };
 
   return (
@@ -70,7 +122,7 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
 
         {/* Filter Pills */}
         <div className="flex items-center gap-2 overflow-x-auto">
-          <button
+          <button type="button"
             onClick={() => setStatusFilter('all')}
             className={`px-3.5 py-2 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center justify-center ${
               statusFilter === 'all'
@@ -81,7 +133,7 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
             Semua ({students.length})
           </button>
 
-          <button
+          <button type="button"
             onClick={() => setStatusFilter('working')}
             className={`px-3.5 py-2 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center justify-center ${
               statusFilter === 'working'
@@ -89,10 +141,10 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Mengerjakan ({students.filter((s) => s.status === 'working' || s.status === 'violation_flagged').length})
+            Mengerjakan ({students.filter((s) => s.status === 'working' || s.status === 'violation_flagged' || s.status === 'ready').length})
           </button>
 
-          <button
+          <button type="button"
             onClick={() => setStatusFilter('submitted')}
             className={`px-3.5 py-2 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center justify-center ${
               statusFilter === 'submitted'
@@ -103,7 +155,7 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
             Selesai ({students.filter((s) => s.status === 'submitted').length})
           </button>
 
-          <button
+          <button type="button"
             onClick={() => setStatusFilter('violation')}
             className={`px-3.5 py-2 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center justify-center ${
               statusFilter === 'violation'
@@ -111,7 +163,7 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                 : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
             }`}
           >
-            Pelanggaran ({students.filter((s) => s.violationCount > 0).length})
+            Pelanggaran ({students.filter((s) => getEffectiveViolationCount(s) > 0).length})
           </button>
         </div>
       </div>
@@ -152,7 +204,8 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                 const totalQ = Math.max(1, (student.totalQuestions && student.totalQuestions > 1) ? student.totalQuestions : (activeTotalQuestions || 5));
                 const currentProg = Math.min(totalQ, Math.max(0, Number(student.progressCount) || 0));
                 const progressPct = Math.min(100, Math.round((currentProg / totalQ) * 100));
-                const hasViolation = student.violationCount > 0;
+                const effectiveViolationCount = getEffectiveViolationCount(student);
+                const hasViolation = effectiveViolationCount > 0;
                 const safeName = student.name || 'Siswa';
                 const safeNisn = student.nisn || '-';
                 const safeClass = student.className || 'Kelas X';
@@ -160,8 +213,12 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                 return (
                   <tr
                     key={student.id}
-                    className={`hover:bg-blue-50/40 transition-colors ${
-                      hasViolation ? 'bg-rose-50/20' : ''
+                    className={`transition-colors ${
+                      student.isAway
+                        ? 'bg-rose-100/50 hover:bg-rose-100/70 border-l-4 border-l-rose-600'
+                        : hasViolation
+                        ? 'bg-rose-50/20 hover:bg-blue-50/40'
+                        : 'hover:bg-blue-50/40'
                     }`}
                   >
                     {/* Student Name */}
@@ -169,7 +226,9 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                       <div className="flex items-center gap-3">
                         <div
                           className={`w-8 h-8 rounded-xl flex items-center justify-center font-display font-black text-xs flex-shrink-0 ${
-                            isSubmitted
+                            student.isAway
+                              ? 'bg-rose-600 text-white shadow-xs animate-pulse'
+                              : isSubmitted
                               ? 'bg-emerald-100 text-emerald-800'
                               : hasViolation
                               ? 'bg-rose-100 text-rose-800'
@@ -179,7 +238,14 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                           {safeName.substring(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <div className="font-display font-bold text-slate-900 text-sm">{safeName}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-display font-bold text-slate-900 text-sm">{safeName}</span>
+                            {student.isAway && (
+                              <span className="px-1.5 py-0.5 bg-rose-600 text-white text-[9px] font-display font-black rounded uppercase tracking-wider animate-pulse">
+                                Di Luar
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[11px] text-slate-500 font-mono mt-0.5">
                             {safeNisn} • {safeClass}
                           </div>
@@ -215,6 +281,11 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                         <span className="inline-flex items-center gap-1.5 text-emerald-700 font-display font-bold text-xs">
                           <CheckCircle className="w-3.5 h-3.5" /> Selesai
                         </span>
+                      ) : student.status === 'ready' ? (
+                        <span className="font-mono font-bold text-amber-700 text-xs inline-flex items-center gap-1.5 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" />
+                          {formatSeconds(student.remainingSeconds)} (Siap)
+                        </span>
                       ) : (
                         <span className="font-mono font-bold text-slate-800 text-xs flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-slate-400" />
@@ -244,10 +315,15 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
 
                     {/* Violation Badge */}
                     <td className="py-3 px-4">
-                      {hasViolation ? (
+                      {student.isAway ? (
+                        <LiveAwayBadge leftAt={student.leftAt} />
+                      ) : hasViolation ? (
                         <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-rose-100 text-rose-800 rounded-lg text-xs font-display font-bold border border-rose-200">
                           <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                          <span>{student.violationCount}x Keluar Layar</span>
+                          <span>
+                            {effectiveViolationCount}x Keluar
+                            {student.totalAwaySeconds ? ` (${formatAwayDuration(student.totalAwaySeconds)})` : ''}
+                          </span>
                         </div>
                       ) : (
                         <span className="text-[11px] text-slate-400 font-sans">
@@ -258,7 +334,7 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
 
                     {/* Actions Button */}
                     <td className="py-3 px-4 text-right">
-                      <button
+                      <button type="button"
                         onClick={() => onSelectStudent(student)}
                         className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-xl text-xs font-display font-bold transition-colors inline-flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap shadow-xs"
                       >

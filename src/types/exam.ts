@@ -46,20 +46,26 @@ export interface ExamSettings {
 
 export interface StudentProctoring {
   id: string;
+  examId?: string;
   nisn: string;
   name: string;
   className: string;
   progressCount: number;
   totalQuestions: number;
   remainingSeconds: number;
+  startedAt?: string;
   connectionStatus: 'online' | 'reconnecting' | 'offline';
   violationCount: number;
   violationLogs: {
     timestamp: string;
     reason: string;
   }[];
-  status: 'working' | 'submitted' | 'violation_flagged' | 'timed_out';
+  status: 'ready' | 'working' | 'submitted' | 'violation_flagged' | 'timed_out';
   score?: number;
+  isAway?: boolean;
+  leftAt?: string;
+  lastAwaySeconds?: number;
+  totalAwaySeconds?: number;
 }
 
 export interface ViolationLogItem {
@@ -90,7 +96,7 @@ export interface GradeRecord {
 export interface StudentAnswerDetailItem {
   questionId: string;
   number: number;
-  type: 'multiple_choice' | 'short_answer';
+  type: QuestionType;
   questionText: string;
   latexFormula?: string;
   imageUrl?: string;
@@ -106,5 +112,85 @@ export interface StudentAnswerDetailItem {
   isDoubt: boolean;
   pointsEarned: number;
   maxPoints: number;
+  teacherFeedback?: string;
+  aiFeedback?: string;
+  aiSuggestedScore?: number;
+  isGraded?: boolean;
+}
+
+export interface EssayGradingItem {
+  answerId?: string;
+  sessionId: string;
+  studentName: string;
+  nisn: string;
+  className: string;
+  questionId: string;
+  questionNumber: number;
+  questionText: string;
+  latexFormula?: string;
+  rubricOrModelAnswer?: string;
+  maxPoints: number;
+  studentAnswer: string;
+  scoreEarned: number | null;
+  isGraded: boolean;
+  aiSuggestedScore?: number;
+  aiFeedback?: string;
+  teacherFeedback?: string;
+}
+
+export interface StudentPublicExamSummary {
+  sessionId: string;
+  examId: string;
+  examTitle: string;
+  subject: string;
+  gradeLevel: string;
+  token?: string;
+  teacherName: string;
+  teacherNip?: string;
+  schoolName: string;
+  schoolNpsn?: string;
+  studentName: string;
+  nisn: string;
+  className: string;
+  score: number;
+  maxScore: number;
+  percentage: number;
+  status: 'Lulus' | 'Remedial' | 'Menunggu Koreksi';
+  submittedAt: string;
+  tabViolations: number;
+  breakdown: {
+    objectiveScore: number;
+    objectiveMax: number;
+    shortAnswerScore: number;
+    shortAnswerMax: number;
+    essayScore: number;
+    essayMax: number;
+    hasPendingEssays: boolean;
+  };
+  hasEssayFeedback: boolean;
+  essayFeedbacks?: Array<{
+    questionNumber: number;
+    feedback: string;
+    scoreEarned: number;
+    maxPoints: number;
+  }>;
+}
+
+export interface DataRetentionStats {
+  sessionCount: number;
+  gradeCount: number;
+  violationCount: number;
+  answerCount: number;
+  oldestDate?: string;
+  isPro: boolean;
+  tier: 'free' | 'pro' | 'school';
+}
+
+export interface DataRetentionCleanupResult {
+  deletedSessions: number;
+  deletedGrades: number;
+  deletedLogs: number;
+  isPro: boolean;
+  message: string;
 }
 

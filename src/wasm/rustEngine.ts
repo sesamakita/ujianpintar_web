@@ -18,12 +18,20 @@ export interface RustStudentAnswerItem {
 }
 
 export interface RustGradeResult {
-  total_score: number;
-  max_score: number;
+  totalScore: number;
+  maxScore: number;
   percentage: number;
-  status: 'Lulus' | 'Remedial';
-  correct_count: number;
-  total_questions: number;
+  status: 'Lulus' | 'Remedial' | 'Menunggu Koreksi';
+  correctCount: number;
+  totalQuestions: number;
+  hasPendingEssays: boolean;
+  objectiveScore: number;
+  objectiveMax: number;
+  shortAnswerScore: number;
+  shortAnswerMax: number;
+  essayScore: number;
+  essayMax: number;
+  details: Record<string, { isCorrect: boolean; pointsEarned: number }>;
 }
 
 export class RustEngineBridge {
@@ -38,22 +46,43 @@ export class RustEngineBridge {
     let totalScore = 0;
     let maxScore = 0;
     let correctCount = 0;
+    let hasPendingEssays = false;
+    let objectiveScore = 0;
+    let objectiveMax = 0;
+    let shortAnswerScore = 0;
+    let shortAnswerMax = 0;
+    const details: Record<string, { isCorrect: boolean; pointsEarned: number }> = {};
 
     for (const q of questions) {
       maxScore += q.points || 10;
       const ans = answers.find((a) => a.question_id === q.id);
+
+      if (q.question_type === 'essay') {
+        // Essay answers require teacher / AI grading, initially 0 points pending
+        hasPendingEssays = true;
+        details[q.id] = { isCorrect: false, pointsEarned: 0 };
+        continue;
+      }
 
       if (ans) {
         let isCorrect = false;
 
         if (q.question_type === 'multiple_choice' || q.question_type === 'true_false') {
           isCorrect = !!q.correct_option_id && ans.selected_option_id === q.correct_option_id;
+          if (isCorrect) {
+            objectiveScore += q.points || 10;
+          }
+          objectiveMax += q.points || 10;
         } else if (q.question_type === 'short_answer') {
           if (q.correct_answer_text && ans.answer_text) {
             const cleanC = q.correct_answer_text.trim().toLowerCase().replace(/,/g, '.');
             const cleanU = ans.answer_text.trim().toLowerCase().replace(/,/g, '.');
             isCorrect = cleanC === cleanU;
           }
+          if (isCorrect) {
+            shortAnswerScore += q.points || 10;
+          }
+          shortAnswerMax += q.points || 10;
         }
 
         if (isCorrect) {
@@ -61,18 +90,35 @@ export class RustEngineBridge {
           correctCount++;
         }
       }
+
+      details[q.id] = { isCorrect: false, pointsEarned: 0 };
     }
 
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
-    const status: 'Lulus' | 'Remedial' = percentage >= kkm ? 'Lulus' : 'Remedial';
+
+    // If exam has essays and current objective score hasn't passed KKM, status is pending essay review
+    let status: 'Lulus' | 'Remedial' | 'Menunggu Koreksi' = 'Remedial';
+    if (percentage >= kkm) {
+      status = 'Lulus';
+    } else if (hasPendingEssays) {
+      status = 'Menunggu Koreksi';
+    }
 
     return {
-      total_score: totalScore,
-      max_score: maxScore,
+      totalScore,
+      maxScore,
       percentage,
       status,
-      correct_count: correctCount,
-      total_questions: questions.length,
+      correctCount,
+      totalQuestions: questions.length,
+      hasPendingEssays,
+      objectiveScore,
+      objectiveMax,
+      shortAnswerScore,
+      shortAnswerMax,
+      essayScore: 0,
+      essayMax: 0,
+      details,
     };
   }
 

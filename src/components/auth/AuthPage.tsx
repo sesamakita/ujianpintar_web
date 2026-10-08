@@ -16,10 +16,13 @@ import {
   CheckCircle2,
   KeyRound,
   ArrowLeft,
-  X
+  X,
+  Search,
 } from 'lucide-react';
 import { AppLogoBadge } from '../common/AppLogo';
 import { authService } from '../../services/authService';
+import { whatsappVerificationService } from '../../services/whatsappVerificationService';
+import { SchoolDirectoryModal } from '../common/SchoolDirectoryModal';
 
 interface AuthPageProps {
   onLoginSuccess: (userData: { id?: string; name: string; email: string; school: string; subject: string }) => void;
@@ -46,6 +49,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [schoolName, setSchoolName] = useState('');
+  const [npsn, setNpsn] = useState('');
+  const [isSchoolModalOpen, setIsSchoolModalOpen] = useState(false);
   const [subject, setSubject] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [rememberMe, setRememberMe] = useState(true);
@@ -130,11 +135,27 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
     // 3. DAFTAR AKUN BARU
     if (mode === 'signup') {
+      // Verifikasi nomor WhatsApp aktif (WAHA) sebelum mendaftar — fail-safe: jika WAHA offline,
+      // sistem tetap mengizinkan nomor dengan format valid agar guru tidak terhalang mendaftar.
+      const quickCheck = whatsappVerificationService.formatAndValidatePhone(whatsapp);
+      if (!quickCheck.isValidFormat) {
+        setIsLoading(false);
+        setNotification(quickCheck.errorMessage || 'Nomor WhatsApp tidak valid. Gunakan nomor seluler Indonesia (contoh: 0812...).');
+        return;
+      }
+      const waCheck = await whatsappVerificationService.verifyNumber(whatsapp);
+      if (waCheck.status === 'invalid') {
+        setIsLoading(false);
+        setNotification(waCheck.message || 'Nomor WhatsApp tidak terdaftar / tidak aktif. Gunakan nomor WhatsApp aktif Anda.');
+        return;
+      }
+
       const res = await authService.signUpTeacher(email, password, {
         name: fullName || 'Rahmat, S.Pd.',
         school: schoolName || 'SMA Negeri 1 Indonesia',
         subject: subject || 'Matematika Wajib',
-        whatsapp: whatsapp || '081234567890',
+        whatsapp: quickCheck.formattedPhone || whatsapp || '081234567890',
+        npsn: npsn || '',
       });
       setIsLoading(false);
       if (res.error) {
@@ -262,7 +283,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   <span className="font-display font-black text-xl tracking-tight leading-none text-white">
                     UjianPintar
                   </span>
-                  <span className="text-[10px] uppercase font-mono font-black tracking-wider px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-md border border-blue-400/30">
+                  <span className="text-[11px] uppercase font-mono font-black tracking-wider px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-md border border-blue-400/30">
                     PRO
                   </span>
                 </div>
@@ -307,7 +328,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </div>
 
           {/* Security Bottom Pill */}
-          <div className="relative z-10 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] lg:text-[11px] text-slate-400 font-mono">
+          <div className="relative z-10 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
             <div className="flex items-center gap-2">
               <span>🔐 Supabase Cloud Protected</span>
               <a
@@ -338,14 +359,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 <div>
                   <div className="flex items-center gap-1.5">
                     <span className="font-display font-black text-base text-slate-900 leading-none">UjianPintar</span>
-                    <span className="text-[9px] uppercase font-mono font-black tracking-wider px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded border border-blue-200">
+                    <span className="text-[11px] uppercase font-mono font-black tracking-wider px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded border border-blue-200">
                       PRO
                     </span>
                   </div>
-                  <p className="text-[10px] text-slate-500 font-sans mt-0.5">Portal Guru & Ujian Sekolah</p>
+                  <p className="text-[11px] text-slate-500 font-sans mt-0.5">Portal Guru & Ujian Sekolah</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
+              <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400">
                 <span>🔐 Supabase</span>
               </div>
             </div>
@@ -409,7 +430,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
             {/* Notification Banner */}
             {notification && (
-              <div className={`mt-4 p-3.5 rounded-xl text-xs font-medium flex items-start gap-2.5 animate-in fade-in ${
+              <div
+                role="status"
+                aria-live="polite"
+                className={`mt-4 p-3.5 rounded-xl text-xs font-medium flex items-start gap-2.5 animate-in fade-in ${
                 notification.includes('berhasil')
                   ? 'bg-emerald-50 border border-emerald-200 text-emerald-900'
                   : 'bg-amber-50 border border-amber-200 text-amber-900'
@@ -462,7 +486,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
                 <div className="relative flex items-center justify-center">
                   <div className="border-t border-slate-200 w-full" />
-                  <span className="bg-white px-3 text-[10px] font-display font-bold text-slate-400 uppercase tracking-wider">
+                  <span className="bg-white px-3 text-[11px] font-display font-bold text-slate-400 uppercase tracking-wider">
                     {mode === 'signup' ? 'atau daftar manual dengan formulir' : 'atau gunakan email & kata sandi'}
                   </span>
                 </div>
@@ -476,15 +500,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               {mode === 'signup' && (
                 <>
                   <div>
-                    <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label htmlFor="signup-fullname" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Nama Lengkap & Gelar Guru
                     </label>
                     <div className="relative">
                       <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
+                        id="signup-fullname"
                         type="text"
                         required
-                        autoComplete="off"
+                        autoComplete="name"
                         placeholder="Rahmat, S.Pd."
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
@@ -495,30 +520,59 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
-                        Nama Sekolah / Instansi
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label htmlFor="signup-school" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
+                          Nama Sekolah / Instansi
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsSchoolModalOpen(true)}
+                          className="inline-flex items-center gap-1 text-[11px] font-display font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                        >
+                          <Search className="w-3 h-3" />
+                          <span>Cari Sekolah Resmi</span>
+                        </button>
+                      </div>
                       <div className="relative">
                         <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                         <input
+                          id="signup-school"
                           type="text"
                           required
-                          autoComplete="off"
-                          placeholder="SMA Negeri 1 Indonesia"
+                          autoComplete="organization"
+                          placeholder="Contoh: SMKN 1 Banggai"
                           value={schoolName}
                           onChange={(e) => setSchoolName(e.target.value)}
                           className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                         />
                       </div>
+                      {npsn ? (
+                        <div className="mt-1.5 flex items-center justify-between text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                          <span className="font-semibold">NPSN: <span className="font-mono font-bold">{npsn}</span> (Terdata Resmi)</span>
+                          <button
+                            type="button"
+                            onClick={() => { setNpsn(''); }}
+                            className="text-slate-400 hover:text-slate-600 cursor-pointer ml-1"
+                            title="Hapus NPSN"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 font-sans mt-1">
+                          Ketik manual atau klik <strong>Cari Sekolah Resmi</strong> untuk mengisi otomatis beserta NPSN.
+                        </p>
+                      )}
                     </div>
 
                     <div>
-                      <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                      <label htmlFor="signup-subject" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                         Mata Pelajaran Utama
                       </label>
                       <div className="relative">
                         <BookOpen className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                         <input
+                          id="signup-subject"
                           type="text"
                           required
                           autoComplete="off"
@@ -533,15 +587,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
                   {/* WhatsApp Field for Sign Up */}
                   <div>
-                    <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label htmlFor="signup-whatsapp" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Nomor WhatsApp Guru
                     </label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
+                        id="signup-whatsapp"
                         type="tel"
                         required
-                        autoComplete="off"
+                        autoComplete="tel"
                         placeholder="Contoh: 081234567890"
                         value={whatsapp}
                         onChange={(e) => setWhatsapp(e.target.value)}
@@ -555,15 +610,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               {/* Email Field (for login, signup, and forgot step 1) */}
               {((mode === 'login' || mode === 'signup') || (mode === 'forgot' && forgotStep === 1)) && (
                 <div className="relative" ref={emailContainerRef}>
-                  <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label htmlFor="auth-email" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                     {mode === 'forgot' ? 'Alamat Email Terdaftar' : 'Alamat Email Guru'}
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                     <input
+                      id="auth-email"
                       type="email"
                       required
-                      autoComplete="off"
+                      autoComplete="email"
                       placeholder={mode === 'signup' ? "nama.guru@gmail.com" : "nama.guru@gmail.com"}
                       value={email}
                       onFocus={() => {
@@ -650,15 +706,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               {/* FORGOT PASSWORD: STEP 1 (WhatsApp Input) */}
               {mode === 'forgot' && forgotStep === 1 && (
                 <div>
-                  <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label htmlFor="forgot-whatsapp" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Nomor WhatsApp Terdaftar
                   </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                     <input
+                      id="forgot-whatsapp"
                       type="tel"
                       required
-                      autoComplete="off"
+                      autoComplete="tel"
                       placeholder="Contoh: 081234567890"
                       value={whatsapp}
                       onChange={(e) => setWhatsapp(e.target.value)}
@@ -687,12 +744,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label htmlFor="forgot-new-password" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Kata Sandi Baru
                     </label>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
+                        id="forgot-new-password"
                         type={showNewPassword ? 'text' : 'password'}
                         required
                         autoComplete="new-password"
@@ -704,6 +762,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
+                        aria-label={showNewPassword ? 'Sembunyikan kata sandi baru' : 'Tampilkan kata sandi baru'}
                         className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
                       >
                         {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -712,12 +771,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                    <label htmlFor="forgot-confirm-password" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Konfirmasi Kata Sandi Baru
                     </label>
                     <div className="relative">
                       <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
+                        id="forgot-confirm-password"
                         type={showConfirmPassword ? 'text' : 'password'}
                         required
                         autoComplete="new-password"
@@ -729,6 +789,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        aria-label={showConfirmPassword ? 'Sembunyikan konfirmasi kata sandi' : 'Tampilkan konfirmasi kata sandi'}
                         className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
                       >
                         {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -742,7 +803,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               {mode !== 'forgot' && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
+                    <label htmlFor="auth-password" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
                       Kata Sandi
                     </label>
                     {mode === 'login' && (
@@ -758,6 +819,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   <div className="relative">
                     <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                     <input
+                      id="auth-password"
                       type={showPassword ? 'text' : 'password'}
                       required
                       autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
@@ -769,6 +831,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
                       className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -834,6 +897,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* School Directory Modal */}
+      <SchoolDirectoryModal
+        isOpen={isSchoolModalOpen}
+        onClose={() => setIsSchoolModalOpen(false)}
+        currentSchoolName={schoolName}
+        onSelectSchool={(s) => {
+          setSchoolName(s.schoolName);
+          setNpsn(s.npsn);
+        }}
+      />
     </div>
   );
 };

@@ -192,7 +192,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
   const isAfternoon = selectedHour >= 12 && selectedHour < 18;
 
   return (
-    <div 
+    <div role="dialog" aria-modal="true" aria-label="Pilih Waktu" 
       className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 font-sans overflow-y-auto"
       onMouseUp={handlePointerUp}
       onTouchEnd={handlePointerUp}

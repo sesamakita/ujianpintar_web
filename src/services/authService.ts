@@ -19,7 +19,7 @@ export const authService = {
   async signUpTeacher(
     email: string, 
     password: string, 
-    profile: { name: string; school: string; subject: string; whatsapp: string }
+    profile: { name: string; school: string; subject: string; whatsapp: string; npsn?: string; nip?: string }
   ) {
     const cleanEmail = email.toLowerCase().trim();
     const cleanWhatsapp = profile.whatsapp.replace(/[^0-9+]/g, '').trim();
@@ -34,6 +34,7 @@ export const authService = {
             school_name: profile.school,
             subject: profile.subject,
             whatsapp_number: cleanWhatsapp,
+            npsn: profile.npsn || '',
           },
         },
       });
@@ -47,6 +48,8 @@ export const authService = {
         subject: profile.subject,
         whatsapp: cleanWhatsapp,
         email: cleanEmail,
+        npsn: profile.npsn || '',
+        nip: profile.nip || '',
       };
       localStorage.setItem(`ujianpintar_profile_${cleanEmail}`, JSON.stringify(savedProfile));
       localStorage.setItem(`ujianpintar_account_${cleanEmail}`, JSON.stringify({
@@ -63,8 +66,9 @@ export const authService = {
             full_name: profile.name,
             school_name: profile.school,
             subject: profile.subject,
-            nip: '',
-            npsn: '',
+            nip: profile.nip || '',
+            npsn: profile.npsn || '',
+            whatsapp_number: cleanWhatsapp,
             updated_at: new Date().toISOString(),
           });
         } catch {

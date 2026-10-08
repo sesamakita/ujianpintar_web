@@ -377,7 +377,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
             </div>
           )}
 
-          <button
+          <button type="button"
             onClick={handleOpenCreateModal}
             className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-display font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer hover:scale-[1.01]"
           >
@@ -441,7 +441,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
             <p className="text-xs text-slate-500 font-sans max-w-md mx-auto">
               Mulai dengan membuat paket bank soal pertama Anda untuk menghasilkan PIN token dan memasukkan butir soal.
             </p>
-            <button
+            <button type="button"
               onClick={handleOpenCreateModal}
               className="mt-2 inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-display font-bold shadow-xs hover:bg-blue-700 cursor-pointer"
             >
@@ -797,7 +797,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
       {/* Modal Buat Bank Soal Baru */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+        <div role="dialog" aria-modal="true" aria-label="Bank Soal" className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-200 space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
@@ -820,10 +820,10 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
             <div className="space-y-3.5">
               <div>
-                <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                <label htmlFor="ebl-1" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Judul Bank Soal / Nama Ujian *
                 </label>
-                <input
+                <input id="ebl-1"
                   type="text"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
@@ -835,10 +835,10 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label htmlFor="ebl-2" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Mata Pelajaran
                   </label>
-                  <input
+                  <input id="ebl-2"
                     type="text"
                     value={newSubject}
                     onChange={(e) => setNewSubject(e.target.value)}
@@ -848,10 +848,10 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label htmlFor="ebl-3" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Jenjang / Kelas
                   </label>
-                  <input
+                  <input id="ebl-3"
                     type="text"
                     value={newGradeLevel}
                     onChange={(e) => setNewGradeLevel(formatClassName(e.target.value, true))}
@@ -864,10 +864,10 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                  <label htmlFor="ebl-4" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                     Durasi Pengerjaan (Menit)
                   </label>
-                  <input
+                  <input id="ebl-4"
                     type="number"
                     value={newDuration}
                     onChange={(e) => setNewDuration(e.target.value)}
@@ -879,18 +879,18 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
+                    <label htmlFor="ebl-5" className="text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
                       Token Siswa (6 Digit)
                     </label>
                     <button
                       type="button"
                       onClick={() => setNewPin(examService.generateRandomToken())}
-                      className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <RefreshCw className="w-3 h-3" /> Acak
                     </button>
                   </div>
-                  <input
+                  <input id="ebl-5"
                     type="text"
                     value={newPin}
                     onChange={(e) => setNewPin(e.target.value)}
@@ -902,25 +902,25 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-display font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1">
+                  <label htmlFor="ebl-6" className="text-xs font-display font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1">
                     <Lock className="w-3 h-3 text-amber-600" /> PIN Guru Pengawas Ruang (6 Digit)
                   </label>
                   <button
                     type="button"
                     onClick={() => setNewProctorPin(examService.generateRandomToken())}
-                    className="text-[10px] text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
+                    className="text-[11px] text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     <RefreshCw className="w-3 h-3" /> Acak PIN
                   </button>
                 </div>
-                <input
+                <input id="ebl-6"
                   type="text"
                   value={newProctorPin}
                   onChange={(e) => setNewProctorPin(e.target.value)}
                   maxLength={6}
                   className="w-full px-3.5 py-2 text-xs font-mono font-black text-center tracking-widest bg-amber-950 text-amber-300 border border-amber-800 rounded-xl focus:outline-none"
                 />
-                <p className="text-[10px] text-slate-500 font-sans mt-1">
+                <p className="text-[11px] text-slate-500 font-sans mt-1">
                   PIN ini diberikan kepada Guru Pengawas Ruang agar bisa langsung memantau kelas ini di HP.
                 </p>
               </div>
@@ -973,10 +973,10 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
             <div className="space-y-3 pt-2">
               <div>
-                <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                <label htmlFor="ebl-7" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Nama Paket Ujian / Kelas Target
                 </label>
-                <input
+                <input id="ebl-7"
                   type="text"
                   value={duplicateTitle}
                   onChange={(e) => setDuplicateTitle(e.target.value)}
@@ -986,10 +986,10 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                <label htmlFor="ebl-8" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                   Tingkat / Rombel Kelas
                 </label>
-                <input
+                <input id="ebl-8"
                   type="text"
                   value={duplicateGradeLevel}
                   onChange={(e) => setDuplicateGradeLevel(formatClassName(e.target.value, true))}
@@ -1002,48 +1002,48 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
+                    <label htmlFor="ebl-9" className="text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
                       Token Siswa Baru
                     </label>
                     <button
                       type="button"
                       onClick={() => setDuplicatePin(examService.generateRandomToken())}
-                      className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <RefreshCw className="w-3 h-3" /> Acak
                     </button>
                   </div>
-                  <input
+                  <input id="ebl-9"
                     type="text"
                     value={duplicatePin}
                     onChange={(e) => setDuplicatePin(e.target.value)}
                     maxLength={6}
                     className="w-full px-3.5 py-2.5 text-xs font-mono font-black text-center tracking-widest bg-slate-900 text-blue-400 border border-slate-700 rounded-xl focus:outline-none"
                   />
-                  <span className="text-[10px] text-slate-400 block mt-0.5">Untuk pengerjaan siswa</span>
+                  <span className="text-[11px] text-slate-400 block mt-0.5">Untuk pengerjaan siswa</span>
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-display font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1">
+                    <label htmlFor="ebl-10" className="text-xs font-display font-bold text-amber-800 uppercase tracking-wider flex items-center gap-1">
                       <Lock className="w-3 h-3 text-amber-600" /> PIN Pengawas Baru
                     </label>
                     <button
                       type="button"
                       onClick={() => setDuplicateProctorPin(examService.generateRandomToken())}
-                      className="text-[10px] text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
+                      className="text-[11px] text-amber-700 hover:underline flex items-center gap-1 cursor-pointer"
                     >
                       <RefreshCw className="w-3 h-3" /> Acak
                     </button>
                   </div>
-                  <input
+                  <input id="ebl-10"
                     type="text"
                     value={duplicateProctorPin}
                     onChange={(e) => setDuplicateProctorPin(e.target.value)}
                     maxLength={6}
                     className="w-full px-3.5 py-2.5 text-xs font-mono font-black text-center tracking-widest bg-amber-950 text-amber-300 border border-amber-800 rounded-xl focus:outline-none"
                   />
-                  <span className="text-[10px] text-amber-700 block mt-0.5">Untuk pengawas ruang HP</span>
+                  <span className="text-[11px] text-amber-700 block mt-0.5">Untuk pengawas ruang HP</span>
                 </div>
               </div>
 
@@ -1100,7 +1100,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
             {/* Display Big Token */}
             <div className="my-4 p-5 bg-slate-900 rounded-2xl text-white shadow-inner flex flex-col items-center">
-              <span className="text-[10px] uppercase tracking-widest text-slate-400 font-display font-bold mb-1">
+              <span className="text-[11px] uppercase tracking-widest text-slate-400 font-display font-bold mb-1">
                 TOKEN AKSES SISWA
               </span>
               <div className="text-4xl font-mono font-black tracking-widest text-blue-400">
@@ -1258,7 +1258,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                   <span className="text-xl font-bold font-display text-amber-950 mt-0.5 block">
                     {monthlyUsage?.usedSessions ?? 0} / 3 <span className="text-xs font-normal text-amber-800">Sesi</span>
                   </span>
-                  <span className="text-[10px] text-amber-700 block mt-1">
+                  <span className="text-[11px] text-amber-700 block mt-1">
                     Peserta &gt; 10 siswa per kelas
                   </span>
                 </div>
@@ -1267,7 +1267,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
                   <span className="text-xl font-bold font-display text-blue-950 mt-0.5 block">
                     {monthlyUsage?.remainingSessions ?? 3} <span className="text-xs font-normal text-blue-800">Sesi</span>
                   </span>
-                  <span className="text-[10px] text-blue-700 block mt-1">
+                  <span className="text-[11px] text-blue-700 block mt-1">
                     Reset otomatis awal bulan
                   </span>
                 </div>
@@ -1328,11 +1328,11 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
                         <div>
                           {group.isQualifying ? (
-                            <span className="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-lg text-[10px] whitespace-nowrap">
+                            <span className="px-2.5 py-1 bg-amber-100 text-amber-800 font-bold rounded-lg text-[11px] whitespace-nowrap">
                               ✓ Sesi Resmi (&gt;10 Siswa)
                             </span>
                           ) : (
-                            <span className="px-2.5 py-1 bg-slate-200 text-slate-600 font-medium rounded-lg text-[10px] whitespace-nowrap">
+                            <span className="px-2.5 py-1 bg-slate-200 text-slate-600 font-medium rounded-lg text-[11px] whitespace-nowrap">
                               Simulasi (≤10 Siswa, Bebas Kuota)
                             </span>
                           )}

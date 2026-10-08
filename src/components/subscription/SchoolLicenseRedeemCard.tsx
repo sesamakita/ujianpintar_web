@@ -538,13 +538,13 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
           <div className="space-y-4">
             <form onSubmit={handleRedeem} className="space-y-3">
               <div>
-                <label className="block text-xs font-display font-bold text-slate-800 uppercase tracking-wider mb-1.5">
+                <label htmlFor="slr-1" className="block text-xs font-display font-bold text-slate-800 uppercase tracking-wider mb-1.5">
                   Masukkan Kode Lisensi Sekolah Anda:
                 </label>
                 <div className="flex flex-col sm:flex-row gap-2.5">
                   <div className="relative flex-1">
                     <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
+                    <input id="slr-1"
                       type="text"
                       value={licenseCode}
                       onChange={(e) => setLicenseCode(e.target.value.toUpperCase())}
@@ -602,10 +602,10 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
 
             <form onSubmit={handleUnlockOperator} className="space-y-3">
               <div>
-                <label className="block text-xs font-display font-bold text-slate-800 uppercase tracking-wider mb-1">
+                <label htmlFor="slr-2" className="block text-xs font-display font-bold text-slate-800 uppercase tracking-wider mb-1">
                   Masukkan PIN Master Operator:
                 </label>
-                <input
+                <input id="slr-2"
                   type="password"
                   value={operatorPinInput}
                   onChange={(e) => setOperatorPinInput(e.target.value)}
@@ -666,10 +666,10 @@ export const SchoolLicenseRedeemCard: React.FC<SchoolLicenseRedeemCardProps> = (
 
             <form onSubmit={handleResetCode} className="space-y-3">
               <div>
-                <label className="block text-xs font-display font-bold text-slate-800 uppercase tracking-wider mb-1">
+                <label htmlFor="slr-3" className="block text-xs font-display font-bold text-slate-800 uppercase tracking-wider mb-1">
                   Kode Lisensi Baru:
                 </label>
-                <input
+                <input id="slr-3"
                   type="text"
                   value={newCodeInput}
                   onChange={(e) => setNewCodeInput(e.target.value.toUpperCase())}

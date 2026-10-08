@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { SubscriptionPlan, BillingCycle, PaymentChannel, TransactionRecord, TeacherSubscription } from '../../types/subscription';
 import { subscriptionService, DANA_CONFIG, PAYMENT_METHODS } from '../../services/subscriptionService';
+import { formatRupiah } from '../../utils/formatters';
 
 interface PaymentCheckoutModalProps {
   isOpen: boolean;
@@ -159,9 +160,6 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
   }, [isWaitingApproval, activeTransaction, onPaymentSuccess]);
 
   if (!isOpen || !activeTransaction) return null;
-
-  const formatRupiah = (num: number) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
   const formatTimer = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -435,7 +433,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
             {/* Order Summary Card */}
             <div className="p-4 bg-slate-900 text-white rounded-2xl flex items-center justify-between shadow-inner">
               <div>
-                <span className="text-[10px] font-mono uppercase tracking-wider text-blue-400 font-bold block">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-blue-400 font-bold block">
                   Paket Langganan ({billingCycle === 'yearly' ? 'Tahunan' : 'Bulanan'})
                 </span>
                 <h4 className="text-base font-display font-black text-white mt-0.5">
@@ -447,11 +445,11 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               </div>
 
               <div className="text-right">
-                <div className="text-[10px] text-slate-400 font-sans">Total Tagihan:</div>
+                <div className="text-[11px] text-slate-400 font-sans">Total Tagihan:</div>
                 <div className="text-lg sm:text-xl font-display font-black text-emerald-400 tracking-tight">
                   {formatRupiah(activeTransaction.totalAmount)}
                 </div>
-                <div className="text-[9px] text-amber-300 font-mono">
+                <div className="text-[10px] text-amber-300 font-mono">
                   Termasuk kode unik: +Rp {activeTransaction.uniqueCode}
                 </div>
               </div>
@@ -459,16 +457,16 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
 
             {/* Customer Information Inputs */}
             <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2.5">
-              <label className="text-[11px] font-display font-bold text-slate-700 uppercase tracking-wider block">
+              <label id="pcm-g1" className="text-[11px] font-display font-bold text-slate-700 uppercase tracking-wider block">
                 Data Pemesan & Kontak Verifikasi:
               </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div role="group" aria-labelledby="pcm-g1" className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
-                  <label className="text-[10px] text-slate-500 font-medium block mb-1">
+                  <label htmlFor="paymen-1" className="text-[11px] text-slate-500 font-medium block mb-1">
                     Nama Guru / Pemesan:
                   </label>
-                  <input
+                  <input id="paymen-1"
                     type="text"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
@@ -478,10 +476,10 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-500 font-medium block mb-1">
+                  <label htmlFor="paymen-2" className="text-[11px] text-slate-500 font-medium block mb-1">
                     Nomor WhatsApp Aktif <span className="text-rose-500 font-bold">*</span>:
                   </label>
-                  <input
+                  <input id="paymen-2"
                     type="tel"
                     value={customerWhatsapp}
                     onChange={(e) => setCustomerWhatsapp(e.target.value)}
@@ -492,10 +490,10 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
               </div>
 
               <div>
-                <label className="text-[10px] text-slate-500 font-medium block mb-1">
+                <label htmlFor="paymen-3" className="text-[11px] text-slate-500 font-medium block mb-1">
                   Asal Satuan Pendidikan / Sekolah:
                 </label>
-                <input
+                <input id="paymen-3"
                   type="text"
                   value={customerSchool}
                   onChange={(e) => setCustomerSchool(e.target.value)}
@@ -507,11 +505,11 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
 
             {/* Payment Method Selector (DANA vs QRIS) */}
             <div>
-              <label className="text-[11px] font-display font-bold text-slate-700 uppercase tracking-wider block mb-2">
+              <label id="pcm-g3" className="text-[11px] font-display font-bold text-slate-700 uppercase tracking-wider block mb-2">
                 Pilih Jalur Pembayaran:
               </label>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div role="group" aria-labelledby="pcm-g3" className="grid grid-cols-2 gap-2">
                 {PAYMENT_METHODS.map((method) => {
                   const isSelected = selectedChannel === method.id;
                   return (
@@ -538,7 +536,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                         <div className="text-xs font-bold truncate">
                           {method.id === 'dana' ? 'Transfer DANA' : 'Scan QRIS'}
                         </div>
-                        <div className="text-[10px] text-emerald-600 font-medium">
+                        <div className="text-[11px] text-emerald-600 font-medium">
                           Bebas Admin
                         </div>
                       </div>
@@ -565,7 +563,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                   <div className="bg-white p-3.5 rounded-xl border border-slate-200 space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] text-slate-500">Nomor Akun DANA:</span>
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
+                      <span className="text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
                         Akun Resmi Terverifikasi
                       </span>
                     </div>
@@ -607,7 +605,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                     <div className="text-xl font-display font-black text-amber-950 font-mono tracking-tight">
                       {formatRupiah(activeTransaction.totalAmount)}
                     </div>
-                    <p className="text-[10px] text-amber-800 leading-tight">
+                    <p className="text-[11px] text-amber-800 leading-tight">
                       ⚠️ <strong>Penting:</strong> Pastikan Anda mentransfer tepat hingga 3 digit terakhir (<strong>{activeTransaction.uniqueCode}</strong>) agar bot verifikasi kami dapat mengenali pembayaran Anda seketika.
                     </p>
                   </div>
@@ -633,7 +631,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                       <div className="text-xs font-bold text-slate-800">
                         Pindai QRIS Resmi Dn Apps
                       </div>
-                      <div className="text-[10px] text-slate-500">
+                      <div className="text-[11px] text-slate-500">
                         Mendukung DANA, BCA, Livin Mandiri, BRImo, GoPay, OVO, ShopeePay
                       </div>
                       <a
@@ -650,7 +648,7 @@ export const PaymentCheckoutModal: React.FC<PaymentCheckoutModalProps> = ({
                   {/* Exact Amount */}
                   <div className="bg-amber-50/80 p-3 rounded-xl border border-amber-200 flex items-center justify-between">
                     <div>
-                      <div className="text-[10px] text-amber-800 font-bold uppercase">Masukkan Nominal Pas:</div>
+                      <div className="text-[11px] text-amber-800 font-bold uppercase">Masukkan Nominal Pas:</div>
                       <div className="text-base font-mono font-black text-amber-950">
                         {formatRupiah(activeTransaction.totalAmount)}
                       </div>

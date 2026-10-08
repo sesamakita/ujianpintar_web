@@ -4,7 +4,6 @@ import {
   X, 
   Check, 
   Key, 
-  ExternalLink, 
   BookOpen, 
   GraduationCap, 
   Flame, 
@@ -15,13 +14,23 @@ import {
   CheckCircle2,
   ListChecks,
   ShieldCheck,
-  Zap,
-  Trash2
+  Trash2,
+  SlidersHorizontal,
+  Scale,
+  Calculator,
+  Plus,
+  Minus
 } from 'lucide-react';
-import type { Question } from '../../types/exam';
-import { aiQuestionService, type AIGenerateParams } from '../../services/aiQuestionService';
+import type { Question, QuestionType } from '../../types/exam';
+import { 
+  aiQuestionService, 
+  type AIGenerateParams,
+  type QuestionComposition,
+  type TypePointsConfig
+} from '../../services/aiQuestionService';
 import { MathRenderer } from '../common/MathRenderer';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { GeminiApiKeySettings } from '../common/GeminiApiKeySettings';
 import { formatClassName } from '../../utils/formatters';
 
 interface AIGeneratorModalProps {
@@ -43,17 +52,35 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
   const [subject, setSubject] = useState(defaultSubject);
   const [gradeLevel, setGradeLevel] = useState(defaultGradeLevel);
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | 'hots'>('medium');
-  const [count, setCount] = useState<number>(5);
-  const [questionType, setQuestionType] = useState<'multiple_choice' | 'essay'>('multiple_choice');
   const [referenceMaterial, setReferenceMaterial] = useState('');
+
+  // Mode: Single vs Mixed
+  const [genMode, setGenMode] = useState<'single' | 'mixed'>('mixed');
+
+  // Single Mode State
+  const [singleType, setSingleType] = useState<QuestionType>('multiple_choice');
+  const [singleCount, setSingleCount] = useState<number>(5);
+  const [singlePoints, setSinglePoints] = useState<number>(10);
+
+  // Mixed Mode State (Default matching user example: 20 PG, 2 B/S, 3 Isian Singkat, 5 Uraian = 30 soal, 100 poin!)
+  const [composition, setComposition] = useState<QuestionComposition>({
+    multiple_choice: 20,
+    true_false: 2,
+    short_answer: 3,
+    essay: 5,
+  });
+
+  const [typePoints, setTypePoints] = useState<TypePointsConfig>({
+    multiple_choice: 2,
+    true_false: 5,
+    short_answer: 10,
+    essay: 4,
+  });
   
-  // API Key BYOK state
-  const [apiKeyInput, setApiKeyInput] = useState('');
+  // API Key BYOK state (shared component handles input/test; parent tracks saved state)
   const [storedApiKey, setStoredApiKey] = useState('');
   const [isApiKeySaved, setIsApiKeySaved] = useState(false);
   const [showApiKeySettings, setShowApiKeySettings] = useState(false);
-  const [isTestingKey, setIsTestingKey] = useState(false);
-  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isConfirmRemoveKeyOpen, setIsConfirmRemoveKeyOpen] = useState(false);
 
   // States for generation lifecycle
@@ -68,49 +95,50 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
     if (isOpen) {
       const stored = aiQuestionService.getStoredApiKey();
       setStoredApiKey(stored);
-      setApiKeyInput(stored);
       setIsApiKeySaved(Boolean(stored));
       setShowApiKeySettings(!stored); // If no key, automatically expand setup
       setSubject(defaultSubject);
       setGradeLevel(defaultGradeLevel);
-      setTestResult(null);
       setErrorMessage(null);
     }
   }, [isOpen, defaultSubject, defaultGradeLevel]);
 
   if (!isOpen) return null;
 
-  const handleSaveAndTestApiKey = async () => {
-    const cleanKey = apiKeyInput.trim();
-    if (!cleanKey) {
-      setErrorMessage('Harap masukkan API Key Google Gemini Anda.');
-      return;
+  // Mixed mode calculated total questions & total points
+  const mixedTotalQuestions = 
+    (composition.multiple_choice || 0) +
+    (composition.true_false || 0) +
+    (composition.short_answer || 0) +
+    (composition.essay || 0);
+
+  const mixedTotalPoints = 
+    ((composition.multiple_choice || 0) * (typePoints.multiple_choice || 0)) +
+    ((composition.true_false || 0) * (typePoints.true_false || 0)) +
+    ((composition.short_answer || 0) * (typePoints.short_answer || 0)) +
+    ((composition.essay || 0) * (typePoints.essay || 0));
+
+  // Presets applicator for Mixed Mode
+  const applyPreset = (presetName: 'user_30' | 'ph_20' | 'quiz_10' | 'sumatif_25') => {
+    if (presetName === 'user_30') {
+      setComposition({ multiple_choice: 20, true_false: 2, short_answer: 3, essay: 5 });
+      setTypePoints({ multiple_choice: 2, true_false: 5, short_answer: 10, essay: 4 });
+    } else if (presetName === 'ph_20') {
+      setComposition({ multiple_choice: 14, true_false: 4, short_answer: 2, essay: 0 });
+      setTypePoints({ multiple_choice: 4, true_false: 4, short_answer: 14, essay: 0 });
+    } else if (presetName === 'quiz_10') {
+      setComposition({ multiple_choice: 6, true_false: 2, short_answer: 2, essay: 0 });
+      setTypePoints({ multiple_choice: 10, true_false: 10, short_answer: 10, essay: 0 });
+    } else if (presetName === 'sumatif_25') {
+      setComposition({ multiple_choice: 15, true_false: 5, short_answer: 3, essay: 2 });
+      setTypePoints({ multiple_choice: 3, true_false: 3, short_answer: 5, essay: 12 });
     }
+  };
 
-    setIsTestingKey(true);
-    setTestResult(null);
-    setErrorMessage(null);
-
-    const test = await aiQuestionService.testApiKey(cleanKey);
-    setIsTestingKey(false);
-
-    if (test.valid) {
-      aiQuestionService.setStoredApiKey(cleanKey);
-      setStoredApiKey(cleanKey);
-      setIsApiKeySaved(true);
-      setTestResult({
-        success: true,
-        message: `API Key Valid & Aktif! Terhubung ke model ${test.model || 'Gemini 3.6 Flash'}.`,
-      });
-      setTimeout(() => {
-        setShowApiKeySettings(false);
-      }, 1500);
-    } else {
-      setTestResult({
-        success: false,
-        message: test.error || 'API Key tidak valid. Periksa kembali kunci dari Google AI Studio.',
-      });
-    }
+  const handleKeySaved = (key: string) => {
+    setStoredApiKey(key);
+    setIsApiKeySaved(true);
+    setShowApiKeySettings(false);
   };
 
   const handleRemoveApiKey = () => {
@@ -120,10 +148,8 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
   const handleExecuteRemoveApiKey = () => {
     aiQuestionService.setStoredApiKey('');
     setStoredApiKey('');
-    setApiKeyInput('');
     setIsApiKeySaved(false);
     setShowApiKeySettings(true);
-    setTestResult(null);
     setIsConfirmRemoveKeyOpen(false);
   };
 
@@ -134,9 +160,19 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
       return;
     }
 
-    if (!isApiKeySaved && !apiKeyInput.trim()) {
+    if (!isApiKeySaved && !storedApiKey.trim()) {
       setShowApiKeySettings(true);
       setErrorMessage('Harap masukkan dan simpan API Key Google Gemini pribadi Anda terlebih dahulu.');
+      return;
+    }
+
+    if (genMode === 'mixed' && mixedTotalQuestions === 0) {
+      setErrorMessage('Total butir soal pada mode campuran minimal 1 butir.');
+      return;
+    }
+
+    if (genMode === 'single' && singleCount <= 0) {
+      setErrorMessage('Jumlah butir soal minimal 1 butir.');
       return;
     }
 
@@ -148,10 +184,19 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
       gradeLevel: formatClassName(gradeLevel, false).trim() || 'Kelas X',
       topic: topic.trim(),
       difficulty,
-      count,
-      questionType,
+      mode: genMode,
+      ...(genMode === 'single'
+        ? {
+            questionType: singleType,
+            count: singleCount,
+            defaultPoints: singlePoints,
+          }
+        : {
+            composition,
+            pointsPerType: typePoints,
+          }),
       referenceMaterial: referenceMaterial.trim() || undefined,
-      apiKey: storedApiKey || apiKeyInput.trim(),
+      apiKey: storedApiKey.trim(),
     };
 
     const res = await aiQuestionService.generateQuestions(params);
@@ -193,15 +238,16 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
     setGeneratedQuestions([]);
   };
 
-  // Masked API key helper (e.g. AIzaSy...4xAb)
+  // Masked API key helper
   const maskedKey = storedApiKey
     ? `${storedApiKey.slice(0, 7)}...${storedApiKey.slice(-4)}`
     : '';
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+    <div role="dialog" aria-modal="true" aria-label="Generator Soal AI" className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-200 overflow-hidden font-sans">
-        {/* 1. Gradient Header Banner */}
+        
+        {/* 1. Header Banner */}
         <div className="bg-gradient-to-r from-violet-700 via-indigo-700 to-blue-700 p-5 text-white flex-shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-inner flex-shrink-0">
@@ -227,7 +273,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                 )}
               </div>
               <p className="text-xs text-indigo-100 font-sans mt-1">
-                Buat butir soal otomatis & berbobot menggunakan Google Gemini API pribadi
+                Generate butir soal PG, Benar/Salah, Isian Singkat, & Uraian otomatis dengan bobot poin presisi
               </p>
             </div>
           </div>
@@ -287,79 +333,61 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Input and Test Button */}
-                  <div className="space-y-2 pt-1">
-                    <div className="flex gap-2">
-                      <input
-                        type="password"
-                        value={apiKeyInput}
-                        onChange={(e) => setApiKeyInput(e.target.value)}
-                        placeholder="Tempelkan API Key (AIzaSy...)"
-                        className="flex-1 px-3.5 py-2.5 text-xs font-mono bg-white border border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-900 shadow-2xs"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleSaveAndTestApiKey}
-                        disabled={isTestingKey}
-                        className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-display font-bold shadow-xs cursor-pointer flex items-center gap-1.5 flex-shrink-0"
-                      >
-                        {isTestingKey ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Memverifikasi...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Zap className="w-3.5 h-3.5" />
-                            <span>Simpan & Verifikasi</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Test result message */}
-                    {testResult && (
-                      <div
-                        className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
-                          testResult.success
-                            ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-                            : 'bg-rose-50 text-rose-800 border border-rose-200'
-                        }`}
-                      >
-                        {testResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />}
-                        <span>{testResult.message}</span>
-                      </div>
-                    )}
-
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] pt-1 gap-1">
-                      <a
-                        href="https://aistudio.google.com/app/apikey"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-indigo-600 hover:underline font-bold inline-flex items-center gap-1"
-                      >
-                        <span>🔗 Buka Google AI Studio untuk Dapatkan Key Gratis</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                      <span className="text-amber-600 font-medium text-[10.5px]">
-                        *Gunakan Gmail pribadi (@gmail.com), akun belajar.id dibatasi
-                      </span>
-                    </div>
-                  </div>
+                  {/* Shared Input and Test Button */}
+                  <GeminiApiKeySettings
+                    variant="light"
+                    currentKey={storedApiKey}
+                    onKeySaved={handleKeySaved}
+                    onKeyRemoved={() => handleExecuteRemoveApiKey()}
+                  />
                 </div>
               ) : null}
 
+              {/* Mode Switcher: Mode Campuran (Mixed) vs Mode Tunggal (Single) */}
+              <div className="space-y-1.5">
+                <label id="aig-g1" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
+                  Model Pembuatan Soal:
+                </label>
+                <div role="group" aria-labelledby="aig-g1" className="bg-slate-100 p-1 rounded-2xl grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setGenMode('mixed')}
+                    className={`py-2 px-3 rounded-xl text-xs font-display font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      genMode === 'mixed'
+                        ? 'bg-white text-indigo-700 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Komposisi Campuran (Mix 4 Tipe)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setGenMode('single')}
+                    className={`py-2 px-3 rounded-xl text-xs font-display font-bold transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      genMode === 'single'
+                        ? 'bg-white text-indigo-700 shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <ListChecks className="w-3.5 h-3.5 text-slate-600" />
+                    <span>Mode Tunggal (1 Tipe Soal)</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Topik / Kisi-kisi Utama */}
               <div>
-                <label className="block text-xs font-display font-bold text-slate-800 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+                <label htmlFor="aigene-1" className="block text-xs font-display font-bold text-slate-800 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                   <span>Topik / Kisi-Kisi Materi Ujian *</span>
                   <span className="text-[11px] text-indigo-600 font-sans normal-case font-normal">Wajib diisi</span>
                 </label>
-                <textarea
+                <textarea id="aigene-1"
                   rows={2}
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Contoh: Persamaan Kuadrat, Teori Relativitas Khusus, Teks Prosedur Kompleks, Tata Surya & Planet..."
+                  placeholder="Contoh: Persamaan Kuadrat & Fungsi, Dinamika Partikel & Hukum Newton, Teks Eksplanasi Fenomena Alam..."
                   className="w-full p-3 text-xs font-sans bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-900 transition-colors"
                   required
                 />
@@ -368,10 +396,10 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
               {/* Mapel & Jenjang Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <label htmlFor="aigene-1" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                     <BookOpen className="w-3.5 h-3.5 text-slate-400" /> Mata Pelajaran
                   </label>
-                  <input
+                  <input id="aigene-1"
                     type="text"
                     value={subject}
                     onChange={(e) => setSubject(e.target.value)}
@@ -381,10 +409,10 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <label htmlFor="aigene-2" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                     <GraduationCap className="w-3.5 h-3.5 text-slate-400" /> Jenjang / Tingkat Kelas
                   </label>
-                  <input
+                  <input id="aigene-2"
                     type="text"
                     value={gradeLevel}
                     onChange={(e) => setGradeLevel(formatClassName(e.target.value, true))}
@@ -395,84 +423,447 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                 </div>
               </div>
 
-              {/* Tipe Soal & Tingkat Kesulitan */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                    <ListChecks className="w-3.5 h-3.5 text-slate-400" /> Tipe Soal
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setQuestionType('multiple_choice')}
-                      className={`py-2 px-2 rounded-xl text-xs font-display font-bold transition-all border cursor-pointer text-center ${
-                        questionType === 'multiple_choice'
-                          ? 'bg-indigo-50 text-indigo-700 border-indigo-300 shadow-xs'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      Pilihan Ganda
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuestionType('essay')}
-                      className={`py-2 px-2 rounded-xl text-xs font-display font-bold transition-all border cursor-pointer text-center ${
-                        questionType === 'essay'
-                          ? 'bg-indigo-50 text-indigo-700 border-indigo-300 shadow-xs'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
-                    >
-                      Uraian
-                    </button>
+              {/* SECTION: SINGLE MODE INPUTS */}
+              {genMode === 'single' && (
+                <div className="space-y-3.5 p-4 bg-slate-50/70 border border-slate-200 rounded-2xl">
+                  {/* Tipe Soal (4 Jenis) */}
+                  <div>
+                    <label id="aig-g3" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <ListChecks className="w-3.5 h-3.5 text-slate-400" /> Tipe Soal
+                    </label>
+                    <div role="group" aria-labelledby="aig-g3" className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      {[
+                        { id: 'multiple_choice', label: 'Pilihan Ganda' },
+                        { id: 'true_false', label: 'Benar / Salah' },
+                        { id: 'short_answer', label: 'Isian Singkat' },
+                        { id: 'essay', label: 'Uraian' },
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setSingleType(item.id as QuestionType)}
+                          className={`py-2 px-2 rounded-xl text-xs font-display font-bold transition-all border cursor-pointer text-center ${
+                            singleType === item.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                              : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Jumlah Soal & Poin per Soal Grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                      <label htmlFor="aigene-3" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-slate-400" /> Jumlah Butir Soal
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        {[3, 5, 10, 20].map((num) => (
+                          <button
+                            key={num}
+                            type="button"
+                            onClick={() => setSingleCount(num)}
+                            className={`flex-1 py-2 rounded-xl text-xs font-display font-bold transition-all border cursor-pointer text-center ${
+                              singleCount === num
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {num}
+                          </button>
+                        ))}
+                        <input id="aigene-3"
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={singleCount}
+                          onChange={(e) => setSingleCount(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-14 bg-white border border-slate-200 py-2 rounded-xl text-center text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          title="Jumlah butir kustom"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="aigene-4" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <Scale className="w-3.5 h-3.5 text-slate-400" /> Bobot Poin per Butir
+                      </label>
+                      <div className="flex items-center gap-1.5">
+                        {[2, 5, 10, 20].map((pt) => (
+                          <button
+                            key={pt}
+                            type="button"
+                            onClick={() => setSinglePoints(pt)}
+                            className={`flex-1 py-2 rounded-xl text-xs font-display font-bold transition-all border cursor-pointer text-center ${
+                              singlePoints === pt
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {pt} pt
+                          </button>
+                        ))}
+                        <input id="aigene-4"
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={singlePoints}
+                          onChange={(e) => setSinglePoints(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-14 bg-white border border-slate-200 py-2 rounded-xl text-center text-xs font-mono font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          title="Poin kustom"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-600 flex items-center justify-between">
+                    <span>Estimasi Akumulasi: <strong>{singleCount} Soal × {singlePoints} Poin</strong></span>
+                    <span className="font-mono font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md">
+                      {singleCount * singlePoints} Poin Total
+                    </span>
                   </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                    <Flame className="w-3.5 h-3.5 text-slate-400" /> Tingkat Kesulitan
-                  </label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {[
-                      { id: 'easy', label: 'Mudah' },
-                      { id: 'medium', label: 'Sedang' },
-                      { id: 'hard', label: 'Sulit' },
-                      { id: 'hots', label: 'HOTS 🔥' },
-                    ].map((item) => (
+              {/* SECTION: MIXED MODE (KOMPOSISI CAMPURAN) */}
+              {genMode === 'mixed' && (
+                <div className="space-y-3.5 p-4 bg-gradient-to-br from-indigo-50/60 via-violet-50/40 to-blue-50/50 border border-indigo-100 rounded-2xl">
+                  
+                  {/* Presets Row */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label htmlFor="aigene-5" className="block text-xs font-display font-bold text-indigo-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Pilihan Preset Komposisi Cepat:
+                      </label>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                       <button
-                        key={item.id}
                         type="button"
-                        onClick={() => setDifficulty(item.id as any)}
-                        className={`py-2 px-2.5 rounded-xl text-xs font-display font-bold transition-all border cursor-pointer text-center ${
-                          difficulty === item.id
-                            ? 'bg-indigo-50 text-indigo-700 border-indigo-300 shadow-xs'
-                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                        }`}
+                        onClick={() => applyPreset('user_30')}
+                        className="p-2 bg-white hover:bg-indigo-50 text-indigo-900 border border-indigo-200/80 rounded-xl text-[11px] font-display font-bold transition-all text-left shadow-2xs cursor-pointer"
                       >
-                        {item.label}
+                        <span className="block text-indigo-700 font-extrabold">30 Soal (Campuran)</span>
+                        <span className="text-[10px] text-slate-500 font-sans block">20 PG, 2 B/S, 3 Isian, 5 Uraian</span>
                       </button>
-                    ))}
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('ph_20')}
+                        className="p-2 bg-white hover:bg-indigo-50 text-indigo-900 border border-indigo-200/80 rounded-xl text-[11px] font-display font-bold transition-all text-left shadow-2xs cursor-pointer"
+                      >
+                        <span className="block text-indigo-700 font-extrabold">PH 20 Soal</span>
+                        <span className="text-[10px] text-slate-500 font-sans block">14 PG, 4 B/S, 2 Isian Singkat</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('sumatif_25')}
+                        className="p-2 bg-white hover:bg-indigo-50 text-indigo-900 border border-indigo-200/80 rounded-xl text-[11px] font-display font-bold transition-all text-left shadow-2xs cursor-pointer"
+                      >
+                        <span className="block text-indigo-700 font-extrabold">Sumatif 25 Soal</span>
+                        <span className="text-[10px] text-slate-500 font-sans block">15 PG, 5 B/S, 3 Isian, 2 Uraian</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('quiz_10')}
+                        className="p-2 bg-white hover:bg-indigo-50 text-indigo-900 border border-indigo-200/80 rounded-xl text-[11px] font-display font-bold transition-all text-left shadow-2xs cursor-pointer"
+                      >
+                        <span className="block text-indigo-700 font-extrabold">Kuis 10 Soal</span>
+                        <span className="text-[10px] text-slate-500 font-sans block">6 PG, 2 B/S, 2 Isian Singkat</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4 Type Rows Configuration */}
+                  <div className="space-y-2 pt-1">
+                    <div className="text-[11px] font-display font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between px-1">
+                      <span>Jenis Soal Ujian</span>
+                      <div className="flex items-center gap-6">
+                        <span className="w-20 text-center">Jumlah Soal</span>
+                        <span className="w-16 text-center">Poin/Soal</span>
+                        <span className="w-16 text-right">Subtotal</span>
+                      </div>
+                    </div>
+
+                    {/* 1. Pilihan Ganda */}
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 flex-shrink-0" />
+                        <div>
+                          <span className="text-xs font-display font-bold text-slate-800 block">Pilihan Ganda</span>
+                          <span className="text-[10px] text-slate-400">Opsi A-D / A-E</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {/* Count counter */}
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                          <button
+                            type="button"
+                            onClick={() => setComposition({ ...composition, multiple_choice: Math.max(0, composition.multiple_choice - 1) })}
+                            className="p-1 hover:bg-slate-200 text-slate-600 transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <input id="aigene-5"
+                            type="number"
+                            min="0"
+                            max="50"
+                            value={composition.multiple_choice}
+                            onChange={(e) => setComposition({ ...composition, multiple_choice: Math.max(0, parseInt(e.target.value) || 0) })}
+                            className="w-10 text-center font-mono font-bold text-xs bg-transparent focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setComposition({ ...composition, multiple_choice: composition.multiple_choice + 1 })}
+                            className="p-1 hover:bg-slate-200 text-slate-600 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* Points input */}
+                        <div className="w-16 flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={typePoints.multiple_choice || 2}
+                            onChange={(e) => setTypePoints({ ...typePoints, multiple_choice: Math.max(1, parseInt(e.target.value) || 1) })}
+                            className="w-full bg-slate-50 border border-slate-200 py-1 text-center font-mono font-bold text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <span className="text-[10px] text-slate-500">pt</span>
+                        </div>
+
+                        {/* Subtotal */}
+                        <span className="w-16 text-right font-mono font-bold text-xs text-blue-700">
+                          {(composition.multiple_choice || 0) * (typePoints.multiple_choice || 0)} Pts
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 2. Benar / Salah */}
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500 flex-shrink-0" />
+                        <div>
+                          <span className="text-xs font-display font-bold text-slate-800 block">Benar / Salah</span>
+                          <span className="text-[10px] text-slate-400">Pernyataan True/False</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {/* Count counter */}
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                          <button
+                            type="button"
+                            onClick={() => setComposition({ ...composition, true_false: Math.max(0, composition.true_false - 1) })}
+                            className="p-1 hover:bg-slate-200 text-slate-600 transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            value={composition.true_false}
+                            onChange={(e) => setComposition({ ...composition, true_false: Math.max(0, parseInt(e.target.value) || 0) })}
+                            className="w-10 text-center font-mono font-bold text-xs bg-transparent focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setComposition({ ...composition, true_false: composition.true_false + 1 })}
+                            className="p-1 hover:bg-slate-200 text-slate-600 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* Points input */}
+                        <div className="w-16 flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={typePoints.true_false || 5}
+                            onChange={(e) => setTypePoints({ ...typePoints, true_false: Math.max(1, parseInt(e.target.value) || 1) })}
+                            className="w-full bg-slate-50 border border-slate-200 py-1 text-center font-mono font-bold text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <span className="text-[10px] text-slate-500">pt</span>
+                        </div>
+
+                        {/* Subtotal */}
+                        <span className="w-16 text-right font-mono font-bold text-xs text-amber-700">
+                          {(composition.true_false || 0) * (typePoints.true_false || 0)} Pts
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 3. Isian Singkat */}
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                        <div>
+                          <span className="text-xs font-display font-bold text-slate-800 block">Isian Singkat</span>
+                          <span className="text-[10px] text-slate-400">Kata kunci / Angka eksak</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {/* Count counter */}
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                          <button
+                            type="button"
+                            onClick={() => setComposition({ ...composition, short_answer: Math.max(0, composition.short_answer - 1) })}
+                            className="p-1 hover:bg-slate-200 text-slate-600 transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            value={composition.short_answer}
+                            onChange={(e) => setComposition({ ...composition, short_answer: Math.max(0, parseInt(e.target.value) || 0) })}
+                            className="w-10 text-center font-mono font-bold text-xs bg-transparent focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setComposition({ ...composition, short_answer: composition.short_answer + 1 })}
+                            className="p-1 hover:bg-slate-200 text-slate-600 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* Points input */}
+                        <div className="w-16 flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={typePoints.short_answer || 10}
+                            onChange={(e) => setTypePoints({ ...typePoints, short_answer: Math.max(1, parseInt(e.target.value) || 1) })}
+                            className="w-full bg-slate-50 border border-slate-200 py-1 text-center font-mono font-bold text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <span className="text-[10px] text-slate-500">pt</span>
+                        </div>
+
+                        {/* Subtotal */}
+                        <span className="w-16 text-right font-mono font-bold text-xs text-emerald-700">
+                          {(composition.short_answer || 0) * (typePoints.short_answer || 0)} Pts
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 4. Uraian */}
+                    <div className="bg-white p-2.5 rounded-xl border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="w-2.5 h-2.5 rounded-full bg-violet-500 flex-shrink-0" />
+                        <div>
+                          <span className="text-xs font-display font-bold text-slate-800 block">Uraian / Esai</span>
+                          <span className="text-[10px] text-slate-400">Penjelasan & Pembahasan</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        {/* Count counter */}
+                        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
+                          <button
+                            type="button"
+                            onClick={() => setComposition({ ...composition, essay: Math.max(0, composition.essay - 1) })}
+                            className="p-1 hover:bg-slate-200 text-slate-600 transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            value={composition.essay}
+                            onChange={(e) => setComposition({ ...composition, essay: Math.max(0, parseInt(e.target.value) || 0) })}
+                            className="w-10 text-center font-mono font-bold text-xs bg-transparent focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setComposition({ ...composition, essay: composition.essay + 1 })}
+                            className="p-1 hover:bg-slate-200 text-slate-600 transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        {/* Points input */}
+                        <div className="w-16 flex items-center gap-1">
+                          <input
+                            type="number"
+                            min="1"
+                            max="100"
+                            value={typePoints.essay || 4}
+                            onChange={(e) => setTypePoints({ ...typePoints, essay: Math.max(1, parseInt(e.target.value) || 1) })}
+                            className="w-full bg-slate-50 border border-slate-200 py-1 text-center font-mono font-bold text-xs rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <span className="text-[10px] text-slate-500">pt</span>
+                        </div>
+
+                        {/* Subtotal */}
+                        <span className="w-16 text-right font-mono font-bold text-xs text-violet-700">
+                          {(composition.essay || 0) * (typePoints.essay || 0)} Pts
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary Bar for Mixed Mode */}
+                  <div className="p-3 bg-slate-900 text-white rounded-xl flex items-center justify-between shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <Calculator className="w-4 h-4 text-amber-400" />
+                      <span className="text-xs font-sans text-slate-200">
+                        Total Gabungan: <strong>{mixedTotalQuestions} Butir Soal</strong>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-slate-300">Total Akumulasi:</span>
+                      <span className={`px-2.5 py-0.5 rounded-lg font-mono font-black text-xs ${
+                        mixedTotalPoints === 100
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-amber-400 text-slate-950'
+                      }`}>
+                        {mixedTotalPoints} Poin {mixedTotalPoints === 100 ? '✓ (Pas 100)' : ''}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Jumlah Butir Soal */}
+              {/* Tingkat Kesulitan */}
               <div>
-                <label className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-slate-400" /> Jumlah Butir Soal
+                <label htmlFor="aigene-2" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                  <Flame className="w-3.5 h-3.5 text-slate-400" /> Tingkat Kesulitan
                 </label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[1, 3, 5, 10].map((num) => (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {[
+                    { id: 'easy', label: 'Mudah' },
+                    { id: 'medium', label: 'Sedang' },
+                    { id: 'hard', label: 'Sulit' },
+                    { id: 'hots', label: 'HOTS 🔥' },
+                  ].map((item) => (
                     <button
-                      key={num}
+                      key={item.id}
                       type="button"
-                      onClick={() => setCount(num)}
-                      className={`py-2 rounded-xl text-xs font-display font-bold transition-all border cursor-pointer text-center ${
-                        count === num
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      onClick={() => setDifficulty(item.id as any)}
+                      className={`py-2 px-2.5 rounded-xl text-xs font-display font-bold transition-all border cursor-pointer text-center ${
+                        difficulty === item.id
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-300 shadow-xs'
+                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
-                      {num} Soal
+                      {item.label}
                     </button>
                   ))}
                 </div>
@@ -489,7 +880,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                     <span className="text-slate-400 group-open:rotate-180 transition-transform text-xs">▼</span>
                   </summary>
                   <div className="p-3 pt-0">
-                    <textarea
+                    <textarea id="aigene-2"
                       rows={3}
                       value={referenceMaterial}
                       onChange={(e) => setReferenceMaterial(e.target.value)}
@@ -531,29 +922,13 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
 
                   {showApiKeySettings && (
                     <div className="pt-2 border-t border-slate-200 space-y-2">
-                      <div className="flex gap-2">
-                        <input
-                          type="password"
-                          value={apiKeyInput}
-                          onChange={(e) => setApiKeyInput(e.target.value)}
-                          placeholder="Ganti dengan API Key baru (AIzaSy...)"
-                          className="flex-1 px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-900"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSaveAndTestApiKey}
-                          disabled={isTestingKey}
-                          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-display font-bold shadow-xs cursor-pointer flex items-center gap-1"
-                        >
-                          {isTestingKey ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                          <span>Simpan & Tes</span>
-                        </button>
-                      </div>
-                      {testResult && (
-                        <p className={`text-[11px] ${testResult.success ? 'text-emerald-700' : 'text-rose-700'}`}>
-                          {testResult.message}
-                        </p>
-                      )}
+                      <GeminiApiKeySettings
+                        variant="light"
+                        currentKey={storedApiKey}
+                        onKeySaved={handleKeySaved}
+                        onKeyRemoved={() => handleExecuteRemoveApiKey()}
+                        showGuide={false}
+                      />
                     </div>
                   )}
                 </div>
@@ -573,7 +948,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                   {isGenerating ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                      <span>Gemini AI Sedang Menulis Soal & Kunci Jawaban...</span>
+                      <span>Gemini AI Sedang Menyusun {genMode === 'mixed' ? mixedTotalQuestions : singleCount} Butir Soal & Kunci Jawaban...</span>
                     </>
                   ) : !isApiKeySaved ? (
                     <>
@@ -583,7 +958,9 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 text-amber-300 fill-amber-300" />
-                      <span>Generate {count} Butir Soal Sekarang</span>
+                      <span>
+                        Generate {genMode === 'mixed' ? mixedTotalQuestions : singleCount} Butir Soal Sekarang ({genMode === 'mixed' ? `${mixedTotalPoints} Poin` : `${singleCount * singlePoints} Poin`})
+                      </span>
                     </>
                   )}
                 </button>
@@ -630,15 +1007,31 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                           onClick={(e) => e.stopPropagation()}
                         />
                         <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
+                          
+                          {/* Type Badge & Points */}
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="px-2 py-0.5 bg-slate-900 text-white rounded-md font-mono font-bold text-[10px]">
                               Soal #{idx + 1}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-sans">
-                              {q.type === 'multiple_choice' ? 'Pilihan Ganda' : 'Uraian'} • {q.points} Poin
+                            <span className={`text-[10px] font-sans font-bold px-2 py-0.5 rounded-md border ${
+                              q.type === 'multiple_choice'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : q.type === 'true_false'
+                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                : q.type === 'short_answer'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-violet-50 text-violet-700 border-violet-200'
+                            }`}>
+                              {q.type === 'multiple_choice' ? 'Pilihan Ganda' :
+                               q.type === 'true_false' ? 'Benar / Salah' :
+                               q.type === 'short_answer' ? 'Isian Singkat' : 'Uraian'}
+                            </span>
+                            <span className="text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                              {q.points} Poin
                             </span>
                           </div>
 
+                          {/* Question Text */}
                           <div className="text-xs font-sans text-slate-900 font-medium leading-relaxed">
                             <MathRenderer text={q.questionText} />
                           </div>
@@ -648,7 +1041,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                             </div>
                           )}
 
-                          {/* Options */}
+                          {/* 1. Multiple Choice Options */}
                           {q.type === 'multiple_choice' && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
                               {q.options.map((opt) => {
@@ -680,6 +1073,52 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                                   </div>
                                 );
                               })}
+                            </div>
+                          )}
+
+                          {/* 2. True / False Options */}
+                          {q.type === 'true_false' && (
+                            <div className="grid grid-cols-2 gap-2 pt-1">
+                              {q.options.map((opt) => {
+                                const isCorrect = opt.id === q.correctOptionId;
+                                return (
+                                  <div
+                                    key={opt.id}
+                                    className={`p-2.5 rounded-xl text-xs flex items-center justify-between border ${
+                                      isCorrect
+                                        ? 'bg-emerald-50 text-emerald-900 border-emerald-300 font-bold'
+                                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                                    }`}
+                                  >
+                                    <span className="font-display font-bold">{opt.label}</span>
+                                    {isCorrect && (
+                                      <span className="text-[9px] uppercase font-mono px-2 py-0.5 bg-emerald-200 text-emerald-800 rounded font-bold">
+                                        Kunci Jawaban
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {/* 3. Short Answer Key */}
+                          {q.type === 'short_answer' && (
+                            <div className="p-2.5 bg-emerald-50/80 border border-emerald-200/80 rounded-xl text-xs flex items-center gap-2">
+                              <span className="font-bold text-emerald-800 text-[11px] flex-shrink-0">Kunci Jawaban:</span>
+                              <span className="font-mono font-bold text-emerald-950 bg-white px-2.5 py-1 rounded-lg border border-emerald-300 text-xs">
+                                {q.correctAnswerText || '-'}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* 4. Essay Guidance */}
+                          {q.type === 'essay' && q.correctAnswerText && (
+                            <div className="p-2.5 bg-violet-50/80 border border-violet-200/80 rounded-xl text-xs space-y-1">
+                              <span className="font-bold text-violet-900 text-[11px] block">Rubrik / Model Jawaban Ideal:</span>
+                              <p className="text-slate-800 font-sans leading-relaxed text-[11px]">
+                                <MathRenderer text={q.correctAnswerText} />
+                              </p>
                             </div>
                           )}
 

@@ -19,12 +19,19 @@ import {
   Sparkles,
   Award,
   Lock,
-  Unlock
+  Unlock,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Printer,
+  XCircle
 } from 'lucide-react';
-import type { ExamSettings, Question, StudentProctoring, GradeRecord, ViolationLogItem } from '../../types/exam';
+import type { ExamSettings, Question, StudentProctoring, GradeRecord, ViolationLogItem, StudentPublicExamSummary, StudentAnswerDetailItem } from '../../types/exam';
 import { MathRenderer } from '../common/MathRenderer';
 import { RustEngineBridge } from '../../wasm/rustEngine';
 import { formatPersonName } from '../../utils/formatters';
+import { examService } from '../../services/examService';
+import { PrintableStudentResultCard } from '../portal/PrintableStudentResultCard';
 
 // Default interactive demo questions for simulation preview when accessed from Landing Page or clean editor
 export const DEFAULT_DEMO_QUESTIONS: Question[] = [
@@ -91,7 +98,19 @@ interface MobilePreviewModalProps {
   onClose: () => void;
   examSettings: ExamSettings;
   questions: Question[];
-  onStudentSubmit?: (student: StudentProctoring, grade: GradeRecord, logs: ViolationLogItem[]) => void;
+  onStudentSubmit?: (
+    student: StudentProctoring,
+    grade: GradeRecord,
+    logs: ViolationLogItem[],
+    answers?: Array<{
+      questionId: string;
+      selectedOptionId?: string;
+      answerText?: string;
+      isDoubt?: boolean;
+      isCorrect?: boolean;
+      scoreEarned?: number;
+    }>
+  ) => void;
 }
 
 export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
@@ -128,6 +147,74 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
   const [simulatedStatus, setSimulatedStatus] = useState<'published' | 'closed'>(
     examSettings.status === 'closed' ? 'closed' : 'published'
   );
+
+  // Check Result State (Dedicated Container in Mobile Simulation)
+  const [checkNisn, setCheckNisn] = useState('');
+  const [checkToken, setCheckToken] = useState('');
+  const [isCheckingResult, setIsCheckingResult] = useState(false);
+  const [checkResultError, setCheckResultError] = useState<string | null>(null);
+  const [checkedResult, setCheckedResult] = useState<StudentPublicExamSummary | null>(null);
+
+  const handleCheckStudentResult = async (customNisn?: string) => {
+    const targetNisn = (customNisn || checkNisn).trim();
+    if (!targetNisn) {
+      setCheckResultError('Harap masukkan nomor NISN Anda.');
+      return;
+    }
+
+    setIsCheckingResult(true);
+    setCheckResultError(null);
+
+    try {
+      const results = await examService.lookupStudentExamHistory(
+        targetNisn,
+        checkToken.trim() || undefined
+      );
+
+      if (results && results.length > 0) {
+        setCheckedResult(results[0]);
+      } else {
+        setCheckResultError(`Data hasil ujian untuk NISN '${targetNisn}' tidak ditemukan.`);
+      }
+    } catch {
+      setCheckResultError('Gagal mengambil data nilai dari database.');
+    } finally {
+      setIsCheckingResult(false);
+    }
+  };
+
+  const [isPrintingCard, setIsPrintingCard] = useState<boolean>(false);
+  const [previewAnswersOpen, setPreviewAnswersOpen] = useState<boolean>(false);
+  const [previewAnswersDetail, setPreviewAnswersDetail] = useState<{
+    studentInfo: any;
+    items: StudentAnswerDetailItem[];
+    summary: any;
+  } | null>(null);
+  const [isPreviewAnswersLoading, setIsPreviewAnswersLoading] = useState<boolean>(false);
+
+  const handleTogglePreviewAnswers = async (summary: StudentPublicExamSummary) => {
+    if (previewAnswersOpen) {
+      setPreviewAnswersOpen(false);
+      return;
+    }
+
+    setPreviewAnswersOpen(true);
+    if (!previewAnswersDetail) {
+      setIsPreviewAnswersLoading(true);
+      try {
+        const details = await examService.getStudentAnswersDetail(
+          summary.examId,
+          summary.nisn,
+          summary.sessionId
+        );
+        setPreviewAnswersDetail(details);
+      } catch (err) {
+        console.warn('Load preview answers detail error:', err);
+      } finally {
+        setIsPreviewAnswersLoading(false);
+      }
+    }
+  };
 
   useEffect(() => {
     setSimulatedStatus(examSettings.status === 'closed' ? 'closed' : 'published');
@@ -227,7 +314,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
 
     // 2. Grade with Rust Engine Bridge
     const gradeResult = RustEngineBridge.gradeExam(rustQuestions, rustAnswers, 75);
-    setFinalScore(gradeResult.total_score);
+    setFinalScore(gradeResult.totalScore);
     setIsSubmitted(true);
 
     const studentId = `stu-${Date.now()}`;
@@ -246,7 +333,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
       violationCount: 0,
       violationLogs: [],
       status: 'submitted',
-      score: gradeResult.total_score,
+      score: gradeResult.totalScore,
     };
 
     // 4. Create Grade Record
@@ -255,21 +342,38 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
       nisn: nisn || '0082391024',
       name: name || 'Budi Santoso',
       className: effectiveGrade,
-      score: gradeResult.total_score,
-      maxScore: gradeResult.max_score || 100,
+      score: gradeResult.totalScore,
+      maxScore: gradeResult.maxScore || 100,
       submittedAt: nowTimeStr,
       timeSpentMinutes: Math.max(1, Math.round(examSettings.durationMinutes / 3)),
       tabViolations: 0,
-      status: gradeResult.status,
+      status: gradeResult.status === 'Remedial' ? 'Remedial' : 'Lulus',
     };
 
+    // 5. Build full student answers detail for audit & review
+    const studentAnswers = questions.map((q, idx) => {
+      const isMc = q.type === 'multiple_choice' || q.type === 'true_false';
+      const isCorrect = isMc
+        ? (selectedAnswers[idx] === q.correctOptionId)
+        : (!!shortAnswers[idx] && !!q.correctAnswerText && shortAnswers[idx].trim().toLowerCase() === q.correctAnswerText.trim().toLowerCase());
+      const maxPts = q.points || 10;
+      return {
+        questionId: q.id,
+        selectedOptionId: selectedAnswers[idx],
+        answerText: shortAnswers[idx],
+        isDoubt: false,
+        isCorrect: !!isCorrect,
+        scoreEarned: isCorrect ? maxPts : 0,
+      };
+    });
+
     if (onStudentSubmit) {
-      onStudentSubmit(studentRecord, gradeRecord, []);
+      onStudentSubmit(studentRecord, gradeRecord, [], studentAnswers);
     }
   };
 
   return (
-    <div 
+    <div role="dialog" aria-modal="true" aria-label="Simulasi Ujian Mobile Siswa" 
       onClick={onClose}
       className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 md:p-6 select-none animate-in fade-in duration-200"
     >
@@ -553,8 +657,217 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                 {/* Inside Screen Content Area */}
                 <div className="flex-1 overflow-y-auto flex flex-col relative bg-slate-50">
                   
-                  {/* SUBMISSION RESULT SCREEN */}
-                  {isSubmitted ? (
+                  {/* CHECKED RESULT SCREEN (DARI CONTAINER CEK NILAI MANDIRI) */}
+                  {checkedResult ? (
+                    <div className="p-4 flex-1 flex flex-col justify-between text-left space-y-3">
+                      <div className="space-y-3">
+                        {/* Header */}
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                              <Award className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-black text-slate-900 leading-tight">Rapor Hasil Ujian</h4>
+                              <p className="text-[10px] text-slate-500 truncate max-w-[150px]">{checkedResult.subject}</p>
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                            checkedResult.percentage >= 75
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {checkedResult.percentage >= 75 ? 'LULUS' : 'REMEDIAL'}
+                          </span>
+                        </div>
+
+                        {/* Student Info Card */}
+                        <div className="p-2.5 rounded-xl bg-white border border-slate-200 space-y-0.5 text-[11px]">
+                          <div className="font-bold text-slate-800 truncate">{checkedResult.studentName}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">NISN: {checkedResult.nisn} • {checkedResult.className}</div>
+                        </div>
+
+                        {/* Big Score Card */}
+                        <div className="p-3 bg-white rounded-2xl border border-slate-200 text-center shadow-2xs">
+                          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Nilai Akhir:</span>
+                          <div className="text-3xl font-black text-slate-900 font-mono mt-0.5">
+                            {checkedResult.percentage} <span className="text-xs font-bold text-slate-400">/ 100</span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 mt-1">
+                            Total: <strong>{checkedResult.score}</strong> dari {checkedResult.maxScore} Poin (KKM 75)
+                          </p>
+                        </div>
+
+                        {/* 3 Pillars Breakdown */}
+                        <div className="grid grid-cols-3 gap-1.5 text-center">
+                          <div className="p-2 bg-blue-50/70 border border-blue-100 rounded-xl">
+                            <span className="text-[9px] font-bold text-blue-700 block">Pilihan Ganda</span>
+                            <span className="text-xs font-black text-slate-800 font-mono">
+                              {checkedResult.breakdown.objectiveScore}/{checkedResult.breakdown.objectiveMax}
+                            </span>
+                          </div>
+                          <div className="p-2 bg-indigo-50/70 border border-indigo-100 rounded-xl">
+                            <span className="text-[9px] font-bold text-indigo-700 block">Isian</span>
+                            <span className="text-xs font-black text-slate-800 font-mono">
+                              {checkedResult.breakdown.shortAnswerScore}/{checkedResult.breakdown.shortAnswerMax}
+                            </span>
+                          </div>
+                          <div className="p-2 bg-purple-50/70 border border-purple-100 rounded-xl">
+                            <span className="text-[9px] font-bold text-purple-700 block">Uraian</span>
+                            <span className="text-xs font-black text-purple-900 font-mono">
+                              {checkedResult.breakdown.essayScore}/{checkedResult.breakdown.essayMax}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Teacher Feedback on Essay */}
+                        {checkedResult.essayFeedbacks && checkedResult.essayFeedbacks.length > 0 && (
+                          <div className="p-2.5 rounded-xl bg-purple-50/80 border border-purple-200 text-[10px] space-y-1">
+                            <div className="flex items-center gap-1 text-purple-900 font-bold">
+                              <Sparkles className="w-3 h-3 text-purple-600" />
+                              <span>Catatan Guru:</span>
+                            </div>
+                            <p className="text-slate-700 italic leading-snug">
+                              "{checkedResult.essayFeedbacks[0].feedback}"
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Action: Unduh / Cetak SKHU PDF */}
+                        <button
+                          type="button"
+                          onClick={() => setIsPrintingCard(true)}
+                          className="w-full py-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Unduh / Cetak SKHU (PDF)</span>
+                        </button>
+
+                        {/* Action: Detail Jawaban Per Butir Soal */}
+                        <div className="pt-0.5 space-y-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePreviewAnswers(checkedResult)}
+                            className="w-full py-2 px-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[10px] font-bold transition flex items-center justify-between cursor-pointer border border-slate-200"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                              <span>{previewAnswersOpen ? 'Sembunyikan Lembar Jawaban' : 'Buka Detail Lembar Jawaban'}</span>
+                            </div>
+                            {previewAnswersOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+
+                          {previewAnswersOpen && (
+                            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+                              {isPreviewAnswersLoading ? (
+                                <div className="py-4 text-center text-[10px] text-slate-400">
+                                  <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-1" />
+                                  <span>Memuat butir soal &amp; jawaban...</span>
+                                </div>
+                              ) : previewAnswersDetail && previewAnswersDetail.items.length > 0 ? (
+                                previewAnswersDetail.items.map((it, idx) => (
+                                  <div key={idx} className="p-2 bg-white border border-slate-200 rounded-xl text-[10px] space-y-1 shadow-2xs">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-slate-800">
+                                        #{it.number} <span className="text-[9px] text-slate-400 font-normal">({it.type === 'multiple_choice' ? 'PG' : it.type === 'short_answer' ? 'Isian' : 'Uraian'})</span>
+                                      </span>
+                                      {(() => {
+                                        const isAnswered = !!(
+                                          it.selectedOptionId ||
+                                          it.selectedOptionLabel ||
+                                          it.selectedOptionText ||
+                                          (it.answerText && it.answerText.trim().length > 0)
+                                        );
+                                        return (
+                                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                            it.type === 'essay'
+                                              ? (it.isGraded ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700')
+                                              : (it.isCorrect ? 'bg-emerald-100 text-emerald-700' : !isAnswered ? 'bg-slate-100 text-slate-600' : 'bg-rose-100 text-rose-700')
+                                          }`}>
+                                            {it.type === 'essay'
+                                              ? (it.isGraded ? `✓ ${it.pointsEarned}/${it.maxPoints} P` : '⏳ Menunggu')
+                                              : (it.isCorrect ? `✓ ${it.pointsEarned}/${it.maxPoints} P` : `✕ 0/${it.maxPoints} P`)}
+                                          </span>
+                                        );
+                                      })()}
+                                    </div>
+                                    <div className="text-slate-800 font-medium">
+                                      <MathRenderer text={it.questionText} />
+                                    </div>
+                                    {it.latexFormula && (
+                                      <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
+                                        <MathRenderer math={it.latexFormula} block />
+                                      </div>
+                                    )}
+                                    <div className="bg-slate-50 p-1.5 rounded-lg border border-slate-100 space-y-1">
+                                      <span className="text-slate-400 block text-[8.5px]">Jawaban Anda:</span>
+                                      <div className={`font-semibold ${!it.isCorrect && it.type !== 'essay' ? 'text-rose-600' : 'text-slate-800'}`}>
+                                        {it.type === 'multiple_choice' ? (
+                                          it.selectedOptionLabel || it.selectedOptionText ? (
+                                            <div className="flex items-start gap-1">
+                                              <span className="font-bold">({it.selectedOptionLabel || '-'})</span>
+                                              <MathRenderer text={it.selectedOptionText || ''} />
+                                            </div>
+                                          ) : (
+                                            <span className="text-slate-400 italic">Tidak dijawab</span>
+                                          )
+                                        ) : it.answerText ? (
+                                          <MathRenderer text={it.answerText} />
+                                        ) : (
+                                          <span className="text-slate-400 italic">Tidak dijawab</span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {(!it.isCorrect || it.type === 'essay' || it.type === 'short_answer') && (
+                                      <div className="bg-blue-50/70 p-1.5 rounded-lg border border-blue-100 text-blue-900 space-y-1">
+                                        <span className="text-blue-500 block text-[8.5px]">Kunci Jawaban:</span>
+                                        <div className="font-semibold">
+                                          {it.type === 'multiple_choice' ? (
+                                            <div className="flex items-start gap-1">
+                                              <span className="font-bold">({it.correctOptionLabel || '-'})</span>
+                                              <MathRenderer
+                                                text={
+                                                  it.options.find(
+                                                    (o) => o.id === it.correctOptionId || o.label === it.correctOptionLabel
+                                                  )?.text || it.correctAnswerText || ''
+                                                }
+                                              />
+                                            </div>
+                                          ) : (
+                                            <MathRenderer text={it.correctAnswerText || '-'} />
+                                          )}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {it.teacherFeedback && (
+                                      <div className="p-1 bg-purple-50 rounded text-purple-900 italic text-[8.5px]">
+                                        "{it.teacherFeedback}"
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="text-[10px] text-slate-400 text-center py-2">
+                                  Tidak ada rekaman butir lembar jawaban.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCheckedResult(null);
+                          setPreviewAnswersOpen(false);
+                        }}
+                        className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                      >
+                        Kembali ke Halaman Masuk
+                      </button>
+                    </div>
+                  ) : isSubmitted ? (
                     <div className="p-6 flex-1 flex flex-col items-center justify-center text-center space-y-4">
                       <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center shadow-md animate-bounce">
                         <Award className="w-8 h-8 stroke-[2.5]" />
@@ -585,7 +898,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                         </div>
                       </div>
 
-                      <button
+                      <button type="button"
                         onClick={() => { resetSimulation(); onClose(); }}
                         className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-md cursor-pointer transition-colors"
                       >
@@ -607,10 +920,11 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                             {/* Inputs */}
                             <div className="mt-5 space-y-3 text-left">
                               <div>
-                                <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                                <label htmlFor="preview-nisn" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
                                   NISN Peserta
                                 </label>
                                 <input
+                                  id="preview-nisn"
                                   type="text"
                                   value={nisn}
                                   onChange={(e) => setNisn(e.target.value)}
@@ -620,10 +934,11 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                               </div>
 
                               <div>
-                                <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                                <label htmlFor="preview-name" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
                                   Nama Lengkap Siswa
                                 </label>
                                 <input
+                                  id="preview-name"
                                   type="text"
                                   value={name}
                                   onChange={(e) => setName(formatPersonName(e.target.value))}
@@ -634,12 +949,14 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                               </div>
 
                               <div>
-                                <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                                <label htmlFor="preview-token" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
                                   Token PIN (6 Digit)
                                 </label>
                                 <input
+                                  id="preview-token"
                                   type="text"
                                   maxLength={6}
+                                  aria-invalid={!!tokenError}
                                   value={tokenInput}
                                   onChange={(e) => {
                                     setTokenInput(e.target.value.toUpperCase());
@@ -650,7 +967,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                                 />
 
                                 {tokenError && (
-                                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-medium flex items-start gap-2 animate-in fade-in mt-2">
+                                  <div role="alert" className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-medium flex items-start gap-2 animate-in fade-in mt-2">
                                     <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
                                     <span className="leading-snug">{tokenError}</span>
                                   </div>
@@ -659,15 +976,87 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                             </div>
                           </div>
 
-                          <div className="pt-4">
-                            <button
+                          <div className="pt-3 space-y-2.5">
+                            <button type="button"
                               onClick={handleProceedToStep2}
-                              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 cursor-pointer transition-colors"
+                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-blue-500/20 cursor-pointer transition-colors"
                             >
                               Lanjutkan ke Konfirmasi <ArrowRight className="w-3.5 h-3.5" />
                             </button>
-                            <div className="text-center mt-2 text-[10px] text-slate-400 font-medium">
+                            <div className="text-center text-[10px] text-slate-400 font-medium">
                               ⚡ Server Online • Koneksi Siap
+                            </div>
+
+                            {/* OR DIVIDER */}
+                            <div className="relative flex py-0.5 items-center">
+                              <div className="flex-grow border-t border-slate-200"></div>
+                              <span className="flex-shrink mx-2 text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                atau cek nilai mandiri
+                              </span>
+                              <div className="flex-grow border-t border-slate-200"></div>
+                            </div>
+
+                            {/* DEDICATED CONTAINER: CEK NILAI MANDIRI */}
+                            <div className="p-3 bg-blue-50/80 border border-blue-200/80 rounded-2xl text-left space-y-2 shadow-2xs">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="w-5 h-5 rounded-md bg-blue-600 text-white flex items-center justify-center text-[10px]">
+                                    <Award className="w-3 h-3" />
+                                  </div>
+                                  <h4 className="text-[11px] font-bold text-slate-800 leading-tight">Cek Hasil Ujian Siswa</h4>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCheckNisn('0081234567');
+                                    setCheckToken('123456');
+                                    handleCheckStudentResult('0081234567');
+                                  }}
+                                  className="text-[9px] text-blue-600 hover:text-blue-700 font-bold underline cursor-pointer"
+                                >
+                                  Coba Demo
+                                </button>
+                              </div>
+
+                              {checkResultError && (
+                                <div className="p-1.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[9px] flex items-center gap-1">
+                                  <AlertTriangle className="w-3 h-3 text-rose-500 flex-shrink-0" />
+                                  <span>{checkResultError}</span>
+                                </div>
+                              )}
+
+                              <div className="space-y-1.5">
+                                <input
+                                  type="text"
+                                  value={checkNisn}
+                                  onChange={(e) => setCheckNisn(e.target.value)}
+                                  placeholder="10 digit NISN siswa..."
+                                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500 font-mono"
+                                />
+                                <input
+                                  type="text"
+                                  value={checkToken}
+                                  onChange={(e) => setCheckToken(e.target.value.toUpperCase())}
+                                  placeholder="Token PIN (Opsional)"
+                                  maxLength={6}
+                                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-mono font-bold text-slate-800 focus:outline-hidden focus:ring-1 focus:ring-blue-500 uppercase tracking-wider"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleCheckStudentResult()}
+                                  disabled={isCheckingResult || !checkNisn.trim()}
+                                  className="w-full py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-xs"
+                                >
+                                  {isCheckingResult ? (
+                                    <span>Memeriksa Nilai...</span>
+                                  ) : (
+                                    <>
+                                      <Award className="w-3 h-3 text-amber-400" />
+                                      <span>Periksa Nilai Ujian</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -731,13 +1120,13 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                           </div>
 
                           <div className="pt-2">
-                            <button
+                            <button type="button"
                               onClick={() => setStep(3)}
                               className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-md shadow-emerald-600/20 cursor-pointer transition-colors"
                             >
                               Mulai Ujian Sekarang (Layar Penuh)
                             </button>
-                            <button
+                            <button type="button"
                               onClick={() => setStep(1)}
                               className="w-full mt-1.5 text-[11px] text-slate-400 hover:text-slate-600 font-semibold cursor-pointer text-center"
                             >
@@ -766,7 +1155,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                               <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-[11px] font-mono font-black flex items-center gap-1">
                                 <Clock className="w-3 h-3 text-rose-600" /> 58:24
                               </span>
-                              <button
+                              <button type="button"
                                 onClick={() => setShowQuestionGrid(!showQuestionGrid)}
                                 className={`p-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-colors cursor-pointer ${
                                   showQuestionGrid 
@@ -797,13 +1186,24 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                               </div>
                             )}
 
+                            {currentQ?.imageUrl && (
+                              <div className="my-2 p-1.5 bg-slate-50 border border-slate-200 rounded-xl overflow-hidden flex justify-center">
+                                <img
+                                  src={currentQ.imageUrl}
+                                  alt="Lampiran Soal"
+                                  className="max-h-48 max-w-full object-contain rounded-lg shadow-2xs"
+                                  loading="lazy"
+                                />
+                              </div>
+                            )}
+
                             {/* Options list for Multiple Choice */}
                             {currentQ?.type === 'multiple_choice' && (
                               <div className="space-y-2 pt-1">
                                 {currentQ.options.map((opt) => {
                                   const isSelected = selectedAnswers[currentQIndex] === opt.id;
                                   return (
-                                    <button
+                                    <button type="button"
                                       key={opt.id}
                                       onClick={() => handleSelectOption(opt.id)}
                                       className={`w-full p-2.5 rounded-xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
@@ -828,13 +1228,80 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                               </div>
                             )}
 
+                            {/* Options list for True / False */}
+                            {currentQ?.type === 'true_false' && (() => {
+                              const rawOptions = Array.isArray(currentQ.options) ? currentQ.options : [];
+                              const optTrue = rawOptions.find(
+                                (o) =>
+                                  /^(b|benar|true|t|ya|yes)$/i.test((o.label || '').trim()) ||
+                                  /^(benar|true|ya|yes)/i.test((o.text || '').trim()) ||
+                                  (o.id && (o.id.endsWith('-t') || o.id.endsWith('_true') || o.id === 'true'))
+                              );
+                              const optFalse = rawOptions.find(
+                                (o) =>
+                                  /^(s|salah|false|f|tidak|no)$/i.test((o.label || '').trim()) ||
+                                  /^(salah|false|tidak|no)/i.test((o.text || '').trim()) ||
+                                  (o.id && (o.id.endsWith('-f') || o.id.endsWith('_false') || o.id === 'false'))
+                              );
+
+                              const trueChoice = optTrue || (rawOptions[0] && rawOptions[0].id !== optFalse?.id ? rawOptions[0] : { id: `opt-${currentQ.id}-t`, label: 'Benar', text: 'Benar' });
+                              let falseChoice = optFalse || (rawOptions[1] && rawOptions[1].id !== trueChoice.id ? rawOptions[1] : (rawOptions[0] && rawOptions[0].id !== trueChoice.id ? rawOptions[0] : { id: `opt-${currentQ.id}-f`, label: 'Salah', text: 'Salah' }));
+
+                              if (trueChoice.id === falseChoice.id) {
+                                falseChoice = {
+                                  id: `${trueChoice.id}_f`,
+                                  label: 'Salah',
+                                  text: 'Salah',
+                                };
+                              }
+
+                              const isTrueSelected = selectedAnswers[currentQIndex] === trueChoice.id;
+                              const isFalseSelected = selectedAnswers[currentQIndex] === falseChoice.id;
+
+                              return (
+                                <div className="space-y-2 pt-1">
+                                  <label id="mpv-g1" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                                    Pilih Pernyataan:
+                                  </label>
+                                  <div role="group" aria-labelledby="mpv-g1" className="grid grid-cols-2 gap-2.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectOption(trueChoice.id)}
+                                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                        isTrueSelected
+                                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm font-bold'
+                                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <CheckCircle2 className={`w-5 h-5 ${isTrueSelected ? 'text-white' : 'text-emerald-600'}`} />
+                                      <span className="text-xs font-bold">BENAR</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectOption(falseChoice.id)}
+                                      className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                        isFalseSelected
+                                          ? 'bg-rose-600 text-white border-rose-600 shadow-sm font-bold'
+                                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                                      }`}
+                                    >
+                                      <XCircle className={`w-5 h-5 ${isFalseSelected ? 'text-white' : 'text-rose-600'}`} />
+                                      <span className="text-xs font-bold">SALAH</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+
                             {/* Short Answer input */}
                             {currentQ?.type === 'short_answer' && (
                               <div className="pt-1.5">
-                                <label className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                                <label htmlFor="preview-short-answer" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
                                   Ketik Jawaban Singkat:
                                 </label>
                                 <input
+                                  id="preview-short-answer"
                                   type="text"
                                   value={shortAnswers[currentQIndex] || ''}
                                   onChange={(e) => setShortAnswers({ ...shortAnswers, [currentQIndex]: e.target.value })}
@@ -843,11 +1310,28 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                                 />
                               </div>
                             )}
+
+                            {/* Essay input */}
+                            {currentQ?.type === 'essay' && (
+                              <div className="pt-1.5">
+                                <label htmlFor="preview-essay" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                                  Lembar Jawaban Uraian / Esai:
+                                </label>
+                                <textarea
+                                  id="preview-essay"
+                                  rows={4}
+                                  value={shortAnswers[currentQIndex] || ''}
+                                  onChange={(e) => setShortAnswers({ ...shortAnswers, [currentQIndex]: e.target.value })}
+                                  placeholder="Tuliskan uraian jawaban lengkap Anda di sini..."
+                                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-hidden focus:border-blue-500 resize-none"
+                                />
+                              </div>
+                            )}
                           </div>
 
                           {/* Navigation Bottom Footer */}
                           <div className="p-3 bg-white border-t border-slate-200 flex items-center justify-between gap-1.5">
-                            <button
+                            <button type="button"
                               disabled={currentQIndex === 0}
                               onClick={() => setCurrentQIndex(Math.max(0, currentQIndex - 1))}
                               className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-35 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
@@ -855,7 +1339,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                               <ArrowLeft className="w-3 h-3" /> Prev
                             </button>
 
-                            <button
+                            <button type="button"
                               onClick={toggleDoubt}
                               className={`px-2.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer ${
                                 doubtAnswers[currentQIndex]
@@ -867,14 +1351,14 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                             </button>
 
                             {currentQIndex < questions.length - 1 ? (
-                              <button
+                              <button type="button"
                                 onClick={() => setCurrentQIndex(currentQIndex + 1)}
                                 className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
                               >
                                 Next <ArrowRight className="w-3 h-3" />
                               </button>
                             ) : (
-                              <button
+                              <button type="button"
                                 onClick={handleFinalSubmit}
                                 className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold cursor-pointer transition-colors shadow-xs"
                               >
@@ -891,7 +1375,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                                   <span className="text-xs font-bold text-white uppercase tracking-wider">
                                     Daftar Nomor Soal ({questions.length})
                                   </span>
-                                  <button
+                                  <button type="button"
                                     onClick={() => setShowQuestionGrid(false)}
                                     className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
                                   >
@@ -913,7 +1397,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                                     }
 
                                     return (
-                                      <button
+                                      <button type="button"
                                         key={q.id}
                                         onClick={() => {
                                           setCurrentQIndex(idx);
@@ -965,7 +1449,16 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
         </div>
 
       </div>
+
+      {/* Printable SKHU Card Modal */}
+      {isPrintingCard && checkedResult && (
+        <PrintableStudentResultCard
+          summary={checkedResult}
+          onClose={() => setIsPrintingCard(false)}
+        />
+      )}
     </div>
   );
 };
+
 

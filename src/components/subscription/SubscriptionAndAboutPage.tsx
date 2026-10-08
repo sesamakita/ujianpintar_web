@@ -37,6 +37,7 @@ import { SubscriptionPlanCard } from './SubscriptionPlanCard';
 import { PaymentCheckoutModal } from './PaymentCheckoutModal';
 import { SchoolLicenseRedeemCard } from './SchoolLicenseRedeemCard';
 import { schoolLicenseService } from '../../services/schoolLicenseService';
+import { formatRupiah } from '../../utils/formatters';
 
 interface SubscriptionAndAboutPageProps {
   currentUser: {
@@ -157,9 +158,6 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
       });
     }
   };
-
-  const formatRupiah = (num: number) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
 
   return (
     <div className="p-6 space-y-7 max-w-5xl mx-auto font-sans select-none animate-in fade-in duration-200">
@@ -560,7 +558,7 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
                   Status Akun Guru & Lisensi Aktif
                 </h4>
               </div>
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold uppercase tracking-wider ${
                 subscription.tier === 'school'
                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                   : subscription.tier === 'pro'
@@ -573,37 +571,37 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Nama Guru</span>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Nama Guru</span>
                 <span className="font-display font-bold text-slate-900 text-sm truncate block">{currentUser.name}</span>
-                <span className="text-[10px] font-mono text-slate-500 block">NIP: {currentUser.nip || '-'}</span>
+                <span className="text-[11px] font-mono text-slate-500 block">NIP: {currentUser.nip || '-'}</span>
               </div>
 
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Satuan Pendidikan</span>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Satuan Pendidikan</span>
                 <span className="font-display font-bold text-slate-900 text-sm truncate block">{currentUser.school || 'Sekolah'}</span>
-                <span className="text-[10px] font-mono text-slate-500 block">NPSN: {currentUser.npsn || '-'}</span>
+                <span className="text-[11px] font-mono text-slate-500 block">NPSN: {currentUser.npsn || '-'}</span>
               </div>
 
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Paket Terdaftar</span>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Paket Terdaftar</span>
                 <span className={`font-display font-bold text-sm truncate block ${
                   subscription.tier === 'free' ? 'text-slate-700' : subscription.tier === 'pro' ? 'text-blue-600' : 'text-emerald-600'
                 }`}>
                   {subscription.planName || (subscription.tier === 'free' ? 'Paket Gratis' : 'Paket Guru PRO')}
                 </span>
-                <span className="text-[10px] text-slate-500 block">
+                <span className="text-[11px] text-slate-500 block">
                   Siklus: {subscription.billingCycle === 'yearly' ? 'Tahunan' : 'Bulanan'}
                 </span>
               </div>
 
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 space-y-1">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Masa Berlaku</span>
+                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Masa Berlaku</span>
                 <span className="font-display font-bold text-slate-900 text-sm truncate block">
                   {subscription.expiresAt
                     ? new Date(subscription.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
                     : 'Aktif Selamanya'}
                 </span>
-                <span className="text-[10px] text-emerald-600 font-semibold block">
+                <span className="text-[11px] text-emerald-600 font-semibold block">
                   {subscription.status === 'active' ? '✓ Status Aktif' : 'Status Uji Coba'}
                 </span>
               </div>
@@ -625,7 +623,7 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
                   <Briefcase className="w-5 h-5" />
                 </div>
                 <div className="space-y-0.5 min-w-0">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Nama Bisnis</span>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Nama Bisnis</span>
                   <span className="font-display font-black text-blue-600 text-sm block">DN Apps</span>
                   <span className="text-[11px] text-slate-500 block truncate">Digital Application Studio</span>
                 </div>
@@ -636,7 +634,7 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
                   <Building2 className="w-5 h-5" />
                 </div>
                 <div className="space-y-0.5 min-w-0">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Badan Usaha Resmi</span>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Badan Usaha Resmi</span>
                   <span className="font-display font-black text-slate-900 text-sm block truncate">PT Berdikari Bangun Bangsa</span>
                   <span className="text-[11px] text-slate-500 block truncate">Entitas Perseroan Terdaftar</span>
                 </div>
@@ -647,7 +645,7 @@ export const SubscriptionAndAboutPage: React.FC<SubscriptionAndAboutPageProps> =
                   <Code2 className="w-5 h-5" />
                 </div>
                 <div className="space-y-0.5 min-w-0">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Lead Developer</span>
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Lead Developer</span>
                   <span className="font-display font-black text-slate-900 text-sm block">Deni Indrayana</span>
                   <span className="text-[11px] text-slate-500 block truncate">Software Engineer</span>
                 </div>

@@ -322,3 +322,35 @@
   }
 }
 
+/* ==========================================================================
+   Accessibility: Respect users who prefer reduced motion
+   Disables the decorative liquid-fill, effervescent bubbles, and pulsing
+   badges so the landing page stays calm and battery-friendly.
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .liquid-wave-svg.wave-front,
+  .liquid-wave-svg.wave-back,
+  .liquid-btn:hover .liquid-bubble,
+  .liquid-btn:active .liquid-bubble,
+  .animate-pulse-subtle,
+  .animate-ping,
+  .animate-pulse,
+  .animate-spin {
+    animation: none !important;
+  }
+
+  .liquid-btn:hover .liquid-fluid,
+  .liquid-btn:active .liquid-fluid {
+    transition: none !important;
+  }
+}
+

@@ -13,7 +13,8 @@ import {
   Copy, 
   AlertCircle,
   Sparkles,
-  Lock
+  Lock,
+  Scale
 } from 'lucide-react';
 import type { ExamSettings, Question } from '../../types/exam';
 import { ExamSettingsPanel } from './ExamSettingsPanel';
@@ -22,6 +23,7 @@ import { ImportModal } from './ImportModal';
 import { MobilePreviewModal } from './MobilePreviewModal';
 import { ExamBankList } from './ExamBankList';
 import { AIGeneratorModal } from './AIGeneratorModal';
+import { BulkPointsModal } from './BulkPointsModal';
 import { examService } from '../../services/examService';
 
 import { generateUUID } from '../../services/examService';
@@ -34,6 +36,12 @@ interface QuestionBuilderProps {
   questions: Question[];
   setQuestions: React.Dispatch<React.SetStateAction<Question[]>>;
   allExams: ExamSettings[];
+  currentUser?: {
+    email: string;
+    id?: string;
+    name?: string;
+    school?: string;
+  };
   subscription?: TeacherSubscription;
   onOpenUpgradeModal?: (title?: string, desc?: string) => void;
   onRefreshExams: () => Promise<void>;
@@ -64,6 +72,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
   questions,
   setQuestions,
   allExams,
+  currentUser,
   subscription,
   onOpenUpgradeModal,
   onRefreshExams,
@@ -82,6 +91,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
 }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
+  const [isBulkPointsModalOpen, setIsBulkPointsModalOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -216,6 +226,11 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
       number: startIndex + idx + 1,
     }));
     setQuestions([...questions, ...renumbered]);
+  };
+
+  const handleApplyBulkPoints = (updatedQuestions: Question[]) => {
+    setQuestions(updatedQuestions);
+    setIsSaved(false);
   };
 
   const handleSaveExam = async () => {
@@ -358,6 +373,19 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
               <span className="font-sans text-slate-500 font-medium">Total Skor:</span>
               <span className="font-mono font-bold text-emerald-900">{totalPoints} Poin</span>
             </div>
+
+            {/* Atur Poin Masal Pill Button */}
+            {questions.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsBulkPointsModalOpen(true)}
+                className="h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-display font-bold transition-all cursor-pointer flex items-center gap-1.5 flex-shrink-0 shadow-2xs"
+                title="Atur bobot poin untuk seluruh soal atau sebagian"
+              >
+                <Scale className="w-3.5 h-3.5 text-slate-600" />
+                <span>Atur Poin Masal</span>
+              </button>
+            )}
 
             {/* AI Generator Button (Horizontal with 3 cards) */}
             <button
@@ -504,8 +532,21 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
                 </button>
               )}
 
+              {/* Atur Poin Button */}
+              {questions.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsBulkPointsModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-display font-bold transition-all shadow-xs cursor-pointer"
+                  title="Atur bobot nilai poin sekaligus"
+                >
+                  <Scale className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Atur Poin {selectedQuestionIds.length > 0 ? `(${selectedQuestionIds.length} Terpilih)` : 'Masal'}</span>
+                </button>
+              )}
+
               {/* Tambah Soal Button */}
-              <button
+              <button type="button"
                 onClick={handleAddNewQuestion}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-display font-bold transition-colors shadow-xs cursor-pointer"
               >
@@ -558,6 +599,10 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
                   onUpdate={handleUpdateQuestion}
                   onDelete={handleRequestDeleteSingle}
                   onDuplicate={handleDuplicateQuestion}
+                  currentUserEmail={currentUser?.email}
+                  currentUserId={currentUser?.id}
+                  subscription={subscription}
+                  onOpenUpgradeModal={() => onOpenUpgradeModal?.('Koleksi Foto Soal', 'Tingkatkan ke Guru Pro untuk menyimpan hingga 20 foto soal di database VPS.')}
                 />
               ))}
             </div>
@@ -565,7 +610,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
 
           {/* Bottom Add Question Banner (only when questions exist) */}
           {questions.length > 0 && (
-            <button
+            <button type="button"
               onClick={handleAddNewQuestion}
               className="w-full py-4 border-2 border-dashed border-blue-300 hover:border-blue-500 bg-blue-50/40 hover:bg-blue-50 rounded-2xl flex items-center justify-center gap-2 text-blue-700 font-display font-bold text-xs transition-all cursor-pointer"
             >
@@ -641,6 +686,14 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
         examSettings={examSettings}
         questions={questions}
         onStudentSubmit={onStudentSubmit}
+      />
+
+      <BulkPointsModal
+        isOpen={isBulkPointsModalOpen}
+        onClose={() => setIsBulkPointsModalOpen(false)}
+        questions={questions}
+        selectedQuestionIds={selectedQuestionIds}
+        onApplyPoints={handleApplyBulkPoints}
       />
     </div>
   );

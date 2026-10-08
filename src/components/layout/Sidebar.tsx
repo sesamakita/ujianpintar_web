@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { 
   FileEdit, 
   Activity, 
@@ -7,6 +8,7 @@ import {
   Sparkles,
   Award,
   Globe,
+  Image as ImageIcon,
   X
 } from 'lucide-react';
 import { AppLogoBadge } from '../common/AppLogo';
@@ -14,8 +16,8 @@ import type { ExamSettings } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
 
 interface SidebarProps {
-  activeTab: 'builder' | 'proctoring' | 'analytics' | 'settings' | 'subscription';
-  setActiveTab: (tab: 'builder' | 'proctoring' | 'analytics' | 'settings' | 'subscription') => void;
+  activeTab: 'builder' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription';
+  setActiveTab: (tab: 'builder' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription') => void;
   examSettings?: ExamSettings;
   activeStudentCount?: number;
   onLogout?: () => void;
@@ -47,6 +49,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isPro = subscription?.tier === 'pro';
   const isSchool = subscription?.tier === 'school';
 
+  // Escape closes the mobile drawer
+  useEffect(() => {
+    if (!isMobileOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && onCloseMobile) {
+        onCloseMobile();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isMobileOpen, onCloseMobile]);
+
   const navItems = [
     {
       id: 'builder' as const,
@@ -54,6 +68,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       sublabel: 'Editor soal & anti-cheat',
       icon: FileEdit,
       badge: null,
+    },
+    {
+      id: 'media' as const,
+      label: 'Koleksi Foto Soal',
+      sublabel: 'Galeri gambar & diagram VPS',
+      icon: ImageIcon,
+      badge: isPro || isSchool ? '20 Foto' : '3 Foto',
+      badgeColor: isPro || isSchool ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-100 text-slate-600',
     },
     {
       id: 'proctoring' as const,
@@ -105,6 +127,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* 1. Main Sidebar Container */}
       <aside
+        id="sidebar-nav-drawer"
+        role={isMobileOpen ? 'dialog' : undefined}
+        aria-modal={isMobileOpen ? 'true' : undefined}
+        aria-label={isMobileOpen ? 'Menu Navigasi Portal Guru' : undefined}
         className={`
           w-72 bg-white border-r border-slate-200 flex flex-col h-screen select-none shadow-xs
           fixed lg:sticky top-0 z-50 lg:z-30 transition-transform duration-300 ease-in-out
@@ -146,6 +172,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   onNavigateToLanding();
                 }}
                 title="Lihat Website Produk / Landing Page"
+                aria-label="Lihat Website Produk / Landing Page"
                 className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
               >
                 <Globe className="w-4 h-4" />
@@ -158,6 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 onClick={onCloseMobile}
                 title="Tutup Menu"
+                aria-label="Tutup Menu"
                 className="lg:hidden p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -199,12 +227,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               const isActive = activeTab === item.id;
 
               return (
-                <button
+                <button type="button"
                   key={item.id}
                   onClick={() => {
                     setActiveTab(item.id);
                     if (onCloseMobile) onCloseMobile();
                   }}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer ${
                     isActive
                       ? 'bg-blue-50 text-blue-700 font-semibold shadow-xs border border-blue-200'
@@ -292,13 +321,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
 
           {onLogout && (
-            <button
+            <button type="button"
               onClick={() => {
                 if (onCloseMobile) onCloseMobile();
                 onLogout();
               }}
               className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
               title="Keluar dari Akun Guru"
+              aria-label="Keluar dari Akun Guru"
             >
               <LogOut className="w-4 h-4" />
             </button>

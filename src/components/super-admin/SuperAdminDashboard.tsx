@@ -31,6 +31,7 @@ import { superAdminService } from '../../services/superAdminService';
 import type { VpsTeacherUser, ApkDownloadLead } from '../../services/superAdminService';
 import { ConfirmModal } from '../common/ConfirmModal';
 import type { SchoolLicense } from '../../types/schoolLicense';
+import { formatRupiah } from '../../utils/formatters';
 
 export const SuperAdminDashboard: React.FC = () => {
   // Navigation Sub-tab
@@ -350,9 +351,6 @@ export const SuperAdminDashboard: React.FC = () => {
   const totalAffiliated = teachers.filter(t => t.isSchoolAffiliated).length;
   const totalExamsCreated = teachers.reduce((acc, t) => acc + t.examCount, 0);
 
-  const formatRupiah = (num: number) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
-
   const formatWhatsAppLink = (phone: string) => {
     const clean = phone.replace(/[^0-9]/g, '');
     const intl = clean.startsWith('0') ? '62' + clean.slice(1) : clean;
@@ -410,11 +408,11 @@ export const SuperAdminDashboard: React.FC = () => {
               <h2 className="font-display font-bold text-2xl text-white tracking-tight leading-none">
                 Platform Super Admin
               </h2>
-              <span className="px-2 py-0.5 bg-indigo-950 text-indigo-300 border border-indigo-800 rounded font-mono text-[10px] font-bold">
+              <span className="px-2 py-0.5 bg-indigo-950 text-indigo-300 border border-indigo-800 rounded font-mono text-[11px] font-bold">
                 ROOT SAAS
               </span>
               {/* VPS Status Badge */}
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-[10px] font-mono">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-emerald-950/80 border border-emerald-800 text-emerald-300 text-[11px] font-mono">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span>VPS Live {vpsStatus ? `(${vpsStatus.latencyMs}ms)` : ''}</span>
               </div>
@@ -492,7 +490,7 @@ export const SuperAdminDashboard: React.FC = () => {
           >
             <Building2 className="w-4 h-4 text-indigo-600" />
             <span>Lisensi Satuan Pendidikan</span>
-            <span className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] ${
+            <span className={`px-2 py-0.5 rounded font-mono font-bold text-[11px] ${
               activeTab === 'schools' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-200 text-slate-700'
             }`}>
               {schools.length}
@@ -510,7 +508,7 @@ export const SuperAdminDashboard: React.FC = () => {
           >
             <Users className="w-4 h-4 text-blue-600" />
             <span>Guru & Pengguna Terdaftar</span>
-            <span className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] ${
+            <span className={`px-2 py-0.5 rounded font-mono font-bold text-[11px] ${
               activeTab === 'teachers' ? 'bg-indigo-100 text-indigo-800' : 'bg-slate-200 text-slate-700'
             }`}>
               {teachers.length}
@@ -528,7 +526,7 @@ export const SuperAdminDashboard: React.FC = () => {
           >
             <Download className="w-4 h-4 text-emerald-600" />
             <span>Unduhan APK Siswa (Leads)</span>
-            <span className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] ${
+            <span className={`px-2 py-0.5 rounded font-mono font-bold text-[11px] ${
               activeTab === 'downloads' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
             }`}>
               {apkDownloads.length}
@@ -552,7 +550,7 @@ export const SuperAdminDashboard: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
                 <div className="flex items-center justify-between text-slate-500 text-xs">
-                  <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Total Sekolah Mitra</span>
+                  <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Total Sekolah Mitra</span>
                   <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200">
                     <Building2 className="w-4 h-4" />
                   </div>
@@ -567,7 +565,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
               <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
                 <div className="flex items-center justify-between text-slate-500 text-xs">
-                  <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Dewan Guru Terhubung</span>
+                  <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Dewan Guru Terhubung</span>
                   <div className="w-7 h-7 rounded-md bg-indigo-50 text-indigo-700 flex items-center justify-center border border-indigo-200">
                     <Users className="w-4 h-4" />
                   </div>
@@ -582,7 +580,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
               <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
                 <div className="flex items-center justify-between text-slate-500 text-xs">
-                  <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Estimasi Nilai Kontrak</span>
+                  <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Estimasi Nilai Kontrak</span>
                   <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200">
                     <DollarSign className="w-4 h-4" />
                   </div>
@@ -597,7 +595,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
               <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
                 <div className="flex items-center justify-between text-slate-500 text-xs">
-                  <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Status Server VPS</span>
+                  <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Status Server VPS</span>
                   <div className="w-7 h-7 rounded-md bg-amber-50 text-amber-700 flex items-center justify-center border border-amber-200">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
@@ -640,7 +638,7 @@ export const SuperAdminDashboard: React.FC = () => {
             {/* Table */}
             <div className="overflow-x-auto border-2 border-slate-200 rounded-lg">
               <table className="w-full min-w-[980px] text-left text-xs text-slate-700">
-                <thead className="bg-slate-100 text-slate-700 uppercase tracking-wider font-mono text-[10px] font-bold border-b-2 border-slate-200">
+                <thead className="bg-slate-100 text-slate-700 uppercase tracking-wider font-mono text-[11px] font-bold border-b-2 border-slate-200">
                   <tr>
                     <th className="px-4 py-3 whitespace-nowrap min-w-[220px]">Satuan Pendidikan</th>
                     <th className="px-5 py-3 whitespace-nowrap min-w-[250px]">Kunci Akses / Kode Guru</th>
@@ -717,7 +715,7 @@ export const SuperAdminDashboard: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => setSelectedSchoolForDetails(school)}
-                              className="px-2 py-0.5 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 rounded-md border border-slate-200 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                              className="px-2 py-0.5 bg-slate-100 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 rounded-md border border-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                             >
                               <Eye className="w-3 h-3" />
                               <span>Lihat</span>
@@ -742,7 +740,7 @@ export const SuperAdminDashboard: React.FC = () => {
                             })}
                           </div>
                           <span
-                            className={`text-[10px] font-bold block ${
+                            className={`text-[11px] font-bold block ${
                               daysRemaining === 0
                                 ? 'text-rose-700'
                                 : isExpiringSoon
@@ -758,7 +756,7 @@ export const SuperAdminDashboard: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => handleToggleActive(school)}
-                            className={`px-2.5 py-1 rounded-md text-[10px] font-bold cursor-pointer border transition-colors ${
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold cursor-pointer border transition-colors ${
                               school.isActive
                                 ? 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200'
                                 : 'bg-slate-100 text-slate-600 border-slate-300 hover:bg-slate-200'
@@ -813,7 +811,7 @@ export const SuperAdminDashboard: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
               <div className="flex items-center justify-between text-slate-500 text-xs">
-                <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Total Guru di VPS</span>
+                <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Total Guru di VPS</span>
                 <div className="w-7 h-7 rounded-md bg-indigo-50 text-indigo-700 flex items-center justify-center border border-indigo-200">
                   <Users className="w-4 h-4" />
                 </div>
@@ -828,7 +826,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
             <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
               <div className="flex items-center justify-between text-slate-500 text-xs">
-                <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Guru Mandiri</span>
+                <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Guru Mandiri</span>
                 <div className="w-7 h-7 rounded-md bg-purple-50 text-purple-700 flex items-center justify-center border border-purple-200">
                   <GraduationCap className="w-4 h-4" />
                 </div>
@@ -843,7 +841,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
             <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
               <div className="flex items-center justify-between text-slate-500 text-xs">
-                <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Terafiliasi Sekolah</span>
+                <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Terafiliasi Sekolah</span>
                 <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200">
                   <Building2 className="w-4 h-4" />
                 </div>
@@ -858,7 +856,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
             <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
               <div className="flex items-center justify-between text-slate-500 text-xs">
-                <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Total Paket Ujian</span>
+                <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Total Paket Ujian</span>
                 <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200">
                   <FileText className="w-4 h-4" />
                 </div>
@@ -878,7 +876,7 @@ export const SuperAdminDashboard: React.FC = () => {
               <div>
                 <h3 className="font-display font-bold text-slate-900 text-lg tracking-tight flex items-center gap-2">
                   <span>Data Guru & Pengguna Terdaftar di VPS</span>
-                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded font-mono text-[10px] font-bold">
+                  <span className="px-2 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded font-mono text-[11px] font-bold">
                     LIVE SUPABASE
                   </span>
                 </h3>
@@ -943,7 +941,7 @@ export const SuperAdminDashboard: React.FC = () => {
             {/* Table */}
             <div className="overflow-x-auto border-2 border-slate-200 rounded-lg">
               <table className="w-full text-left text-xs text-slate-700">
-                <thead className="bg-slate-100 text-slate-700 uppercase tracking-wider font-mono text-[10px] font-bold border-b-2 border-slate-200">
+                <thead className="bg-slate-100 text-slate-700 uppercase tracking-wider font-mono text-[11px] font-bold border-b-2 border-slate-200">
                   <tr>
                     <th className="px-4 py-3">Nama & Akun Guru</th>
                     <th className="px-4 py-3">Satuan Pendidikan & Mapel</th>
@@ -972,7 +970,7 @@ export const SuperAdminDashboard: React.FC = () => {
                             <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5 leading-tight">
                               <span>{teacher.fullName}</span>
                               {teacher.provider === 'google' && (
-                                <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded text-[9px] font-mono font-bold" title="Login dengan Google">
+                                <span className="px-1.5 py-0.2 bg-emerald-50 text-emerald-800 border border-emerald-300 rounded text-[10px] font-mono font-bold" title="Login dengan Google">
                                   G
                                 </span>
                               )}
@@ -990,7 +988,7 @@ export const SuperAdminDashboard: React.FC = () => {
                                 <span className="font-mono">{teacher.whatsappNumber}</span>
                               </a>
                             ) : (
-                              <span className="text-[10px] text-slate-400 italic">No WA belum terisi</span>
+                              <span className="text-[11px] text-slate-400 italic">No WA belum terisi</span>
                             )}
                             {/* Email */}
                             <div className="text-[11px] text-slate-500 font-mono leading-tight">
@@ -1018,12 +1016,12 @@ export const SuperAdminDashboard: React.FC = () => {
                       {/* Registration Type */}
                       <td className="px-4 py-3.5">
                         {teacher.isSchoolAffiliated ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-300">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-300">
                             <Building2 className="w-3 h-3" />
                             <span>Terafiliasi</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-300">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-purple-50 text-purple-800 border border-purple-300">
                             <GraduationCap className="w-3 h-3" />
                             <span>Guru Mandiri</span>
                           </span>
@@ -1034,23 +1032,23 @@ export const SuperAdminDashboard: React.FC = () => {
                       <td className="px-4 py-3.5">
                         {teacher.subscriptionTier === 'pro' ? (
                           <div className="flex flex-col gap-0.5">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300 w-fit">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-300 w-fit">
                               <Sparkles className="w-3 h-3 text-amber-600" />
                               <span>PRO Mandiri</span>
                             </span>
                             {teacher.subscriptionExpiresAt && (
-                              <span className="text-[10px] text-slate-500 font-mono">
+                              <span className="text-[11px] text-slate-500 font-mono">
                                 s/d {new Date(teacher.subscriptionExpiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                               </span>
                             )}
                           </div>
                         ) : teacher.subscriptionTier === 'school' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-300">
                             <Building2 className="w-3 h-3 text-indigo-600" />
                             <span>Lisensi Sekolah</span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
                             <span>Basic (Gratis)</span>
                           </span>
                         )}
@@ -1075,7 +1073,7 @@ export const SuperAdminDashboard: React.FC = () => {
                           })}
                         </div>
                         {teacher.lastSignInAt && (
-                          <span className="text-[10px] text-slate-500 font-mono block">
+                          <span className="text-[11px] text-slate-500 font-mono block">
                             Login: {new Date(teacher.lastSignInAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}
                           </span>
                         )}
@@ -1167,7 +1165,7 @@ export const SuperAdminDashboard: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
               <div className="flex items-center justify-between text-slate-500 text-xs">
-                <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Total Unduhan APK</span>
+                <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Total Unduhan APK</span>
                 <div className="w-7 h-7 rounded-md bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200">
                   <Download className="w-4 h-4" />
                 </div>
@@ -1181,7 +1179,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
             <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
               <div className="flex items-center justify-between text-slate-500 text-xs">
-                <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Kontak WhatsApp Terdata</span>
+                <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Kontak WhatsApp Terdata</span>
                 <div className="w-7 h-7 rounded-md bg-teal-50 text-teal-700 flex items-center justify-center border border-teal-200">
                   <MessageCircle className="w-4 h-4" />
                 </div>
@@ -1197,7 +1195,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
             <div className="p-5 bg-white rounded-xl border-2 border-slate-200 space-y-2">
               <div className="flex items-center justify-between text-slate-500 text-xs">
-                <span className="font-bold uppercase tracking-wider text-[10px] font-mono">Unduhan Hari Ini</span>
+                <span className="font-bold uppercase tracking-wider text-[11px] font-mono">Unduhan Hari Ini</span>
                 <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-700 flex items-center justify-center border border-blue-200">
                   <Smartphone className="w-4 h-4" />
                 </div>
@@ -1245,7 +1243,7 @@ export const SuperAdminDashboard: React.FC = () => {
             {/* DOWNLOADS TABLE */}
             <div className="overflow-x-auto border border-slate-200 rounded-lg">
               <table className="w-full text-left text-xs font-sans">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider font-mono">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[11px] tracking-wider font-mono">
                   <tr>
                     <th className="px-4 py-3 text-center w-12">No</th>
                     <th className="px-4 py-3">Email Pengunduh</th>
@@ -1300,7 +1298,7 @@ export const SuperAdminDashboard: React.FC = () => {
                                 href={waLink}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                                className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[11px] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
                                 title="Kirim Pesan WhatsApp ke Nomor Ini"
                               >
                                 <MessageCircle className="w-3 h-3" />
@@ -1377,8 +1375,8 @@ export const SuperAdminDashboard: React.FC = () => {
 
             <form onSubmit={handleCreateLicense} className="p-6 space-y-4 text-xs font-sans">
               <div className="space-y-1.5">
-                <label className="font-bold text-slate-700">Nama Sekolah</label>
-                <input
+                <label htmlFor="sad-1" className="font-bold text-slate-700">Nama Sekolah</label>
+                <input id="sad-1"
                   type="text"
                   value={formSchoolName}
                   onChange={(e) => setFormSchoolName(e.target.value)}
@@ -1390,8 +1388,8 @@ export const SuperAdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">NPSN</label>
-                  <input
+                  <label htmlFor="sad-2" className="font-bold text-slate-700">NPSN</label>
+                  <input id="sad-2"
                     type="text"
                     value={formNpsn}
                     onChange={(e) => setFormNpsn(e.target.value)}
@@ -1400,8 +1398,8 @@ export const SuperAdminDashboard: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">Kota / Kab</label>
-                  <input
+                  <label htmlFor="sad-3" className="font-bold text-slate-700">Kota / Kab</label>
+                  <input id="sad-3"
                     type="text"
                     value={formCity}
                     onChange={(e) => setFormCity(e.target.value)}
@@ -1413,8 +1411,8 @@ export const SuperAdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">Provinsi</label>
-                  <input
+                  <label htmlFor="sad-4" className="font-bold text-slate-700">Provinsi</label>
+                  <input id="sad-4"
                     type="text"
                     value={formProvince}
                     onChange={(e) => setFormProvince(e.target.value)}
@@ -1423,8 +1421,8 @@ export const SuperAdminDashboard: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">Kuota Guru</label>
-                  <input
+                  <label htmlFor="sad-5" className="font-bold text-slate-700">Kuota Guru</label>
+                  <input id="sad-5"
                     type="number"
                     value={formMaxTeachers}
                     onChange={(e) => setFormMaxTeachers(Number(e.target.value))}
@@ -1437,7 +1435,7 @@ export const SuperAdminDashboard: React.FC = () => {
 
               <div className="space-y-1.5 pt-3 border-t border-slate-200">
                 <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-700">Kunci Akses / Kode Lisensi Dewan Guru</label>
+                  <label htmlFor="sad-6" className="font-bold text-slate-700">Kunci Akses / Kode Lisensi Dewan Guru</label>
                   <button
                     type="button"
                     onClick={handleAutoGenerateCode}
@@ -1446,7 +1444,7 @@ export const SuperAdminDashboard: React.FC = () => {
                     ⚡ Generate Otomatis
                   </button>
                 </div>
-                <input
+                <input id="sad-6"
                   type="text"
                   value={formSchoolCode}
                   onChange={(e) => setFormSchoolCode(e.target.value.toUpperCase())}
@@ -1458,8 +1456,8 @@ export const SuperAdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">Master PIN Operator</label>
-                  <input
+                  <label htmlFor="sad-7" className="font-bold text-slate-700">Master PIN Operator</label>
+                  <input id="sad-7"
                     type="text"
                     value={formOperatorPin}
                     onChange={(e) => setFormOperatorPin(e.target.value)}
@@ -1468,8 +1466,8 @@ export const SuperAdminDashboard: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">Masa Berlaku</label>
-                  <select
+                  <label htmlFor="sadm-1" className="font-bold text-slate-700">Masa Berlaku</label>
+                  <select id="sadm-1"
                     value={formDurationMonths}
                     onChange={(e) => setFormDurationMonths(Number(e.target.value))}
                     className="w-full h-10 px-3 bg-white border-2 border-slate-200 focus:border-indigo-600 focus:outline-none rounded-lg text-xs text-slate-900 transition-none"
@@ -1534,8 +1532,8 @@ export const SuperAdminDashboard: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 block">Master PIN Baru</label>
-                <input
+                <label htmlFor="supera-1" className="text-xs font-bold text-slate-700 block">Master PIN Baru</label>
+                <input id="supera-1"
                   type="text"
                   value={newPinInput}
                   onChange={(e) => setNewPinInput(e.target.value)}
@@ -1601,7 +1599,7 @@ export const SuperAdminDashboard: React.FC = () => {
                       <div className="font-bold text-slate-900">{t.name}</div>
                       <div className="text-[11px] text-slate-500 font-mono">{t.email}</div>
                     </div>
-                    <span className="text-[10px] font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                    <span className="text-[11px] font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                       {new Date(t.joinedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
                   </div>
@@ -1658,19 +1656,19 @@ export const SuperAdminDashboard: React.FC = () => {
               {/* Biodata Grid - Flat Style */}
               <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-lg border-2 border-slate-200">
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">Satuan Pendidikan</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-mono font-bold block">Satuan Pendidikan</span>
                   <span className="font-bold text-slate-900">{selectedTeacherForDetails.schoolName || '-'}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">Mata Pelajaran</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-mono font-bold block">Mata Pelajaran</span>
                   <span className="font-bold text-slate-900">{selectedTeacherForDetails.subject || '-'}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">NPSN / NIP</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-mono font-bold block">NPSN / NIP</span>
                   <span className="font-mono text-slate-800 font-semibold">{selectedTeacherForDetails.npsn || '-'} / {selectedTeacherForDetails.nip || '-'}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">Kontak WhatsApp</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-mono font-bold block">Kontak WhatsApp</span>
                   {selectedTeacherForDetails.whatsappNumber ? (
                     <a
                       href={formatWhatsAppLink(selectedTeacherForDetails.whatsappNumber)}
@@ -1686,13 +1684,13 @@ export const SuperAdminDashboard: React.FC = () => {
                   )}
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">Metode Login</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-mono font-bold block">Metode Login</span>
                   <span className="font-bold text-slate-800 capitalize">{selectedTeacherForDetails.provider}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-slate-500 uppercase font-mono font-bold block">Status Lisensi</span>
+                  <span className="text-[11px] text-slate-500 uppercase font-mono font-bold block">Status Lisensi</span>
                   <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                    <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[10px] ${
+                    <span className={`inline-block px-2 py-0.5 rounded font-bold uppercase text-[11px] ${
                       selectedTeacherForDetails.subscriptionTier === 'pro'
                         ? 'bg-amber-100 text-amber-900 border border-amber-300'
                         : selectedTeacherForDetails.subscriptionTier === 'school'
@@ -1702,7 +1700,7 @@ export const SuperAdminDashboard: React.FC = () => {
                       {selectedTeacherForDetails.subscriptionTier === 'pro' ? 'PRO Mandiri' : selectedTeacherForDetails.subscriptionTier === 'school' ? 'Lisensi Sekolah' : 'Basic (Gratis)'}
                     </span>
                     {selectedTeacherForDetails.subscriptionExpiresAt && (
-                      <span className="text-[10px] text-slate-500 font-mono">
+                      <span className="text-[11px] text-slate-500 font-mono">
                         (Aktif s/d {new Date(selectedTeacherForDetails.subscriptionExpiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })})
                       </span>
                     )}
@@ -1716,7 +1714,7 @@ export const SuperAdminDashboard: React.FC = () => {
                   <h5 className="font-display font-bold text-xs text-slate-900 uppercase tracking-wider">
                     Paket Ujian di Database VPS ({selectedTeacherForDetails.exams.length})
                   </h5>
-                  <span className="text-[10px] font-mono text-slate-400">public.exams</span>
+                  <span className="text-[11px] font-mono text-slate-400">public.exams</span>
                 </div>
 
                 {selectedTeacherForDetails.exams.length > 0 ? (
@@ -1729,7 +1727,7 @@ export const SuperAdminDashboard: React.FC = () => {
                             {ex.subject} • Token: <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{ex.token}</span>
                           </div>
                         </div>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300">
                           {ex.status}
                         </span>
                       </div>
@@ -1799,8 +1797,8 @@ export const SuperAdminDashboard: React.FC = () => {
 
             <form onSubmit={handleSaveEditTeacher} className="p-6 space-y-3.5 text-xs font-sans">
               <div className="space-y-1.5">
-                <label className="font-bold text-slate-700">Nama Lengkap & Gelar</label>
-                <input
+                <label htmlFor="supera-2" className="font-bold text-slate-700">Nama Lengkap & Gelar</label>
+                <input id="supera-2"
                   type="text"
                   value={editForm.fullName}
                   onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
@@ -1810,8 +1808,8 @@ export const SuperAdminDashboard: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="font-bold text-slate-700">Satuan Pendidikan / Sekolah</label>
-                <input
+                <label htmlFor="supera-3" className="font-bold text-slate-700">Satuan Pendidikan / Sekolah</label>
+                <input id="supera-3"
                   type="text"
                   value={editForm.schoolName}
                   onChange={(e) => setEditForm({ ...editForm, schoolName: e.target.value })}
@@ -1822,8 +1820,8 @@ export const SuperAdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">NPSN</label>
-                  <input
+                  <label htmlFor="supera-4" className="font-bold text-slate-700">NPSN</label>
+                  <input id="supera-4"
                     type="text"
                     value={editForm.npsn}
                     onChange={(e) => setEditForm({ ...editForm, npsn: e.target.value })}
@@ -1831,8 +1829,8 @@ export const SuperAdminDashboard: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">NIP</label>
-                  <input
+                  <label htmlFor="supera-5" className="font-bold text-slate-700">NIP</label>
+                  <input id="supera-5"
                     type="text"
                     value={editForm.nip}
                     onChange={(e) => setEditForm({ ...editForm, nip: e.target.value })}
@@ -1843,8 +1841,8 @@ export const SuperAdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">Mata Pelajaran</label>
-                  <input
+                  <label htmlFor="supera-6" className="font-bold text-slate-700">Mata Pelajaran</label>
+                  <input id="supera-6"
                     type="text"
                     value={editForm.subject}
                     onChange={(e) => setEditForm({ ...editForm, subject: e.target.value })}
@@ -1852,8 +1850,8 @@ export const SuperAdminDashboard: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="font-bold text-slate-700">No. WhatsApp</label>
-                  <input
+                  <label htmlFor="supera-7" className="font-bold text-slate-700">No. WhatsApp</label>
+                  <input id="supera-7"
                     type="text"
                     value={editForm.whatsappNumber}
                     onChange={(e) => setEditForm({ ...editForm, whatsappNumber: e.target.value })}
@@ -1916,8 +1914,8 @@ export const SuperAdminDashboard: React.FC = () => {
               </div>
 
               <div className="space-y-1.5 text-xs">
-                <label className="font-bold text-slate-700">Pilih Sekolah Mitra</label>
-                <select
+                <label htmlFor="sadm-2" className="font-bold text-slate-700">Pilih Sekolah Mitra</label>
+                <select id="sadm-2"
                   value={assignTargetSchoolCode}
                   onChange={(e) => setAssignTargetSchoolCode(e.target.value)}
                   className="w-full h-10 px-3 bg-white border-2 border-slate-200 focus:border-blue-600 focus:outline-none rounded-lg text-xs text-slate-900 transition-none"
@@ -1998,7 +1996,7 @@ export const SuperAdminDashboard: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-900">Guru Mandiri PRO</span>
                       {tierTargetTeacher.subscriptionTier === 'pro' && (
-                        <span className="text-[9px] font-bold uppercase bg-amber-600 text-white px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] font-bold uppercase bg-amber-600 text-white px-1.5 py-0.5 rounded">
                           Aktif
                         </span>
                       )}
@@ -2023,7 +2021,7 @@ export const SuperAdminDashboard: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-900">Akun Standar / Basic</span>
                       {tierTargetTeacher.subscriptionTier === 'free' && (
-                        <span className="text-[9px] font-bold uppercase bg-slate-700 text-white px-1.5 py-0.5 rounded">
+                        <span className="text-[10px] font-bold uppercase bg-slate-700 text-white px-1.5 py-0.5 rounded">
                           Aktif
                         </span>
                       )}

@@ -1,0 +1,14 @@
+{
+  "latestVersion": "1.0.1",
+  "latestVersionCode": 2,
+  "minSupportedVersionCode": 1,
+  "title": "Pembaruan Aplikasi Tersedia!",
+  "releaseNotes": [
+    "Sistem deteksi & notifikasi pembaruan aplikasi otomatis (In-App Update)",
+    "Pemisahan kontainer Cek Hasil Ujian Mandiri dengan tema Indigo Claymorphism",
+    "Penyelarasan grid 2 kolom simetris pada seluruh model dan resolusi layar HP",
+    "Peningkatan performa rendering formula Matematika (KaTeX/LaTeX)"
+  ],
+  "apkUrl": "https://api.ujianpintar.online/storage/v1/object/public/Mobile%20Apk%20UjianPintar/UjianPintar-v1.0-Android.apk",
+  "forceUpdate": false
+}
