@@ -1,4 +1,11 @@
-import { getStoredGeminiApiKey, setStoredGeminiApiKey, aiQuestionService, DEFAULT_GEMINI_MODELS } from './aiQuestionService';
+import { 
+  getStoredGeminiApiKey, 
+  setStoredGeminiApiKey, 
+  getStoredAISettings,
+  setStoredAISettings,
+  aiQuestionService, 
+  DEFAULT_GEMINI_MODELS 
+} from './aiQuestionService';
 
 const STORAGE_KEY = 'ujianpintar_gemini_api_key';
 
@@ -21,6 +28,8 @@ export interface EssayEvalResponse {
 
 export const aiEssayGradingService = {
   getStoredApiKey(): string {
+    const aiSettings = getStoredAISettings();
+    if (aiSettings.geminiApiKey) return aiSettings.geminiApiKey;
     const fromQuestionService = getStoredGeminiApiKey();
     if (fromQuestionService) return fromQuestionService;
     if (typeof window === 'undefined') return '';
@@ -33,27 +42,75 @@ export const aiEssayGradingService = {
   },
 
   setStoredApiKey(key: string): void {
+    setStoredAISettings({ geminiApiKey: key });
     setStoredGeminiApiKey(key);
   },
 
   /**
-   * Evaluate a single student essay answer using Google Gemini AI
+   * Helper to parse AI evaluation JSON or text into score and feedback
+   */
+  parseEvaluationResponse(rawText: string, maxPoints: number): { score: number; feedback: string } | null {
+    if (!rawText) return null;
+    let cleanJson = rawText.trim();
+    if (cleanJson.startsWith('```json')) {
+      cleanJson = cleanJson.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+    } else if (cleanJson.startsWith('```')) {
+      cleanJson = cleanJson.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+    }
+
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(cleanJson);
+    } catch {
+      const jsonMatch =
+        rawText.match(/\{[\s\S]*"suggestedScore"[\s\S]*\}/i) ||
+        rawText.match(/\{[\s\S]*"score"[\s\S]*\}/i) ||
+        rawText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+        } catch {}
+      }
+    }
+
+    let rawScore =
+      parsed?.suggestedScore ??
+      parsed?.suggested_score ??
+      parsed?.score ??
+      parsed?.nilai ??
+      parsed?.skor ??
+      parsed?.points ??
+      parsed?.earnedPoints;
+
+    if (typeof rawScore === 'string') {
+      const matchNum = rawScore.match(/(\d+(\.\d+)?)/);
+      if (matchNum) {
+        rawScore = parseFloat(matchNum[1]);
+      }
+    }
+
+    if (rawScore === undefined || rawScore === null || isNaN(Number(rawScore))) {
+      return null;
+    }
+
+    const parsedScore = Math.max(0, Math.min(maxPoints, Math.round(Number(rawScore))));
+    const feedbackText =
+      parsed?.feedback ||
+      parsed?.alasan ||
+      parsed?.catatan ||
+      parsed?.reason ||
+      `Evaluasi AI: ${parsedScore}/${maxPoints} Poin.`;
+
+    return { score: parsedScore, feedback: feedbackText };
+  },
+
+  /**
+   * Evaluate a single student essay answer using Google Gemini AI or Custom OpenAI-compatible provider
    */
   async evaluateSingleEssay(
     item: EssayEvalRequest,
     apiKey?: string
   ): Promise<EssayEvalResponse> {
-    const key = (apiKey || this.getStoredApiKey()).trim();
-    if (!key) {
-      return {
-        id: item.id,
-        success: false,
-        suggestedScore: 0,
-        feedback: '',
-        error: 'API Key Google Gemini pribadi belum diatur. Masukkan API Key gratis Anda pada tombol Atur Key AI.',
-      };
-    }
-
     const cleanAnswer = (item.studentAnswer || '').trim();
     if (!cleanAnswer) {
       return {
@@ -63,6 +120,10 @@ export const aiEssayGradingService = {
         feedback: 'Siswa tidak menuliskan lembar jawaban uraian ini (jawaban kosong).',
       };
     }
+
+    const aiSettings = getStoredAISettings();
+    const explicitKey = (apiKey || '').trim();
+    const useGemini = Boolean(explicitKey || aiSettings.activeProvider === 'gemini');
 
     const systemPrompt = `Anda adalah Asisten Penilai Ujian (Educational Essay Evaluator) ahli, adil, dan objektif dalam kurikulum Indonesia.
 Tugas Anda adalah menilai jawaban uraian / esai siswa berdasarkan butir soal dan kunci/rubrik acuan yang disiapkan oleh guru.
@@ -92,6 +153,141 @@ Pedoman Penilaian:
 
 Berikan penilaian objektif dalam format JSON { "suggestedScore": number, "feedback": string }`;
 
+    // -------------------------------------------------------------
+    // BRANCH A: CUSTOM OPENAI-COMPATIBLE PROVIDER
+    // -------------------------------------------------------------
+    if (!useGemini) {
+      const baseUrl = (aiSettings.customBaseUrl || '').trim();
+      const customKey = (aiSettings.customApiKey || '').trim();
+      const model = (aiSettings.customModel || 'llama-3.3-70b-versatile').trim();
+
+      if (!baseUrl || !customKey) {
+        return {
+          id: item.id,
+          success: false,
+          suggestedScore: 0,
+          feedback: '',
+          error: 'Penyedia AI Kustom belum dikonfigurasi lengkap (Base URL atau API Key belum diisi di Pengaturan Sekolah).',
+        };
+      }
+
+      const cleanUrl = baseUrl.replace(/\/+$/, '');
+      const endpoint = cleanUrl.endsWith('/chat/completions') ? cleanUrl : `${cleanUrl}/chat/completions`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+      try {
+        let response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${customKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+            temperature: 0.2,
+            response_format: { type: 'json_object' },
+          }),
+          signal: controller.signal,
+        });
+
+        // Fallback retry without response_format if not supported by model
+        if (!response.ok && response.status === 400) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = (errData?.error?.message || '').toLowerCase();
+          if (errMsg.includes('response_format') || errMsg.includes('schema') || errMsg.includes('unrecognized parameter')) {
+            response = await fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${customKey}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: userPrompt },
+                ],
+                temperature: 0.2,
+              }),
+              signal: controller.signal,
+            });
+          }
+        }
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = errData?.error?.message || errData?.message || `HTTP ${response.status}: ${response.statusText}`;
+          return {
+            id: item.id,
+            success: false,
+            suggestedScore: 0,
+            feedback: '',
+            error: `AI Kustom (${response.status}): ${errMsg}`,
+          };
+        }
+
+        const data = await response.json();
+        const rawText = data?.choices?.[0]?.message?.content;
+        const parsed = this.parseEvaluationResponse(rawText, item.maxPoints);
+
+        if (!parsed) {
+          return {
+            id: item.id,
+            success: false,
+            suggestedScore: 0,
+            feedback: '',
+            error: 'Format skor dari AI Kustom tidak dapat diuraikan.',
+          };
+        }
+
+        return {
+          id: item.id,
+          success: true,
+          suggestedScore: parsed.score,
+          feedback: parsed.feedback,
+        };
+      } catch (err: any) {
+        if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+          return {
+            id: item.id,
+            success: false,
+            suggestedScore: 0,
+            feedback: '',
+            error: 'Waktu evaluasi esai melebihi batas (timeout 45 detik).',
+          };
+        }
+        return {
+          id: item.id,
+          success: false,
+          suggestedScore: 0,
+          feedback: '',
+          error: `Gagal memanggil AI Kustom: ${err.message || 'Kesalahan jaringan/CORS'}`,
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // BRANCH B: GOOGLE GEMINI AI STUDIO
+    // -------------------------------------------------------------
+    const key = (explicitKey || this.getStoredApiKey()).trim();
+    if (!key) {
+      return {
+        id: item.id,
+        success: false,
+        suggestedScore: 0,
+        feedback: '',
+        error: 'API Key Google Gemini pribadi belum diatur. Masukkan API Key gratis Anda pada Pengaturan Sekolah atau tombol Atur Kunci AI.',
+      };
+    }
+
     let candidateModels = await aiQuestionService.getAvailableModels(key);
     if (!candidateModels || candidateModels.length === 0) {
       candidateModels = DEFAULT_GEMINI_MODELS;
@@ -100,6 +296,9 @@ Berikan penilaian objektif dalam format JSON { "suggestedScore": number, "feedba
     let lastError = '';
 
     for (const modelItem of candidateModels) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
       try {
         const url = `https://generativelanguage.googleapis.com/${modelItem.ver}/models/${modelItem.name}:generateContent?key=${encodeURIComponent(key)}`;
         const response = await fetch(url, {
@@ -122,6 +321,7 @@ Berikan penilaian objektif dalam format JSON { "suggestedScore": number, "feedba
               responseMimeType: 'application/json',
             },
           }),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
@@ -134,7 +334,7 @@ Berikan penilaian objektif dalam format JSON { "suggestedScore": number, "feedba
               success: false,
               suggestedScore: 0,
               feedback: '',
-              error: 'API Key Google Gemini tidak valid. Silakan periksa kembali API Key Anda di menu Atur Key AI.',
+              error: 'API Key Google Gemini tidak valid. Silakan periksa kembali API Key Anda di Pengaturan Sekolah.',
             };
           }
 
@@ -159,65 +359,26 @@ Berikan penilaian objektif dalam format JSON { "suggestedScore": number, "feedba
           continue;
         }
 
-        let cleanJson = rawText.trim();
-        if (cleanJson.startsWith('```json')) {
-          cleanJson = cleanJson.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
-        } else if (cleanJson.startsWith('```')) {
-          cleanJson = cleanJson.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
-        }
-
-        let parsed: any = null;
-        try {
-          parsed = JSON.parse(cleanJson);
-        } catch {
-          const jsonMatch =
-            rawText.match(/\{[\s\S]*"suggestedScore"[\s\S]*\}/i) ||
-            rawText.match(/\{[\s\S]*"score"[\s\S]*\}/i) ||
-            rawText.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            try {
-              parsed = JSON.parse(jsonMatch[0]);
-            } catch {}
-          }
-        }
-
-        let rawScore =
-          parsed?.suggestedScore ??
-          parsed?.suggested_score ??
-          parsed?.score ??
-          parsed?.nilai ??
-          parsed?.skor ??
-          parsed?.points ??
-          parsed?.earnedPoints;
-
-        if (typeof rawScore === 'string') {
-          const matchNum = rawScore.match(/(\d+(\.\d+)?)/);
-          if (matchNum) {
-            rawScore = parseFloat(matchNum[1]);
-          }
-        }
-
-        if (rawScore === undefined || rawScore === null || isNaN(Number(rawScore))) {
+        const parsed = this.parseEvaluationResponse(rawText, item.maxPoints);
+        if (!parsed) {
           lastError = 'Format nilai AI tidak dapat diekstraksi.';
           continue;
         }
 
-        const parsedScore = Math.max(0, Math.min(item.maxPoints, Math.round(Number(rawScore))));
-        const feedbackText =
-          parsed?.feedback ||
-          parsed?.alasan ||
-          parsed?.catatan ||
-          parsed?.reason ||
-          `Evaluasi AI: ${parsedScore}/${item.maxPoints} Poin.`;
-
         return {
           id: item.id,
           success: true,
-          suggestedScore: parsedScore,
-          feedback: feedbackText,
+          suggestedScore: parsed.score,
+          feedback: parsed.feedback,
         };
       } catch (err: any) {
-        lastError = err.message || 'Kesalahan memanggil AI.';
+        if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+          lastError = 'Permintaan evaluasi ke Gemini timeout (45 detik).';
+        } else {
+          lastError = err.message || 'Kesalahan memanggil AI.';
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
 

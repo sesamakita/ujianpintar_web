@@ -1,4 +1,17 @@
 # ==============================================================================
+# 0. MODE MAINTENANCE (Opsional - Aktifkan jika server/database offline)
+# Cara Mengaktifkan: Cukup hapus tanda '#' pada 5 baris Rewrite di bawah ini.
+# Status 503 menginformasikan browser & bot SEO bahwa web tutup sementara.
+# ==============================================================================
+# <IfModule mod_rewrite.c>
+#   RewriteEngine On
+#   RewriteCond %{REQUEST_URI} !^/maintenance\.html$
+#   RewriteCond %{REQUEST_URI} !^/(favicon|logo|icons|apple-touch).*\.(png|jpg|jpeg|svg|ico)$
+#   RewriteRule ^(.*)$ /maintenance.html [R=503,L]
+#   ErrorDocument 503 /maintenance.html
+# </IfModule>
+
+# ==============================================================================
 # 1. Single Page Application (SPA) Rewrite Rule
 # Memastikan semua rute (seperti /admin, /super-admin) diarahkan ke index.html
 # tanpa menyebabkan pesan error 404 saat di-refresh di cPanel / Apache

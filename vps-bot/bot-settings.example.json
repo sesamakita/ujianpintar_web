@@ -1,0 +1,20 @@
+{
+  "activeProvider": "gemini",
+  "geminiApiKey": "",
+  "geminiModel": "gemini-2.0-flash",
+  "groqApiKey": "",
+  "groqModel": "llama-3.3-70b-versatile",
+  "deepseekApiKey": "",
+  "deepseekModel": "deepseek-chat",
+  "customBaseUrl": "",
+  "customApiKey": "",
+  "customModel": "",
+  "adminName": "Admin UjianPintar",
+  "adminPhone": "081234567890",
+  "isAutoReplyEnabled": true,
+  "cooldownSeconds": 3,
+  "humanHandoverMinutes": 30,
+  "wahaBaseUrl": "http://localhost:3080",
+  "wahaApiKey": "",
+  "systemPrompt": "Anda adalah Tim Layanan & Konsultan Pendidikan Resmi UjianPintar."
+}

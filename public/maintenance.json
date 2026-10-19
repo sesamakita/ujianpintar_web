@@ -1,0 +1,12 @@
+{
+  "isMaintenance": false,
+  "title": "Peningkatan Kualitas Sistem UjianPintar",
+  "message": "Kami sedang melakukan pemeliharaan rutin pada server dan basis data untuk meningkatkan stabilitas serta kecepatan akses ujian siswa & guru.",
+  "estimatedEndTime": "2026-10-18T09:00:00+08:00",
+  "allowAdminBypass": true,
+  "bypassSecret": "admin_ujian_2026",
+  "whatsappSupport": "6282196929193",
+  "progressPercent": 75,
+  "progressStatus": "Optimasi Database & Pembaruan Server",
+  "showCountdown": true
+}

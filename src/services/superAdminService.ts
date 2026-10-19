@@ -316,7 +316,7 @@ export const superAdminService = {
           expiresAt: expiresAt,
           daysRemaining: 365,
           isTrial: false,
-          maxExamsPerMonth: -1,
+          maxExamsPerMonth: 20,
           maxStudentsPerExam: -1,
           canUseCustomLogo: true,
           canExportAdvanced: true,

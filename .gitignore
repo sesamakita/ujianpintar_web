@@ -16,6 +16,8 @@ dist-ssr
 .env
 .env.*
 !.env.example
+vps-bot/bot-settings.json
+!vps-bot/bot-settings.example.json
 
 # Rust / WASM build artifacts
 crates/*/target/

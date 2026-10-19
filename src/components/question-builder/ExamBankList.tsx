@@ -44,6 +44,7 @@ interface ExamBankListProps {
   onCreateNewExam: (newExam: ExamSettings) => void;
   onDeleteExam: (examId: string) => Promise<void>;
   onToggleExamAccess?: (examId: string, newStatus: 'published' | 'closed') => Promise<void>;
+  onRequireCompleteProfile?: (action: () => void, promptReason?: { title?: string; description?: string }) => void;
 }
 
 export const ExamBankList: React.FC<ExamBankListProps> = ({
@@ -58,6 +59,7 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
   onCreateNewExam,
   onDeleteExam,
   onToggleExamAccess,
+  onRequireCompleteProfile,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedTokenId, setCopiedTokenId] = useState<string | null>(null);
@@ -123,15 +125,37 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
   }, [exams]);
 
   const handleCopyPin = (token: string, examId: string) => {
-    navigator.clipboard.writeText(token);
-    setCopiedTokenId(examId);
-    setTimeout(() => setCopiedTokenId(null), 2000);
+    const doCopy = () => {
+      navigator.clipboard.writeText(token);
+      setCopiedTokenId(examId);
+      setTimeout(() => setCopiedTokenId(null), 2000);
+    };
+
+    if (onRequireCompleteProfile) {
+      onRequireCompleteProfile(doCopy, {
+        title: 'Lengkapi Data Sekolah & WhatsApp',
+        description: 'Sebelum membagikan token ujian ke siswa, mohon lengkapi nama sekolah dan nomor WhatsApp Anda agar kop ujian resmi dan identitas pengajar tercantum valid.',
+      });
+    } else {
+      doCopy();
+    }
   };
 
   const handleCopyProctorPin = (proctorPin: string, examId: string) => {
-    navigator.clipboard.writeText(proctorPin);
-    setCopiedProctorPinId(examId);
-    setTimeout(() => setCopiedProctorPinId(null), 2000);
+    const doCopy = () => {
+      navigator.clipboard.writeText(proctorPin);
+      setCopiedProctorPinId(examId);
+      setTimeout(() => setCopiedProctorPinId(null), 2000);
+    };
+
+    if (onRequireCompleteProfile) {
+      onRequireCompleteProfile(doCopy, {
+        title: 'Lengkapi Data Sekolah & WhatsApp',
+        description: 'Sebelum membagikan PIN pengawas ruang, mohon lengkapi nama sekolah dan nomor WhatsApp Anda.',
+      });
+    } else {
+      doCopy();
+    }
   };
 
   const [regenerateTarget, setRegenerateTarget] = useState<{
@@ -166,13 +190,21 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
   const handleOpenDuplicateModal = (e: React.MouseEvent, exam: ExamSettings) => {
     e.stopPropagation();
     const isFree = subscription?.tier === 'free';
-    const maxExams = subscription?.maxExamsPerMonth ?? 3;
-    if (isFree && exams.length >= maxExams) {
+    const isPro = subscription?.tier === 'pro';
+    const maxExams = subscription?.maxExamsPerMonth ?? (isFree ? 10 : isPro ? 20 : -1);
+    if (maxExams > 0 && exams.length >= maxExams) {
       if (onOpenUpgradeModal) {
-        onOpenUpgradeModal(
-          'Batas 3 Sesi Ujian Tercapai',
-          `Akun Guru Basic dibatasi maksimal ${maxExams} paket soal aktif. Tingkatkan ke Guru PRO untuk menduplikasi paket soal tanpa batas.`
-        );
+        if (isFree) {
+          onOpenUpgradeModal(
+            'Batas 10 Paket Soal Tercapai',
+            `Akun Guru Basic dibatasi maksimal ${maxExams} paket soal aktif. Tingkatkan ke Guru PRO untuk kapasitas hingga 20 modul atau Lisensi Sekolah tanpa batas.`
+          );
+        } else {
+          onOpenUpgradeModal(
+            'Batas 20 Modul PRO Tercapai',
+            `Akun Guru PRO Anda telah mencapai batas maksimal ${maxExams} modul soal aktif. Hapus beberapa paket lama atau tingkatkan ke Lisensi Sekolah untuk kapasitas tanpa batas.`
+          );
+        }
       }
       return;
     }
@@ -247,13 +279,21 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
 
   const handleOpenCreateModal = () => {
     const isFree = subscription?.tier === 'free';
-    const maxExams = subscription?.maxExamsPerMonth ?? 3;
-    if (isFree && exams.length >= maxExams) {
+    const isPro = subscription?.tier === 'pro';
+    const maxExams = subscription?.maxExamsPerMonth ?? (isFree ? 10 : isPro ? 20 : -1);
+    if (maxExams > 0 && exams.length >= maxExams) {
       if (onOpenUpgradeModal) {
-        onOpenUpgradeModal(
-          'Batas 3 Sesi Ujian Tercapai',
-          `Akun Guru Basic dibatasi maksimal ${maxExams} paket soal aktif. Tingkatkan ke Guru PRO untuk membuat paket soal tanpa batas.`
-        );
+        if (isFree) {
+          onOpenUpgradeModal(
+            'Batas 10 Paket Soal Tercapai',
+            `Akun Guru Basic dibatasi maksimal ${maxExams} paket soal aktif. Tingkatkan ke Guru PRO untuk kapasitas hingga 20 modul atau Lisensi Sekolah tanpa batas.`
+          );
+        } else {
+          onOpenUpgradeModal(
+            'Batas 20 Modul PRO Tercapai',
+            `Akun Guru PRO Anda telah mencapai batas maksimal ${maxExams} modul soal aktif. Hapus beberapa paket lama atau tingkatkan ke Lisensi Sekolah untuk kapasitas tanpa batas.`
+          );
+        }
       }
       return;
     }
@@ -357,23 +397,36 @@ export const ExamBankList: React.FC<ExamBankListProps> = ({
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs">
                 <Layers className="w-3.5 h-3.5 text-slate-500" />
                 <span className="font-semibold text-slate-700">
-                  {exams.length}/3 Paket Soal
+                  {exams.length}/10 Paket Soal
                 </span>
               </div>
 
               <button
                 type="button"
-                onClick={() => onOpenUpgradeModal?.('Upgrade ke Guru PRO', 'Buka kuota ujian tanpa batas, kapasitas siswa tak terhingga, dan fitur raport otomatis.')}
+                onClick={() => onOpenUpgradeModal?.('Upgrade ke Guru PRO', 'Buka kapasitas hingga 20 modul, kapasitas siswa tak terhingga, dan fitur raport otomatis.')}
                 className="text-blue-600 hover:text-blue-700 font-bold hover:underline cursor-pointer inline-flex items-center gap-0.5 text-xs ml-1"
               >
                 <span>Upgrade PRO</span>
                 <span>→</span>
               </button>
             </div>
+          ) : subscription?.tier === 'pro' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-xl text-xs">
+                <Layers className="w-3.5 h-3.5 text-blue-600" />
+                <span className="font-semibold text-blue-800">
+                  {exams.length}/20 Modul PRO
+                </span>
+              </div>
+              <div className="px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-xl text-xs font-bold font-mono text-amber-700 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-amber-600" />
+                <span>GURU PRO</span>
+              </div>
+            </div>
           ) : (
-            <div className="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-xl text-xs font-bold font-mono text-blue-700 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              <span>{subscription?.tier === 'school' ? 'LISENSI SEKOLAH' : 'UNLIMITED PRO'}</span>
+            <div className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-bold font-mono text-indigo-700 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>LISENSI SEKOLAH (UNLIMITED)</span>
             </div>
           )}
 

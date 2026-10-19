@@ -1,5 +1,6 @@
 import { generateUUID } from './examService';
 import type { Question, QuestionType } from '../types/exam';
+import { parseGeminiError } from './botSettingsService';
 
 export interface QuestionComposition {
   multiple_choice: number;
@@ -39,8 +40,23 @@ export interface GeneratedQuestionItem {
   points?: number;
 }
 
-const PRIMARY_STORAGE_KEY = 'ujianpintar_gemini_api_key';
-// Legacy keys for one-time migration only. New writes go ONLY to PRIMARY_STORAGE_KEY.
+export type AIProviderType = 'gemini' | 'custom_openai';
+
+export interface AISettingsConfig {
+  activeProvider: AIProviderType;
+  geminiApiKey: string;
+  customBaseUrl: string;
+  customApiKey: string;
+  customModel: string;
+  useChatbotAI?: boolean;
+  isInheritedFromChatbot?: boolean;
+}
+
+export const AI_SETTINGS_STORAGE_KEY = 'ujianpintar_ai_settings';
+export const PRIMARY_STORAGE_KEY = 'ujianpintar_gemini_api_key';
+export const STORAGE_KEY_BOT_SETTINGS = 'ujianpintar_whatsapp_bot_settings';
+
+// Legacy keys for one-time migration only. New writes go ONLY to PRIMARY_STORAGE_KEY & AI_SETTINGS_STORAGE_KEY.
 const LEGACY_API_KEYS = [
   'gemini_api_key',
   'GOOGLE_GEMINI_API_KEY',
@@ -48,9 +64,157 @@ const LEGACY_API_KEYS = [
   'ai_generator_api_key',
 ];
 
+export interface ChatbotAISummary {
+  hasConfig: boolean;
+  provider: 'gemini' | 'groq' | 'deepseek' | 'custom_openai' | 'fallback_local';
+  providerLabel: string;
+  model: string;
+  geminiApiKey?: string;
+  customBaseUrl?: string;
+  customApiKey?: string;
+  customModel?: string;
+}
+
+/**
+ * Membaca ringkasan setelan AI yang tersimpan di panel Otak Chatbot Super Admin
+ */
+export const getChatbotAISummary = (): ChatbotAISummary => {
+  if (typeof window === 'undefined') {
+    return { hasConfig: false, provider: 'fallback_local', providerLabel: 'Belum Ada Kunci', model: '-' };
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_BOT_SETTINGS);
+    if (!raw) return { hasConfig: false, provider: 'fallback_local', providerLabel: 'Belum Dikonfigurasi', model: '-' };
+    const bot = JSON.parse(raw);
+    const provider = bot.activeProvider || 'gemini';
+
+    if (provider === 'gemini' && bot.geminiApiKey && bot.geminiApiKey.trim()) {
+      return {
+        hasConfig: true,
+        provider: 'gemini',
+        providerLabel: 'Google Gemini AI',
+        model: bot.geminiModel || 'gemini-1.5-flash',
+        geminiApiKey: bot.geminiApiKey.trim(),
+      };
+    }
+    if (provider === 'groq' && bot.groqApiKey && bot.groqApiKey.trim()) {
+      return {
+        hasConfig: true,
+        provider: 'groq',
+        providerLabel: 'Groq Cloud (Llama 3.3)',
+        model: bot.groqModel || 'llama-3.3-70b-versatile',
+        customBaseUrl: 'https://api.groq.com/openai/v1',
+        customApiKey: bot.groqApiKey.trim(),
+        customModel: bot.groqModel || 'llama-3.3-70b-versatile',
+      };
+    }
+    if (provider === 'deepseek' && bot.deepseekApiKey && bot.deepseekApiKey.trim()) {
+      return {
+        hasConfig: true,
+        provider: 'deepseek',
+        providerLabel: 'DeepSeek AI',
+        model: bot.deepseekModel || 'deepseek-chat',
+        customBaseUrl: 'https://api.deepseek.com/v1',
+        customApiKey: bot.deepseekApiKey.trim(),
+        customModel: bot.deepseekModel || 'deepseek-chat',
+      };
+    }
+    if (provider === 'custom_openai' && bot.customApiKey && bot.customBaseUrl) {
+      return {
+        hasConfig: true,
+        provider: 'custom_openai',
+        providerLabel: 'Custom AI (OpenAI)',
+        model: bot.customModel || 'gpt-4o-mini',
+        customBaseUrl: bot.customBaseUrl.trim(),
+        customApiKey: bot.customApiKey.trim(),
+        customModel: bot.customModel || 'gpt-4o-mini',
+      };
+    }
+    // Fallback: Jika provider di bot bukan gemini tapi ada geminiApiKey
+    if (bot.geminiApiKey && bot.geminiApiKey.trim()) {
+      return {
+        hasConfig: true,
+        provider: 'gemini',
+        providerLabel: 'Google Gemini AI',
+        model: bot.geminiModel || 'gemini-1.5-flash',
+        geminiApiKey: bot.geminiApiKey.trim(),
+      };
+    }
+    if (bot.groqApiKey && bot.groqApiKey.trim()) {
+      return {
+        hasConfig: true,
+        provider: 'groq',
+        providerLabel: 'Groq Cloud (Llama 3.3)',
+        model: bot.groqModel || 'llama-3.3-70b-versatile',
+        customBaseUrl: 'https://api.groq.com/openai/v1',
+        customApiKey: bot.groqApiKey.trim(),
+        customModel: bot.groqModel || 'llama-3.3-70b-versatile',
+      };
+    }
+    if (bot.deepseekApiKey && bot.deepseekApiKey.trim()) {
+      return {
+        hasConfig: true,
+        provider: 'deepseek',
+        providerLabel: 'DeepSeek AI',
+        model: bot.deepseekModel || 'deepseek-chat',
+        customBaseUrl: 'https://api.deepseek.com/v1',
+        customApiKey: bot.deepseekApiKey.trim(),
+        customModel: bot.deepseekModel || 'deepseek-chat',
+      };
+    }
+  } catch (e) {
+    console.warn('Error reading chatbot AI summary:', e);
+  }
+  return { hasConfig: false, provider: 'fallback_local', providerLabel: 'Belum Ada Kunci', model: '-' };
+};
+
+/**
+ * Menyinkronkan setelan AI sekolah dengan setelan Chatbot Super Admin secara instan
+ */
+export const syncAISettingsFromChatbot = (): {
+  success: boolean;
+  message: string;
+  settings?: AISettingsConfig;
+} => {
+  const summary = getChatbotAISummary();
+  if (!summary.hasConfig) {
+    return {
+      success: false,
+      message: 'Belum ada kunci API yang tersimpan di setelan Chatbot Super Admin. Silakan buka menu Super Admin > Otak Chatbot WA untuk mengisi kunci API terlebih dahulu.',
+    };
+  }
+
+  let newSettings: Partial<AISettingsConfig> = {
+    useChatbotAI: true,
+  };
+
+  if (summary.provider === 'gemini') {
+    newSettings = {
+      activeProvider: 'gemini',
+      geminiApiKey: summary.geminiApiKey || '',
+      useChatbotAI: true,
+    };
+  } else {
+    newSettings = {
+      activeProvider: 'custom_openai',
+      customBaseUrl: summary.customBaseUrl || 'https://api.groq.com/openai/v1',
+      customApiKey: summary.customApiKey || '',
+      customModel: summary.customModel || 'llama-3.3-70b-versatile',
+      useChatbotAI: true,
+    };
+  }
+
+  setStoredAISettings(newSettings);
+  return {
+    success: true,
+    message: `Berhasil menyinkronkan setelan AI dari Chatbot! Menggunakan ${summary.providerLabel} (${summary.model}).`,
+    settings: getStoredAISettings(),
+  };
+};
+
 /**
  * Returns the user's personal API Key stored in their browser localStorage.
- * Reads the primary key, falling back to legacy keys (one-time migration).
+ * Reads the primary key, falling back to legacy keys, or Chatbot settings if personal is empty.
  */
 export const getStoredGeminiApiKey = (): string => {
   if (typeof window !== 'undefined') {
@@ -65,6 +229,12 @@ export const getStoredGeminiApiKey = (): string => {
         localStorage.setItem(PRIMARY_STORAGE_KEY, clean);
         return clean;
       }
+    }
+
+    // Fallback cerdas: Ambil dari setelan Chatbot jika kunci pribadi guru belum diisi
+    const botSummary = getChatbotAISummary();
+    if (botSummary.geminiApiKey) {
+      return botSummary.geminiApiKey;
     }
   }
   return '';
@@ -81,6 +251,274 @@ export const setStoredGeminiApiKey = (key: string): void => {
     } else {
       localStorage.removeItem(PRIMARY_STORAGE_KEY);
     }
+  }
+};
+
+/**
+ * Reads centralized AI settings (Google Gemini & Custom OpenAI-compatible providers),
+ * automatically falling back to Chatbot settings when enabled or when personal keys are blank.
+ */
+export const getStoredAISettings = (): AISettingsConfig => {
+  const defaults: AISettingsConfig = {
+    activeProvider: 'gemini',
+    geminiApiKey: '',
+    customBaseUrl: 'https://api.groq.com/openai/v1',
+    customApiKey: '',
+    customModel: 'llama-3.3-70b-versatile',
+    useChatbotAI: true,
+    isInheritedFromChatbot: false,
+  };
+
+  if (typeof window === 'undefined') return defaults;
+
+  try {
+    const raw = localStorage.getItem(AI_SETTINGS_STORAGE_KEY);
+    let parsed: Partial<AISettingsConfig> = {};
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {}
+    }
+
+    // Sync legacy/primary geminiApiKey if not present in parsed
+    const primaryGeminiKey = localStorage.getItem(PRIMARY_STORAGE_KEY)?.trim() || '';
+    let geminiApiKey = (parsed.geminiApiKey || primaryGeminiKey || '').trim();
+    let activeProvider: AIProviderType = (parsed.activeProvider === 'custom_openai' ? 'custom_openai' : 'gemini');
+    let customBaseUrl = (parsed.customBaseUrl || defaults.customBaseUrl).trim();
+    let customApiKey = (parsed.customApiKey || '').trim();
+    let customModel = (parsed.customModel || defaults.customModel).trim();
+    const useChatbotAI = parsed.useChatbotAI !== false; // Default true (mengizinkan warisan dari Chatbot)
+    let isInheritedFromChatbot = false;
+
+    // JIKA useChatbotAI aktif dan kunci sekolah saat ini kosong, otomatis warisi dari setelan Chatbot!
+    if (useChatbotAI) {
+      const botSummary = getChatbotAISummary();
+      if (botSummary.hasConfig) {
+        if (activeProvider === 'gemini' && !geminiApiKey) {
+          if (botSummary.geminiApiKey) {
+            geminiApiKey = botSummary.geminiApiKey;
+            isInheritedFromChatbot = true;
+          } else if (botSummary.customApiKey) {
+            // Chatbot menggunakan Groq/DeepSeek, sesuaikan secara cerdas
+            activeProvider = 'custom_openai';
+            customBaseUrl = botSummary.customBaseUrl || 'https://api.groq.com/openai/v1';
+            customApiKey = botSummary.customApiKey;
+            customModel = botSummary.customModel || 'llama-3.3-70b-versatile';
+            isInheritedFromChatbot = true;
+          }
+        } else if (activeProvider === 'custom_openai' && !customApiKey) {
+          if (botSummary.customApiKey) {
+            customBaseUrl = botSummary.customBaseUrl || customBaseUrl;
+            customApiKey = botSummary.customApiKey;
+            customModel = botSummary.customModel || customModel;
+            isInheritedFromChatbot = true;
+          } else if (botSummary.geminiApiKey) {
+            activeProvider = 'gemini';
+            geminiApiKey = botSummary.geminiApiKey;
+            isInheritedFromChatbot = true;
+          }
+        }
+      }
+    }
+
+    return {
+      activeProvider,
+      geminiApiKey,
+      customBaseUrl,
+      customApiKey,
+      customModel,
+      useChatbotAI,
+      isInheritedFromChatbot,
+    };
+  } catch (err) {
+    console.warn('Error reading AI settings from storage:', err);
+    return defaults;
+  }
+};
+
+/**
+ * Persists centralized AI settings and syncs primary Gemini key for backward compatibility.
+ */
+export const setStoredAISettings = (newSettings: Partial<AISettingsConfig>): void => {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const current = getStoredAISettings();
+    const merged: AISettingsConfig = {
+      ...current,
+      ...newSettings,
+      activeProvider: newSettings.activeProvider ?? current.activeProvider,
+      geminiApiKey: (newSettings.geminiApiKey !== undefined ? newSettings.geminiApiKey : current.geminiApiKey).trim(),
+      customBaseUrl: (newSettings.customBaseUrl !== undefined ? newSettings.customBaseUrl : current.customBaseUrl).trim(),
+      customApiKey: (newSettings.customApiKey !== undefined ? newSettings.customApiKey : current.customApiKey).trim(),
+      customModel: (newSettings.customModel !== undefined ? newSettings.customModel : current.customModel).trim(),
+      useChatbotAI: newSettings.useChatbotAI !== undefined ? newSettings.useChatbotAI : current.useChatbotAI,
+    };
+
+    localStorage.setItem(AI_SETTINGS_STORAGE_KEY, JSON.stringify(merged));
+
+    // Keep primary gemini key in sync jika pengguna menginput manual
+    if (newSettings.geminiApiKey !== undefined) {
+      setStoredGeminiApiKey(merged.geminiApiKey);
+    }
+  } catch (err) {
+    console.error('Failed to save AI settings:', err);
+  }
+};
+
+/**
+ * Checks if the currently active AI provider is properly configured with keys.
+ */
+export const hasActiveAIConfig = (): boolean => {
+  const settings = getStoredAISettings();
+  if (settings.activeProvider === 'custom_openai') {
+    return Boolean(settings.customBaseUrl && settings.customApiKey && settings.customModel);
+  }
+  return Boolean(settings.geminiApiKey);
+};
+
+/**
+ * Returns human-readable status for active AI provider.
+ */
+export const getActiveAIProviderInfo = (): {
+  provider: AIProviderType;
+  providerName: string;
+  modelName: string;
+  isConfigured: boolean;
+  isInheritedFromChatbot: boolean;
+} => {
+  const settings = getStoredAISettings();
+  const isInherited = Boolean(settings.isInheritedFromChatbot);
+
+  if (settings.activeProvider === 'custom_openai') {
+    const isConfigured = Boolean(settings.customBaseUrl && settings.customApiKey && settings.customModel);
+    return {
+      provider: 'custom_openai',
+      providerName: isInherited ? 'Custom AI (Tersinkron dari Chatbot)' : 'Custom AI (OpenAI-compatible)',
+      modelName: settings.customModel || 'llama-3.3-70b-versatile',
+      isConfigured,
+      isInheritedFromChatbot: isInherited,
+    };
+  }
+
+  const isConfigured = Boolean(settings.geminiApiKey);
+  return {
+    provider: 'gemini',
+    providerName: isInherited ? 'Google Gemini (Tersinkron dari Chatbot)' : 'Google Gemini AI Studio',
+    modelName: 'Auto-fallback (Gemini Flash)',
+    isConfigured,
+    isInheritedFromChatbot: isInherited,
+  };
+};
+
+/**
+ * Test connection to custom OpenAI-compatible API (e.g. Groq, DeepSeek, OpenRouter, Mistral, Ollama).
+ */
+export const testCustomOpenAIConnection = async (config?: {
+  baseUrl?: string;
+  apiKey?: string;
+  model?: string;
+}): Promise<{ valid: boolean; model?: string; error?: string }> => {
+  const current = getStoredAISettings();
+  const baseUrl = (config?.baseUrl || current.customBaseUrl || '').trim();
+  const apiKey = (config?.apiKey || current.customApiKey || '').trim();
+  const model = (config?.model || current.customModel || 'gpt-4o-mini').trim();
+
+  if (!baseUrl) {
+    return { valid: false, error: 'Base URL penyedia AI kustom belum diisi.' };
+  }
+  if (!apiKey) {
+    return { valid: false, error: 'API Key / Token penyedia AI kustom belum diisi.' };
+  }
+
+  const cleanUrl = baseUrl.replace(/\/+$/, '');
+  const endpoint = cleanUrl.endsWith('/chat/completions') ? cleanUrl : `${cleanUrl}/chat/completions`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'Ping test. Jawab kata "PONG".' }],
+        max_tokens: 15,
+        temperature: 0.1,
+      }),
+    });
+
+    if (response.ok) {
+      return { valid: true, model };
+    }
+
+    const errJson = await response.json().catch(() => ({}));
+    const errMsg = errJson?.error?.message || errJson?.message || `HTTP ${response.status}: ${response.statusText}`;
+
+    if (response.status === 401 || response.status === 403) {
+      return {
+        valid: false,
+        error: `Autentikasi gagal (${response.status}): ${errMsg}. Pastikan API Key / Token benar dan memiliki saldo/kredit aktif.`,
+      };
+    }
+
+    if (response.status === 404) {
+      if (errMsg.toLowerCase().includes('model')) {
+        try {
+          const modelsEndpoint = cleanUrl.endsWith('/chat/completions')
+            ? cleanUrl.replace(/\/chat\/completions$/, '/models')
+            : `${cleanUrl}/models`;
+          const mRes = await fetch(modelsEndpoint, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+          });
+          if (mRes.ok) {
+            const mData = await mRes.json();
+            const list: string[] = Array.isArray(mData?.data)
+              ? mData.data.map((m: any) => m.id).filter(Boolean)
+              : [];
+            if (list.length > 0) {
+              return {
+                valid: false,
+                error: `Model "${model}" tidak tersedia di penyedia ini. Model yang tersedia: ${list.slice(0, 6).join(', ')}. Ganti kolom Nama Model dengan salah satu model tersebut (misal: ${list[0]}).`,
+              };
+            }
+          }
+        } catch {}
+
+        return {
+          valid: false,
+          error: `Nama Model "${model}" tidak tersedia di penyedia ini (${errMsg}). Sesuaikan kolom Nama Model dengan model yang disediakan server.`,
+        };
+      }
+
+      return {
+        valid: false,
+        error: `Endpoint tidak ditemukan (404): ${errMsg}. Pastikan Base URL benar (contoh: https://organization.api-github.com/v1).`,
+      };
+    }
+
+    if (response.status === 429) {
+      return {
+        valid: false,
+        error: `Batas kuota / rate limit terlampaui (429): ${errMsg}.`,
+      };
+    }
+
+    return {
+      valid: false,
+      error: `Gagal terhubung (${response.status}): ${errMsg}`,
+    };
+  } catch (err: any) {
+    const isCorsOrNetwork =
+      err.name === 'TypeError' ||
+      (err.message && (err.message.includes('fetch') || err.message.includes('NetworkError')));
+    return {
+      valid: false,
+      error: isCorsOrNetwork
+        ? `Koneksi diblokir oleh kebijakan keamanan peramban (CORS) atau server tidak merespons. Server penyedia (${baseUrl}) belum mengizinkan permintaan langsung dari peramban web (Access-Control-Allow-Origin). Disarankan menggunakan penyedia yang mendukung browser seperti Qodeer (https://organization.api-github.com/v1 dengan model gpt-4o) atau Google AI Studio.`
+        : `Koneksi jaringan terputus: ${err.message || 'Periksa koneksi internet.'}`,
+    };
   }
 };
 
@@ -113,6 +551,13 @@ export const aiQuestionService = {
   getStoredApiKey: getStoredGeminiApiKey,
   setStoredApiKey: setStoredGeminiApiKey,
   hasApiKey: hasUserGeminiApiKey,
+  getAISettings: getStoredAISettings,
+  setAISettings: setStoredAISettings,
+  hasActiveConfig: hasActiveAIConfig,
+  getActiveProviderInfo: getActiveAIProviderInfo,
+  testCustomOpenAI: testCustomOpenAIConnection,
+  syncFromChatbot: syncAISettingsFromChatbot,
+  getChatbotSummary: getChatbotAISummary,
 
   /**
    * Dynamically query Google AI Studio ModelService to discover active models for this key
@@ -216,30 +661,15 @@ export const aiQuestionService = {
         }
 
         const errJson = await response.json().catch(() => ({}));
-        const errMsg = errJson?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
-
-        if (response.status === 400 && (errMsg.includes('API_KEY_INVALID') || errMsg.includes('API key not valid') || errMsg.includes('API key'))) {
+        const parsed = parseGeminiError(errJson, response.status);
+        if (parsed.isFatal) {
           return {
             valid: false,
-            error: `API Key tidak valid: ${errMsg}. Silakan periksa kembali kunci dari Google AI Studio.`,
+            error: parsed.message,
           };
         }
 
-        if (response.status === 403) {
-          return {
-            valid: false,
-            error: `Akses ditolak (403): ${errMsg}. Pastikan API Key diizinkan untuk Generative Language API di Google Cloud / AI Studio.`,
-          };
-        }
-
-        if (response.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED')) {
-          return {
-            valid: false,
-            error: 'Batas kuota harian/menit API Key ini terlampaui (429 Rate Limit). Coba beberapa saat lagi atau buat API Key baru gratis di Google AI Studio.',
-          };
-        }
-
-        lastError = errMsg;
+        lastError = parsed.message;
       } catch (err: any) {
         lastError = err.message || 'Koneksi jaringan terputus (CORS / AdBlocker / Browser Extension).';
       }
@@ -252,18 +682,82 @@ export const aiQuestionService = {
   },
 
   /**
-   * Generate questions using Google Gemini API with automatic dynamic model fallback
+   * Maps raw generated question items from AI into application Question model.
    */
-  async generateQuestions(params: AIGenerateParams): Promise<{ success: boolean; questions: Question[]; error?: string }> {
-    const apiKey = (params.apiKey || getStoredGeminiApiKey()).trim();
+  mapGeneratedItems(parsedArray: GeneratedQuestionItem[], params: AIGenerateParams): Question[] {
+    return parsedArray.map((item, idx) => {
+      const questionId = generateUUID();
+      const qType: QuestionType = item.type || (params.questionType || 'multiple_choice');
 
-    if (!apiKey) {
+      let calculatedPoints = 10;
+      if (params.pointsPerType && typeof params.pointsPerType[qType] === 'number') {
+        calculatedPoints = params.pointsPerType[qType]!;
+      } else if (typeof params.defaultPoints === 'number') {
+        calculatedPoints = params.defaultPoints;
+      } else if (typeof item.points === 'number' && item.points > 0) {
+        calculatedPoints = item.points;
+      }
+
+      let optionsList: { id: string; label: string; text: string }[] = [];
+      let correctOptionId: string | undefined = undefined;
+
+      if (qType === 'multiple_choice') {
+        optionsList = (item.options || []).map((opt, optIdx) => ({
+          id: generateUUID(),
+          label: opt.label || String.fromCharCode(65 + optIdx),
+          text: opt.text || '',
+        }));
+
+        const correctIdx = (item.options || []).findIndex((o) => o.isCorrect);
+        if (correctIdx >= 0 && optionsList[correctIdx]) {
+          correctOptionId = optionsList[correctIdx].id;
+        } else if (optionsList.length > 0) {
+          correctOptionId = optionsList[0].id;
+        }
+      } else if (qType === 'true_false') {
+        const trueId = generateUUID();
+        const falseId = generateUUID();
+        optionsList = [
+          { id: trueId, label: 'Benar', text: 'Benar' },
+          { id: falseId, label: 'Salah', text: 'Salah' },
+        ];
+
+        const trueOpt = (item.options || []).find((o) => o.text?.toLowerCase().includes('benar') && o.isCorrect);
+        const falseOpt = (item.options || []).find((o) => o.text?.toLowerCase().includes('salah') && o.isCorrect);
+
+        if (trueOpt) {
+          correctOptionId = trueId;
+        } else if (falseOpt) {
+          correctOptionId = falseId;
+        } else {
+          correctOptionId = trueId;
+        }
+      } else {
+        // short_answer or essay: options empty
+        optionsList = [];
+      }
+
       return {
-        success: false,
-        questions: [],
-        error: 'API Key Google Gemini pribadi belum diisi. Masukkan API Key gratis Anda dari Google AI Studio untuk melanjutkan.',
+        id: questionId,
+        number: idx + 1,
+        type: qType,
+        questionText: item.questionText || `Butir Soal #${idx + 1}`,
+        options: optionsList,
+        correctOptionId,
+        correctAnswerText: item.correctAnswerText || undefined,
+        explanation: item.explanation || undefined,
+        points: calculatedPoints,
       };
-    }
+    });
+  },
+
+  /**
+   * Internal worker to generate a single batch (at most 5 questions per call)
+   */
+  async generateSingleBatch(params: AIGenerateParams): Promise<{ success: boolean; questions: Question[]; error?: string }> {
+    const aiSettings = getStoredAISettings();
+    const explicitKey = (params.apiKey || '').trim();
+    const useGemini = Boolean(explicitKey || aiSettings.activeProvider === 'gemini');
 
     const difficultyLabels = {
       easy: 'Mudah (Pemahaman & C1-C2)',
@@ -287,7 +781,7 @@ export const aiQuestionService = {
                          (params.composition.short_answer || 0) + 
                          (params.composition.essay || 0);
 
-      taskSpecification = `Tugas Anda adalah membuat KOMPOSISI CAMPURAN total ${totalCount} butir soal yang terdiri dari:\n- ` + parts.join('\n- ');
+      taskSpecification = `Tugas Anda adalah membuat KOMPOSISI total ${totalCount} butir soal:\n- ` + parts.join('\n- ');
     } else {
       const singleType = params.questionType || 'multiple_choice';
       const singleCount = params.count || 5;
@@ -297,66 +791,246 @@ export const aiQuestionService = {
         short_answer: 'Isian Singkat (short_answer)',
         essay: 'Uraian / Esai (essay)',
       };
-      taskSpecification = `Tugas Anda adalah membuat ${singleCount} butir soal jenis ${typeNames[singleType]} sesuai spesifikasi berikut:`;
+      taskSpecification = `Tugas Anda adalah membuat ${singleCount} butir soal jenis ${typeNames[singleType]} sesuai kisi-kisi berikut:`;
     }
 
     const promptText = `
-Anda adalah Pakar Pembuat Soal Ujian Kurikulum Merdeka Indonesia & Pengembang Soal CBT Profesional.
+Anda adalah Pakar Pembuat Soal Ujian Kurikulum Merdeka Indonesia & CBT Profesional.
 ${taskSpecification}
 
 - Mata Pelajaran: ${params.subject || 'Umum'}
 - Jenjang / Tingkat Kelas: ${params.gradeLevel || 'Kelas X'}
 - Topik / Kisi-Kisi Materi: ${params.topic}
 - Tingkat Kesulitan: ${difficultyLabels[params.difficulty]}
-${params.referenceMaterial ? `- Bahan Bacaan / Rangkuman Materi Acuan:\n"""\n${params.referenceMaterial}\n"""` : ''}
+${params.referenceMaterial ? `- Bahan Bacaan Acuan:\n"""\n${params.referenceMaterial}\n"""` : ''}
 
-Ketentuan Khusus Format Soal per Tipe:
+Ketentuan Format Butir Soal per Tipe:
 1. Pilihan Ganda ("type": "multiple_choice"):
-   - Berikan 4 opsi (A, B, C, D) untuk SD/SMP atau 5 opsi (A, B, C, D, E) untuk SMA/SMK.
-   - Tetapkan tepat 1 opsi yang benar dengan "isCorrect": true, opsi lainnya "isCorrect": false.
+   - Berikan 4 opsi (A-D) untuk SD/SMP atau 5 opsi (A-E) untuk SMA/SMK.
+   - Tepat 1 opsi bernilai "isCorrect": true, lainnya false.
 2. Benar / Salah ("type": "true_false"):
-   - Berupa pernyataan faktual/analisis materi.
-   - Sediakan tepat 2 opsi:
-     [
-       { "label": "A", "text": "Benar", "isCorrect": true / false },
-       { "label": "B", "text": "Salah", "isCorrect": true / false }
-     ]
+   - Dua opsi: [{"label": "A", "text": "Benar", "isCorrect": true/false}, {"label": "B", "text": "Salah", "isCorrect": true/false}].
 3. Isian Singkat ("type": "short_answer"):
-   - Pertanyaan mengarah pada jawaban singkat yang pasti, terukur, dan definitif (misal: angka, istilah ilmiah, rumus, tahun, kata kunci tunggal).
-   - "options" dikosongkan ([]).
-   - Cantumkan kunci jawaban singkat persis pada field "correctAnswerText".
+   - Jawaban eksak/singkat pada field "correctAnswerText". options: [].
 4. Uraian ("type": "essay"):
-   - Pertanyaan berupa analisis mendalam, studi kasus, atau penyelesaian bertahap.
-   - "options" dikosongkan ([]).
-   - Cantumkan rubrik penilaian dan panduan kunci jawaban lengkap pada field "explanation".
+   - options: []. Panduan jawaban/rubrik pada field "explanation".
 
-ATURAN PENULISAN RUMUS MATEMATIKA & SAINS (SANGAT PENTING):
-- SEMUA simbol, rumus, pecahan, akar, eksponen, variabel, dan persamaan HARUS selalu diapit tanda dollar '$...$' untuk formula sebaris (inline) atau '$$...$$' untuk rumus terpusat.
-- Contoh pertanyaan: "Tentukan nilai $x$ dari persamaan $x^2 - 5x + 6 = 0$ jika $x > 0$!" atau "Hitunglah nilai $\\frac{1}{2} + \\sqrt{16}$!".
-- Contoh pilihan jawaban: "$x = 2$ atau $x = 3$", "$\\frac{3}{4}$", "$10\\sqrt{3}\\text{ cm}$".
-- JANGAN pernah menulis rumus matematika sebagai teks kode markdown mentah tanpa tanda dollar '$...$'.
+ATURAN RUMUS MATEMATIKA & SAINS:
+- Formula inline diapit dollar '$...$' (contoh: '$x^2 - 4x + 4 = 0$'), formula terpusat diapit '$$...$$'.
 
-Keluarkan HANYA JSON murni (array of objects) dengan struktur berikut:
-[
-  {
-    "questionText": "Teks lengkap pertanyaan...",
-    "type": "multiple_choice" | "true_false" | "short_answer" | "essay",
-    "options": [
-      { "label": "A", "text": "...", "isCorrect": true },
-      { "label": "B", "text": "...", "isCorrect": false }
-    ],
-    "correctAnswerText": "...",
-    "explanation": "Pembahasan / rubrik penilaian lengkap...",
-    "points": 10
-  }
-]
+ATURAN PENJELASAN (EXPLANATION):
+- "explanation" dibuat ringkas, esensial, dan langsung pada langkah kunci solusi (1-2 kalimat).
+
+Keluarkan HANYA format JSON Object dengan struktur:
+{
+  "questions": [
+    {
+      "questionText": "Teks pertanyaan lengkap...",
+      "type": "multiple_choice",
+      "options": [
+        { "label": "A", "text": "...", "isCorrect": true },
+        { "label": "B", "text": "...", "isCorrect": false }
+      ],
+      "correctAnswerText": "...",
+      "explanation": "Ringkasan solusi singkat...",
+      "points": 10
+    }
+  ]
+}
 `;
+
+    // -------------------------------------------------------------
+    // BRANCH A: CUSTOM OPENAI-COMPATIBLE PROVIDER
+    // -------------------------------------------------------------
+    if (!useGemini) {
+      const baseUrl = (aiSettings.customBaseUrl || '').trim();
+      const apiKey = (aiSettings.customApiKey || '').trim();
+      const model = (aiSettings.customModel || 'llama-3.3-70b-versatile').trim();
+
+      if (!baseUrl || !apiKey) {
+        return {
+          success: false,
+          questions: [],
+          error: 'Penyedia AI Kustom belum dikonfigurasi lengkap (Base URL atau API Key belum diisi di Pengaturan Sekolah).',
+        };
+      }
+
+      const cleanUrl = baseUrl.replace(/\/+$/, '');
+      const endpoint = cleanUrl.endsWith('/chat/completions') ? cleanUrl : `${cleanUrl}/chat/completions`;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 seconds safety timeout
+
+      try {
+        let response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'system',
+                content: 'Anda adalah Pakar CBT Pembuat Soal Ujian Kurikulum Merdeka Indonesia. Balas HANYA format JSON object valid dengan field "questions".'
+              },
+              {
+                role: 'user',
+                content: promptText,
+              },
+            ],
+            temperature: 0.6,
+            response_format: { type: 'json_object' },
+          }),
+          signal: controller.signal,
+        });
+
+        // Fallback retry without response_format if not supported by model/proxy
+        if (!response.ok && response.status === 400) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = (errData?.error?.message || '').toLowerCase();
+          if (errMsg.includes('response_format') || errMsg.includes('schema') || errMsg.includes('unrecognized parameter')) {
+            response = await fetch(endpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages: [
+                  {
+                    role: 'system',
+                    content: 'Anda adalah Pakar CBT Pembuat Soal Ujian Kurikulum Merdeka Indonesia. Balas HANYA format JSON object valid dengan field "questions".'
+                  },
+                  {
+                    role: 'user',
+                    content: promptText,
+                  },
+                ],
+                temperature: 0.6,
+              }),
+              signal: controller.signal,
+            });
+          }
+        }
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          const errMsg = errData?.error?.message || errData?.message || `HTTP ${response.status}: ${response.statusText}`;
+          return {
+            success: false,
+            questions: [],
+            error: `Gagal memanggil AI Kustom (${response.status}): ${errMsg}`,
+          };
+        }
+
+        const data = await response.json();
+        const rawContent = data?.choices?.[0]?.message?.content;
+        if (!rawContent) {
+          return {
+            success: false,
+            questions: [],
+            error: 'AI Kustom tidak mengembalikan teks jawaban.',
+          };
+        }
+
+        let cleanJson = rawContent.trim();
+        if (cleanJson.startsWith('```json')) {
+          cleanJson = cleanJson.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+        } else if (cleanJson.startsWith('```')) {
+          cleanJson = cleanJson.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+        }
+
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(cleanJson);
+        } catch {
+          const arrayMatch = cleanJson.match(/\[\s*\{[\s\S]*\}\s*\]/);
+          if (arrayMatch) {
+            try {
+              parsed = JSON.parse(arrayMatch[0]);
+            } catch {}
+          } else {
+            const objMatch = cleanJson.match(/\{\s*"[\s\S]*"\s*:\s*[\s\S]*\}/);
+            if (objMatch) {
+              try {
+                parsed = JSON.parse(objMatch[0]);
+              } catch {}
+            }
+          }
+        }
+
+        let questionList: GeneratedQuestionItem[] = [];
+        if (parsed) {
+          if (Array.isArray(parsed)) {
+            questionList = parsed;
+          } else if (Array.isArray(parsed.questions)) {
+            questionList = parsed.questions;
+          } else if (Array.isArray(parsed.soal)) {
+            questionList = parsed.soal;
+          } else if (Array.isArray(parsed.items)) {
+            questionList = parsed.items;
+          } else if (Array.isArray(parsed.data)) {
+            questionList = parsed.data;
+          } else if (parsed.questionText) {
+            questionList = [parsed];
+          }
+        }
+
+        if (!Array.isArray(questionList) || questionList.length === 0) {
+          return {
+            success: false,
+            questions: [],
+            error: 'Format balasan AI Kustom tidak dapat diubah menjadi daftar soal.',
+          };
+        }
+
+        const mappedQuestions = this.mapGeneratedItems(questionList, params);
+        return {
+          success: true,
+          questions: mappedQuestions,
+        };
+      } catch (err: any) {
+        if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+          return {
+            success: false,
+            questions: [],
+            error: 'Permintaan AI terhenti karena melebihi batas waktu (timeout 45 detik). Server AI merespons terlalu lambat. Coba gunakan Google Gemini AI Studio di Pengaturan Sekolah yang jauh lebih cepat dan stabil.',
+          };
+        }
+        return {
+          success: false,
+          questions: [],
+          error: `Gagal menghubungi penyedia AI kustom: ${err.message || 'Kesalahan jaringan/CORS'}`,
+        };
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // BRANCH B: GOOGLE GEMINI AI STUDIO
+    // -------------------------------------------------------------
+    const apiKey = (explicitKey || getStoredGeminiApiKey()).trim();
+
+    if (!apiKey) {
+      return {
+        success: false,
+        questions: [],
+        error: 'API Key Google Gemini pribadi belum diisi. Masukkan API Key gratis Anda di Pengaturan Sekolah atau tombol Atur Kunci AI.',
+      };
+    }
 
     const candidateModels = await this.getAvailableModels(apiKey);
     let lastError = 'Gagal menghubungi Gemini API.';
 
     // Try candidate models in order until one succeeds
     for (const item of candidateModels) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000);
+
       try {
         const endpoint = `https://generativelanguage.googleapis.com/${item.ver}/models/${item.name}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
@@ -368,7 +1042,7 @@ Keluarkan HANYA JSON murni (array of objects) dengan struktur berikut:
             },
           ],
           generationConfig: {
-            temperature: 0.7,
+            temperature: 0.6,
             topP: 0.95,
             responseMimeType: 'application/json',
           },
@@ -381,6 +1055,7 @@ Keluarkan HANYA JSON murni (array of objects) dengan struktur berikut:
             'x-goog-api-key': apiKey,
           },
           body: JSON.stringify(requestBody),
+          signal: controller.signal,
         });
 
         if (!response.ok) {
@@ -399,7 +1074,7 @@ Keluarkan HANYA JSON murni (array of objects) dengan struktur berikut:
             return {
               success: false,
               questions: [],
-              error: 'Batas kuota Gemini harian/menit terlampaui (Rate limit). Harap tunggu beberapa saat atau gunakan akun Google lain.',
+              error: 'Batas kuota Gemini harian/menit terlampaui (Rate limit). Harap tunggu beberapa saat atau gunakan penyedia alternatif.',
             };
           }
 
@@ -423,88 +1098,61 @@ Keluarkan HANYA JSON murni (array of objects) dengan struktur berikut:
           cleanJson = cleanJson.replace(/^```\s*/i, '').replace(/\s*```$/i, '');
         }
 
-        const parsedArray: GeneratedQuestionItem[] = JSON.parse(cleanJson);
+        let parsed: any = null;
+        try {
+          parsed = JSON.parse(cleanJson);
+        } catch {
+          const arrayMatch = cleanJson.match(/\[\s*\{[\s\S]*\}\s*\]/);
+          if (arrayMatch) {
+            try {
+              parsed = JSON.parse(arrayMatch[0]);
+            } catch {}
+          } else {
+            const objMatch = cleanJson.match(/\{\s*"[\s\S]*"\s*:\s*[\s\S]*\}/);
+            if (objMatch) {
+              try {
+                parsed = JSON.parse(objMatch[0]);
+              } catch {}
+            }
+          }
+        }
 
-        if (!Array.isArray(parsedArray) || parsedArray.length === 0) {
+        let parsedList: GeneratedQuestionItem[] = [];
+        if (parsed) {
+          if (Array.isArray(parsed)) {
+            parsedList = parsed;
+          } else if (Array.isArray(parsed.questions)) {
+            parsedList = parsed.questions;
+          } else if (Array.isArray(parsed.soal)) {
+            parsedList = parsed.soal;
+          } else if (Array.isArray(parsed.items)) {
+            parsedList = parsed.items;
+          } else if (Array.isArray(parsed.data)) {
+            parsedList = parsed.data;
+          } else if (parsed.questionText) {
+            parsedList = [parsed];
+          }
+        }
+
+        if (!Array.isArray(parsedList) || parsedList.length === 0) {
           lastError = 'Format JSON dari AI tidak sesuai format array pertanyaan.';
           continue;
         }
 
-        // Convert into Application Question Format
-        const mappedQuestions: Question[] = parsedArray.map((item, idx) => {
-          const questionId = generateUUID();
-          const qType: QuestionType = item.type || (params.questionType || 'multiple_choice');
+        const mappedQuestions = this.mapGeneratedItems(parsedList, params);
 
-          // Calculate points: check custom type points or default
-          let calculatedPoints = 10;
-          if (params.pointsPerType && typeof params.pointsPerType[qType] === 'number') {
-            calculatedPoints = params.pointsPerType[qType]!;
-          } else if (typeof params.defaultPoints === 'number') {
-            calculatedPoints = params.defaultPoints;
-          } else if (typeof item.points === 'number' && item.points > 0) {
-            calculatedPoints = item.points;
-          }
-
-          let optionsList: { id: string; label: string; text: string }[] = [];
-          let correctOptionId: string | undefined = undefined;
-
-          if (qType === 'multiple_choice') {
-            optionsList = (item.options || []).map((opt, optIdx) => ({
-              id: generateUUID(),
-              label: opt.label || String.fromCharCode(65 + optIdx),
-              text: opt.text || '',
-            }));
-
-            const correctIdx = (item.options || []).findIndex((o) => o.isCorrect);
-            if (correctIdx >= 0 && optionsList[correctIdx]) {
-              correctOptionId = optionsList[correctIdx].id;
-            } else if (optionsList.length > 0) {
-              correctOptionId = optionsList[0].id;
-            }
-          } else if (qType === 'true_false') {
-            const trueId = generateUUID();
-            const falseId = generateUUID();
-            optionsList = [
-              { id: trueId, label: 'Benar', text: 'Benar' },
-              { id: falseId, label: 'Salah', text: 'Salah' },
-            ];
-
-            const trueOpt = (item.options || []).find((o) => o.text?.toLowerCase().includes('benar') && o.isCorrect);
-            const falseOpt = (item.options || []).find((o) => o.text?.toLowerCase().includes('salah') && o.isCorrect);
-
-            if (trueOpt) {
-              correctOptionId = trueId;
-            } else if (falseOpt) {
-              correctOptionId = falseId;
-            } else {
-              correctOptionId = trueId;
-            }
-          } else {
-            // short_answer or essay: options empty
-            optionsList = [];
-          }
-
-          return {
-            id: questionId,
-            number: idx + 1,
-            type: qType,
-            questionText: item.questionText || `Butir Soal #${idx + 1}`,
-            options: optionsList,
-            correctOptionId,
-            correctAnswerText: item.correctAnswerText || undefined,
-            explanation: item.explanation || undefined,
-            points: calculatedPoints,
-          };
-        });
-
-        // Successful generation!
         return {
           success: true,
           questions: mappedQuestions,
         };
       } catch (err: any) {
-        console.warn(`Exception calling model ${item.name} on ${item.ver}:`, err);
-        lastError = err.message || 'Terjadi kesalahan sistem.';
+        if (err.name === 'AbortError' || err.message?.includes('aborted')) {
+          lastError = 'Permintaan ke Gemini API timeout (45 detik).';
+        } else {
+          lastError = err.message || 'Terjadi kesalahan sistem.';
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
 
@@ -513,5 +1161,145 @@ Keluarkan HANYA JSON murni (array of objects) dengan struktur berikut:
       questions: [],
       error: `Gagal memanggil Gemini AI: ${lastError}`,
     };
+  },
+
+  /**
+   * Main entry point to generate questions.
+   * Employs intelligent parallel batching (max 5 questions per batch) so requests
+   * complete in ~15-25 seconds and never hang or exceed gateway token limits.
+   */
+  async generateQuestions(params: AIGenerateParams): Promise<{ success: boolean; questions: Question[]; error?: string }> {
+    const isSingle = params.mode === 'single' || !params.composition;
+    const singleCount = params.count || 5;
+
+    // SINGLE MODE BATCHING
+    if (isSingle) {
+      if (singleCount <= 5) {
+        return this.generateSingleBatch(params);
+      }
+
+      // Split count into batches of max 5 questions each
+      const batches: number[] = [];
+      let rem = singleCount;
+      while (rem > 0) {
+        const batchSize = Math.min(5, rem);
+        batches.push(batchSize);
+        rem -= batchSize;
+      }
+
+      try {
+        const batchPromises = batches.map((size) =>
+          this.generateSingleBatch({ ...params, count: size })
+        );
+        const results = await Promise.all(batchPromises);
+
+        const allQuestions: Question[] = [];
+        let firstError: string | undefined;
+
+        for (const res of results) {
+          if (res.success && res.questions.length > 0) {
+            allQuestions.push(...res.questions);
+          } else if (!firstError && res.error) {
+            firstError = res.error;
+          }
+        }
+
+        if (allQuestions.length === 0) {
+          return {
+            success: false,
+            questions: [],
+            error: firstError || 'Gagal menghasilkan butir soal dari AI.',
+          };
+        }
+
+        // Re-number sequentially
+        const renumbered = allQuestions.map((q, idx) => ({
+          ...q,
+          number: idx + 1,
+        }));
+
+        return {
+          success: true,
+          questions: renumbered,
+        };
+      } catch (err: any) {
+        return {
+          success: false,
+          questions: [],
+          error: `Gagal memproses batch soal: ${err.message || 'Terjadi kesalahan internal'}`,
+        };
+      }
+    }
+
+    // MIXED MODE BATCHING
+    const comp = params.composition!;
+    const totalMixed = (comp.multiple_choice || 0) + (comp.true_false || 0) + (comp.short_answer || 0) + (comp.essay || 0);
+
+    if (totalMixed <= 5) {
+      return this.generateSingleBatch(params);
+    }
+
+    // Break composition into sub-batches of max 5 questions per batch
+    const subBatches: AIGenerateParams[] = [];
+    const typeKeys: QuestionType[] = ['multiple_choice', 'true_false', 'short_answer', 'essay'];
+
+    for (const qType of typeKeys) {
+      const typeCount = comp[qType] || 0;
+      let remaining = typeCount;
+      const pts = params.pointsPerType?.[qType] || params.defaultPoints || 10;
+
+      while (remaining > 0) {
+        const chunkSize = Math.min(5, remaining);
+        subBatches.push({
+          ...params,
+          mode: 'single',
+          questionType: qType,
+          count: chunkSize,
+          defaultPoints: pts,
+        });
+        remaining -= chunkSize;
+      }
+    }
+
+    try {
+      // Run sub-batches in parallel
+      const results = await Promise.all(subBatches.map((b) => this.generateSingleBatch(b)));
+
+      const allQuestions: Question[] = [];
+      let firstError: string | undefined;
+
+      for (const res of results) {
+        if (res.success && res.questions.length > 0) {
+          allQuestions.push(...res.questions);
+        } else if (!firstError && res.error) {
+          firstError = res.error;
+        }
+      }
+
+      if (allQuestions.length === 0) {
+        return {
+          success: false,
+          questions: [],
+          error: firstError || 'Gagal menghasilkan komposisi butir soal dari AI.',
+        };
+      }
+
+      // Re-number sequentially
+      const renumbered = allQuestions.map((q, idx) => ({
+        ...q,
+        number: idx + 1,
+      }));
+
+      return {
+        success: true,
+        questions: renumbered,
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        questions: [],
+        error: `Gagal memproses komposisi soal: ${err.message || 'Terjadi kesalahan sistem'}`,
+      };
+    }
   },
 };

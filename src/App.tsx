@@ -13,13 +13,19 @@ import { UpgradePromptModal } from './components/subscription/UpgradePromptModal
 import { AuthPage } from './components/auth/AuthPage';
 import { LandingPage } from './components/landing/LandingPage';
 import { StudentResultPortalModal } from './components/portal/StudentResultPortalModal';
+import { FloatingWhatsAppButton } from './components/common/FloatingWhatsAppButton';
 import { AppLogoIcon } from './components/common/AppLogo';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { MaintenanceScreen } from './components/common/MaintenanceScreen';
+import { CompleteProfileModal } from './components/common/CompleteProfileModal';
+import { checkProfileCompletion } from './utils/profileValidation';
 import { authService } from './services/authService';
 import { examService, generateUUID } from './services/examService';
 import { subscriptionService } from './services/subscriptionService';
+import { maintenanceService } from './services/maintenanceService';
 import { supabase } from './lib/supabase';
 import { isAppExitViolation } from './utils/formatters';
+import type { MaintenanceConfig } from './types/maintenance';
 import { 
   initialExamSettings, 
   initialQuestions, 
@@ -109,6 +115,36 @@ export function App() {
     };
   }, []);
 
+  const [maintenanceConfig, setMaintenanceConfig] = useState<MaintenanceConfig | null>(null);
+  const [isMaintenanceLoading, setIsMaintenanceLoading] = useState<boolean>(true);
+  const [isMaintenanceBypassed, setIsMaintenanceBypassed] = useState<boolean>(() => {
+    return maintenanceService.isBypassed();
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchMaintenance = async () => {
+      try {
+        const config = await maintenanceService.checkMaintenanceStatus();
+        if (isMounted && config) {
+          setMaintenanceConfig(config);
+          setIsMaintenanceBypassed(maintenanceService.isBypassed(config));
+        }
+      } catch {} finally {
+        if (isMounted) {
+          setIsMaintenanceLoading(false);
+        }
+      }
+    };
+
+    fetchMaintenance();
+    const interval = setInterval(fetchMaintenance, 30000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isSessionLoading, setIsSessionLoading] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<{
@@ -156,6 +192,73 @@ export function App() {
     });
   };
 
+  // Soft Gate & Progressive Profiling Modal State
+  const [isCompleteProfileOpen, setIsCompleteProfileOpen] = useState<boolean>(false);
+  const [pendingActionAfterProfile, setPendingActionAfterProfile] = useState<(() => void) | null>(null);
+  const [completeProfileConfig, setCompleteProfileConfig] = useState<{
+    title?: string;
+    description?: string;
+    allowDismiss?: boolean;
+  }>({
+    allowDismiss: true,
+  });
+
+  const handleOpenCompleteProfile = (config?: {
+    title?: string;
+    description?: string;
+    allowDismiss?: boolean;
+    onSuccessAction?: () => void;
+  }) => {
+    if (config?.onSuccessAction) {
+      setPendingActionAfterProfile(() => config.onSuccessAction);
+    } else {
+      setPendingActionAfterProfile(null);
+    }
+    setCompleteProfileConfig({
+      title: config?.title || 'Lengkapi Identitas Pengajar & Sekolah',
+      description: config?.description || 'Nama sekolah dan nomor WhatsApp diperlukan agar kop soal ujian resmi, token siswa, dan identitas pengajar tercantum valid.',
+      allowDismiss: config?.allowDismiss ?? true,
+    });
+    setIsCompleteProfileOpen(true);
+  };
+
+  const executeWithProfileCheck = (action: () => void, promptReason?: { title?: string; description?: string }) => {
+    const status = checkProfileCompletion(currentUser);
+    if (!status.isComplete) {
+      handleOpenCompleteProfile({
+        title: promptReason?.title || 'Lengkapi Identitas Pengajar & Sekolah',
+        description: promptReason?.description || 'Lengkapi nama sekolah dan nomor WhatsApp Anda agar kop ujian dan token siswa berfungsi resmi.',
+        allowDismiss: true,
+        onSuccessAction: action,
+      });
+      return false;
+    }
+    action();
+    return true;
+  };
+
+  const handleProfileSaved = (updated: {
+    name: string;
+    school: string;
+    whatsapp: string;
+    nip?: string;
+    npsn?: string;
+    subject?: string;
+  }) => {
+    setCurrentUser((prev) => ({
+      ...prev,
+      ...updated,
+    }));
+
+    if (pendingActionAfterProfile) {
+      const action = pendingActionAfterProfile;
+      setPendingActionAfterProfile(null);
+      setTimeout(() => {
+        action();
+      }, 150);
+    }
+  };
+
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const [subscription, setSubscription] = useState<TeacherSubscription>({
@@ -166,7 +269,7 @@ export function App() {
     expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     daysRemaining: 30,
     isTrial: false,
-    maxExamsPerMonth: 3,
+    maxExamsPerMonth: 10,
     maxStudentsPerExam: 40,
     canUseCustomLogo: false,
     canExportAdvanced: false,
@@ -227,11 +330,16 @@ export function App() {
           if (isOAuthCallback) {
             setCurrentView('portal');
             window.history.replaceState(null, '', '/portal');
-          }
-
-          // Jika biodata sekolah belum lengkap, otomatis arahkan ke Pengaturan Sekolah
-          if (!user.school || user.school.trim() === '') {
-            setActiveTab('settings');
+            const profStatus = checkProfileCompletion(user);
+            if (!profStatus.isComplete) {
+              setTimeout(() => {
+                handleOpenCompleteProfile({
+                  title: 'Selamat Datang di UjianPintar PRO!',
+                  description: 'Akun Google Anda berhasil terhubung. Mari lengkapi nama sekolah dan nomor WhatsApp Anda agar siap menerbitkan ujian.',
+                  allowDismiss: true,
+                });
+              }, 1200);
+            }
           }
 
           // 1. INSTANT DISPLAY FROM LOCAL CACHE (0ms response):
@@ -635,28 +743,53 @@ export function App() {
   };
 
   const handleToggleExamAccess = async (examId: string, newStatus: 'published' | 'closed') => {
-    try {
-      setAllExams((prev) => prev.map((e) => (e.id === examId ? { ...e, status: newStatus } : e)));
-      if (examSettings.id === examId) {
-        setExamSettings((prev) => ({ ...prev, status: newStatus }));
+    const proceedToggle = async () => {
+      try {
+        setAllExams((prev) => prev.map((e) => (e.id === examId ? { ...e, status: newStatus } : e)));
+        if (examSettings.id === examId) {
+          setExamSettings((prev) => ({ ...prev, status: newStatus }));
+        }
+        await examService.updateExamStatus(examId, newStatus);
+      } catch (err) {
+        console.warn('handleToggleExamAccess error:', err);
+        await refreshTeacherExams();
       }
-      await examService.updateExamStatus(examId, newStatus);
-    } catch (err) {
-      console.warn('handleToggleExamAccess error:', err);
-      await refreshTeacherExams();
+    };
+
+    if (newStatus === 'published') {
+      const profStatus = checkProfileCompletion(currentUser);
+      if (!profStatus.isComplete) {
+        handleOpenCompleteProfile({
+          title: 'Lengkapi Data Sekolah & WhatsApp',
+          description: 'Sebelum membuka akses ujian untuk siswa, mohon lengkapi nama sekolah dan nomor WhatsApp Anda agar kop soal dan token ujian terdata resmi.',
+          allowDismiss: true,
+          onSuccessAction: proceedToggle,
+        });
+        return;
+      }
     }
+
+    await proceedToggle();
   };
 
-  const handleLoginSuccess = async (userData: { id?: string; name: string; email: string; school: string; subject: string }) => {
-    setCurrentUser(userData);
+  const handleLoginSuccess = async (userData: { 
+    id?: string; 
+    name: string; 
+    email: string; 
+    school: string; 
+    subject: string;
+    nip?: string;
+    npsn?: string;
+    whatsapp?: string;
+  }) => {
+    setCurrentUser((prev) => ({
+      ...prev,
+      ...userData,
+    }));
     setIsAuthenticated(true);
     setCurrentView('portal');
     window.history.pushState(null, '', '/portal');
 
-    // Jika biodata sekolah belum diisi, otomatis buka tab settings
-    if (!userData.school || userData.school.trim() === '') {
-      setActiveTab('settings');
-    }
     // Clear previous memory telemetry
     setStudents([]);
     setGrades([]);
@@ -745,16 +878,67 @@ export function App() {
     examService.recordStudentSubmission(newStudent, newGrade, examSettings.id, answers);
   };
 
+  // Render banner peringatan jika admin sedang berada di mode bypass maintenance
+  const renderBypassWarningBanner = () => {
+    if (!maintenanceConfig?.isMaintenance || !isMaintenanceBypassed) return null;
+    return (
+      <div className="fixed top-0 inset-x-0 z-[99999] bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-slate-950 px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-xl select-none">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping shrink-0" />
+          <span className="truncate">
+            <strong>Mode Maintenance Aktif:</strong> Pengunjung umum diarahkan ke halaman pemeliharaan. Anda sedang menggunakan <u>Akses Bypass Penguji/Admin</u>.
+          </span>
+        </div>
+        <button
+          onClick={() => {
+            maintenanceService.clearBypass();
+            setIsMaintenanceBypassed(false);
+          }}
+          className="shrink-0 ml-3 px-3 py-1 bg-slate-950 hover:bg-slate-900 text-white rounded-lg text-xs font-bold transition-all shadow cursor-pointer"
+        >
+          Keluar Mode Bypass
+        </button>
+      </div>
+    );
+  };
+
+  // Tunggu pengecekan status maintenance selesai (mencegah flash tampilan normal)
+  if (isMaintenanceLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Tampilkan Layar Pemeliharaan Sistem (Maintenance Screen) jika aktif & belum di-bypass
+  if (maintenanceConfig?.isMaintenance && !isMaintenanceBypassed) {
+    return (
+      <MaintenanceScreen
+        config={maintenanceConfig}
+        onBypassSuccess={() => setIsMaintenanceBypassed(true)}
+        onRefreshCheck={async () => {
+          const latest = await maintenanceService.checkMaintenanceStatus();
+          setMaintenanceConfig(latest);
+          return latest?.isMaintenance ?? false;
+        }}
+      />
+    );
+  }
+
   // Super Admin Dedicated Standalone Route & Portal
   if (isSuperAdminRoute) {
     return (
-      <SuperAdminPortal
-        onExit={() => {
-          window.history.pushState(null, '', '/');
-          setIsSuperAdminRoute(false);
-          setCurrentView('landing');
-        }}
-      />
+      <>
+        {renderBypassWarningBanner()}
+        <SuperAdminPortal
+          onExit={() => {
+            window.history.pushState(null, '', '/');
+            setIsSuperAdminRoute(false);
+            setCurrentView('landing');
+          }}
+        />
+      </>
     );
   }
 
@@ -782,6 +966,7 @@ export function App() {
   if (currentView === 'landing') {
     return (
       <>
+        {renderBypassWarningBanner()}
         <LandingPage
           isAuthenticated={isAuthenticated}
           currentUser={currentUser}
@@ -828,6 +1013,12 @@ export function App() {
             }
           }}
         />
+
+        {/* Floating WhatsApp Hotline Button */}
+        <FloatingWhatsAppButton
+          defaultMessage="Halo Admin UjianPintar, saya ingin bertanya seputar platform UjianPintar..."
+          hidden={isMobilePreviewOpen || isStudentPortalOpen}
+        />
       </>
     );
   }
@@ -835,14 +1026,20 @@ export function App() {
   // 2. Auth Page (Login / Signup)
   if (currentView === 'auth' || !isAuthenticated) {
     return (
-      <AuthPage 
-        initialMode={authInitialMode}
-        onLoginSuccess={handleLoginSuccess} 
-        onBackToLanding={() => {
-          setCurrentView('landing');
-          window.history.pushState(null, '', '/');
-        }}
-      />
+      <>
+        {renderBypassWarningBanner()}
+        <AuthPage 
+          initialMode={authInitialMode}
+          onLoginSuccess={handleLoginSuccess} 
+          onBackToLanding={() => {
+            setCurrentView('landing');
+            window.history.pushState(null, '', '/');
+          }}
+        />
+        <FloatingWhatsAppButton
+          defaultMessage="Halo Admin UjianPintar, saya butuh bantuan seputar akun atau pendaftaran..."
+        />
+      </>
     );
   }
 
@@ -930,6 +1127,7 @@ export function App() {
 
   return (
     <div className="flex h-screen bg-slate-100/75 text-slate-900 font-sans antialiased overflow-hidden">
+      {renderBypassWarningBanner()}
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
@@ -969,28 +1167,29 @@ export function App() {
 
         {/* Banner Pengingat Lengkapi Profil Sekolah */}
         {(() => {
-          const missingFields: string[] = [];
-          if (!currentUser.school || currentUser.school.trim() === '' || currentUser.school === 'Satuan Pendidikan') missingFields.push('Nama Sekolah');
-          if (!currentUser.nip || currentUser.nip.trim() === '') missingFields.push('NIP');
-          if (!currentUser.npsn || currentUser.npsn.trim() === '') missingFields.push('NPSN');
-          if (missingFields.length === 0 || activeTab === 'settings') return null;
+          const status = checkProfileCompletion(currentUser);
+          if (status.isComplete) return null;
+
           return (
             <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-4 py-2.5 flex items-center justify-between gap-3 shadow-sm text-xs font-medium animate-in fade-in shrink-0">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-base shrink-0">⚠️</span>
                 <span className="leading-tight">
-                  <strong>Profil Sekolah Belum Lengkap</strong>
-                  {' — '}
-                  Data <strong>{missingFields.join(', ')}</strong> masih kosong.
-                  {' '}Kop surat dan SKHU PDF siswa tidak akan terisi dengan benar.
+                  <strong>Profil Pengajar Belum Lengkap:</strong>
+                  {' '}Data <strong>{status.missingFields.join(', ')}</strong> belum diisi.
+                  {' '}Kop surat ujian dan notifikasi token siswa membutuhkan kelengkapan data ini.
                 </span>
               </div>
               <button
                 type="button"
-                onClick={() => setActiveTab('settings')}
+                onClick={() => handleOpenCompleteProfile({
+                  title: 'Lengkapi Identitas Pengajar & Sekolah',
+                  description: 'Nama sekolah dan nomor WhatsApp diperlukan agar kop soal ujian resmi, token siswa, dan identitas pengajar tercantum valid.',
+                  allowDismiss: true,
+                })}
                 className="px-3 py-1 bg-white text-amber-900 rounded-lg font-bold text-xs hover:bg-amber-50 active:bg-amber-100 transition-colors shadow-sm whitespace-nowrap cursor-pointer flex items-center gap-1 shrink-0"
               >
-                <span>Lengkapi →</span>
+                <span>Lengkapi Sekarang →</span>
               </button>
             </div>
           );
@@ -1024,6 +1223,7 @@ export function App() {
                 setIsMobilePreviewOpen={setIsMobilePreviewOpen}
                 onStudentSubmit={handleStudentSubmit}
                 onToggleExamAccess={handleToggleExamAccess}
+                onRequireCompleteProfile={executeWithProfileCheck}
               />
             )}
 
@@ -1059,6 +1259,7 @@ export function App() {
                 subscription={subscription}
                 questions={questions}
                 onOpenUpgradeModal={handleOpenUpgradeModal}
+                onRequireCompleteProfile={executeWithProfileCheck}
               />
             )}
 
@@ -1122,6 +1323,23 @@ export function App() {
             window.history.pushState(null, '', window.location.pathname);
           }
         }}
+      />
+
+      {/* Floating WhatsApp Hotline Button */}
+      <FloatingWhatsAppButton
+        defaultMessage="Halo Admin UjianPintar, saya ingin bertanya seputar platform UjianPintar..."
+        hidden={isMobilePreviewOpen || isStudentPortalOpen}
+      />
+
+      {/* Soft Gate & Progressive Profiling Modal */}
+      <CompleteProfileModal
+        isOpen={isCompleteProfileOpen}
+        onClose={() => setIsCompleteProfileOpen(false)}
+        allowDismiss={completeProfileConfig.allowDismiss}
+        title={completeProfileConfig.title}
+        description={completeProfileConfig.description}
+        currentUser={currentUser}
+        onSaveSuccess={handleProfileSaved}
       />
     </div>
   );

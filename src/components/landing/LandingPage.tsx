@@ -1614,6 +1614,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   </div>
                   <div className="flex items-start gap-2.5">
                     <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                    <span>Maksimal 10 paket soal aktif</span>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                     <span>Maksimal 3 sesi ujian aktif per bulan</span>
                   </div>
                   <div className="flex items-start gap-2.5">
@@ -1708,6 +1712,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 <div className="space-y-2.5 text-xs border-t border-slate-700/80 pt-4 text-slate-200">
                   <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">
                     Fitur Unggulan PRO:
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <Check className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                    <span>Kapasitas hingga <strong>20 modul / paket soal aktif</strong></span>
                   </div>
                   <div className="flex items-start gap-2.5">
                     <Check className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />

@@ -14,11 +14,16 @@ import {
   Award, 
   ChevronDown, 
   ChevronUp,
-  Key
+  Key,
+  Filter,
+  ArrowUpDown,
+  Ban,
+  RotateCcw
 } from 'lucide-react';
 import type { EssayGradingItem, GradeRecord } from '../../types/exam';
 import { examService } from '../../services/examService';
 import { aiEssayGradingService } from '../../services/aiEssayGradingService';
+import { aiQuestionService } from '../../services/aiQuestionService';
 import { MathRenderer } from '../common/MathRenderer';
 import { GeminiApiKeySettings } from '../common/GeminiApiKeySettings';
 
@@ -56,10 +61,15 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
   const [aiProgress, setAiProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [analyzingCardId, setAnalyzingCardId] = useState<string | null>(null);
 
-  // Filters
+  // Filters & Sorting State
   const [selectedQuestionFilter, setSelectedQuestionFilter] = useState<string>('all');
+  const [selectedClassFilter, setSelectedClassFilter] = useState<string>('all');
+  const [filterGradedStatus, setFilterGradedStatus] = useState<'all' | 'pending' | 'graded' | 'has_ai' | 'no_ai'>('all');
+  const [filterAnswerQuality, setFilterAnswerQuality] = useState<'all' | 'empty' | 'short' | 'long'>('all');
+  const [sortBy, setSortBy] = useState<'name_asc' | 'name_desc' | 'class_asc' | 'length_desc' | 'score_asc' | 'score_desc'>('name_asc');
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterGradedStatus, setFilterGradedStatus] = useState<'all' | 'graded' | 'pending'>('all');
+  const [skipGradedInAI, setSkipGradedInAI] = useState(true);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
   const [expandedRubrics, setExpandedRubrics] = useState<Record<string, boolean>>({});
 
   // Sync stored API key on open
@@ -80,10 +90,12 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
 
   const handleKeySaved = (key: string) => {
     setStoredApiKey(key);
+    aiQuestionService.setAISettings({ activeProvider: 'gemini', geminiApiKey: key });
     setShowApiKeySettings(false);
   };
 
   const handleKeyRemoved = () => {
+    aiQuestionService.setAISettings({ geminiApiKey: '' });
     setStoredApiKey('');
     setShowApiKeySettings(true);
   };
@@ -101,6 +113,18 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
     }
   };
 
+  // List of distinct classes
+  const availableClasses = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((item) => {
+      const cls = (item.className || '').trim();
+      if (cls && cls !== '-') {
+        set.add(cls);
+      }
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'id', { numeric: true }));
+  }, [items]);
+
   // List of distinct essay questions
   const distinctQuestions = useMemo(() => {
     const map = new Map<string, { id: string; number: number; text: string; maxPoints: number }>();
@@ -117,23 +141,68 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
     return Array.from(map.values()).sort((a, b) => a.number - b.number);
   }, [items]);
 
-  // Filtered items
+  // Check if any filter is active
+  const hasActiveFilter = useMemo(() => {
+    return (
+      selectedQuestionFilter !== 'all' ||
+      selectedClassFilter !== 'all' ||
+      filterGradedStatus !== 'all' ||
+      filterAnswerQuality !== 'all' ||
+      searchQuery.trim().length > 0
+    );
+  }, [selectedQuestionFilter, selectedClassFilter, filterGradedStatus, filterAnswerQuality, searchQuery]);
+
+  // Reset all filters
+  const handleResetFilters = () => {
+    setSelectedQuestionFilter('all');
+    setSelectedClassFilter('all');
+    setFilterGradedStatus('all');
+    setFilterAnswerQuality('all');
+    setSearchQuery('');
+    setSortBy('name_asc');
+  };
+
+  // Filtered & Sorted items
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const result = items.filter((item) => {
       // 1. Question filter
       if (selectedQuestionFilter !== 'all' && item.questionId !== selectedQuestionFilter) {
         return false;
       }
 
-      // 2. Graded status filter
+      // 2. Class filter
+      if (selectedClassFilter !== 'all' && (item.className || '').trim() !== selectedClassFilter) {
+        return false;
+      }
+
+      // 3. Graded & AI status filter
       if (filterGradedStatus === 'graded' && !item.isGraded) {
         return false;
       }
       if (filterGradedStatus === 'pending' && item.isGraded) {
         return false;
       }
+      if (filterGradedStatus === 'has_ai' && typeof item.aiSuggestedScore !== 'number') {
+        return false;
+      }
+      if (filterGradedStatus === 'no_ai' && typeof item.aiSuggestedScore === 'number') {
+        return false;
+      }
 
-      // 3. Search query (name or NISN)
+      // 4. Answer quality filter
+      const ansText = (item.studentAnswer || '').trim();
+      const wordCount = ansText ? ansText.split(/\s+/).filter(Boolean).length : 0;
+      if (filterAnswerQuality === 'empty' && ansText.length > 0) {
+        return false;
+      }
+      if (filterAnswerQuality === 'short' && (ansText.length === 0 || wordCount >= 10)) {
+        return false;
+      }
+      if (filterAnswerQuality === 'long' && wordCount < 10) {
+        return false;
+      }
+
+      // 5. Search query (name, NISN, or class)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchName = item.studentName.toLowerCase().includes(q);
@@ -144,11 +213,56 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
 
       return true;
     });
-  }, [items, selectedQuestionFilter, filterGradedStatus, searchQuery]);
+
+    // 6. Sorting
+    return [...result].sort((a, b) => {
+      switch (sortBy) {
+        case 'name_desc':
+          return b.studentName.localeCompare(a.studentName, 'id');
+        case 'class_asc': {
+          const cComp = (a.className || '').localeCompare(b.className || '', 'id', { numeric: true });
+          if (cComp !== 0) return cComp;
+          return a.studentName.localeCompare(b.studentName, 'id');
+        }
+        case 'length_desc': {
+          const lenA = (a.studentAnswer || '').trim().length;
+          const lenB = (b.studentAnswer || '').trim().length;
+          return lenB - lenA;
+        }
+        case 'score_desc': {
+          const sA = a.scoreEarned ?? -1;
+          const sB = b.scoreEarned ?? -1;
+          return sB - sA;
+        }
+        case 'score_asc': {
+          const sA = a.scoreEarned ?? 9999;
+          const sB = b.scoreEarned ?? 9999;
+          return sA - sB;
+        }
+        case 'name_asc':
+        default:
+          return a.studentName.localeCompare(b.studentName, 'id');
+      }
+    });
+  }, [items, selectedQuestionFilter, selectedClassFilter, filterGradedStatus, filterAnswerQuality, searchQuery, sortBy]);
 
   const totalCount = items.length;
   const gradedCount = items.filter((i) => i.isGraded).length;
   const pendingCount = totalCount - gradedCount;
+  const emptyPendingCount = useMemo(() => {
+    return items.filter((i) => !i.studentAnswer?.trim() && !i.isGraded).length;
+  }, [items]);
+
+  // Target candidate items for batch AI evaluation (respecting filters & skipGradedInAI)
+  const itemsToEval = useMemo(() => {
+    const baseList = hasActiveFilter ? filteredItems : items;
+    return baseList.filter((item) => {
+      if (skipGradedInAI && item.isGraded) return false;
+      return true;
+    });
+  }, [hasActiveFilter, filteredItems, items, skipGradedInAI]);
+
+  const itemsToEvalCount = itemsToEval.length;
 
   // Toggle rubric accordion
   const toggleRubric = (questionId: string) => {
@@ -184,26 +298,51 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
     });
   };
 
-  // 1-Click Batch AI Evaluation
+  // Auto-zero all empty answers
+  const handleAutoZeroEmptyAnswers = () => {
+    const count = items.filter((i) => !i.studentAnswer?.trim() && !i.isGraded).length;
+    if (count === 0) return;
+
+    setItems((prev) =>
+      prev.map((item) => {
+        if (!item.studentAnswer?.trim() && !item.isGraded) {
+          return {
+            ...item,
+            scoreEarned: 0,
+            isGraded: true,
+            teacherFeedback: item.teacherFeedback || 'Jawaban kosong (tidak dijawab).',
+          };
+        }
+        return item;
+      })
+    );
+
+    setInfoMessage(
+      `Berhasil memberikan nilai 0 untuk ${count} lembar jawaban kosong. Klik tombol 'Simpan & Perbarui Nilai Siswa' untuk menyimpan permanen ke rapor.`
+    );
+    setTimeout(() => setInfoMessage(null), 5000);
+  };
+
+  // 1-Click Batch AI Evaluation (targeted to itemsToEval)
   const handleStartAIEvaluation = async () => {
-    const key = (storedApiKey || aiEssayGradingService.getStoredApiKey()).trim();
-    if (!key) {
-      setErrorMessage('Harap atur dan simpan API Key Google Gemini pribadi Anda terlebih dahulu.');
+    const hasConfig = aiQuestionService.hasActiveConfig();
+    if (!hasConfig) {
+      setErrorMessage('Harap atur API Key Google Gemini atau Token AI Kustom di Pengaturan Sekolah terlebih dahulu.');
       setShowApiKeySettings(true);
       return;
     }
 
-    if (items.length === 0) {
-      setErrorMessage('Belum ada data lembar jawaban siswa yang dapat dianalisis.');
+    if (itemsToEval.length === 0) {
+      setErrorMessage('Tidak ada lembar jawaban siswa yang perlu dievaluasi dengan kriteria filter saat ini.');
       return;
     }
 
     setIsAnalyzingAI(true);
     setErrorMessage(null);
-    setAiProgress({ current: 0, total: items.length });
+    setAiProgress({ current: 0, total: itemsToEval.length });
 
     try {
-      const evalRequests = items.map((item) => ({
+      const evalRequests = itemsToEval.map((item) => ({
         id: `${item.sessionId}_${item.questionId}`,
         studentName: item.studentName,
         questionText: item.questionText,
@@ -212,9 +351,12 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
         studentAnswer: item.studentAnswer,
       }));
 
+      const aiSettings = aiQuestionService.getAISettings();
+      const apiKeyToPass = aiSettings.activeProvider === 'gemini' ? (storedApiKey || aiSettings.geminiApiKey) : undefined;
+
       const results = await aiEssayGradingService.batchEvaluateEssays(
         evalRequests,
-        key,
+        apiKeyToPass,
         (current, total) => setAiProgress({ current, total })
       );
 
@@ -262,9 +404,9 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
     const target = items[indexInAll];
     if (!target) return;
 
-    const key = (storedApiKey || aiEssayGradingService.getStoredApiKey()).trim();
-    if (!key) {
-      setErrorMessage('Harap atur dan simpan API Key Google Gemini pribadi Anda terlebih dahulu.');
+    const hasConfig = aiQuestionService.hasActiveConfig();
+    if (!hasConfig) {
+      setErrorMessage('Harap atur API Key Google Gemini atau Token AI Kustom di Pengaturan Sekolah terlebih dahulu.');
       setShowApiKeySettings(true);
       return;
     }
@@ -274,6 +416,9 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
     setErrorMessage(null);
 
     try {
+      const aiSettings = aiQuestionService.getAISettings();
+      const apiKeyToPass = aiSettings.activeProvider === 'gemini' ? (storedApiKey || aiSettings.geminiApiKey) : undefined;
+
       const res = await aiEssayGradingService.evaluateSingleEssay(
         {
           id: cardId,
@@ -283,7 +428,7 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
           maxPoints: target.maxPoints,
           studentAnswer: target.studentAnswer,
         },
-        key
+        apiKeyToPass
       );
 
       if (res.success) {
@@ -310,11 +455,14 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
     }
   };
 
-  // Batch apply all AI suggested scores
+  // Batch apply all AI suggested scores (respecting current filters)
   const handleApplyAllAIScores = () => {
+    const targetSet = new Set((hasActiveFilter ? filteredItems : items).map((i) => `${i.sessionId}_${i.questionId}`));
+
     setItems((prev) =>
       prev.map((item) => {
-        if (typeof item.aiSuggestedScore === 'number') {
+        const key = `${item.sessionId}_${item.questionId}`;
+        if (targetSet.has(key) && typeof item.aiSuggestedScore === 'number') {
           return {
             ...item,
             scoreEarned: item.aiSuggestedScore,
@@ -385,10 +533,10 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
                 <span className="px-2 py-0.5 bg-amber-400/20 border border-amber-300/30 text-amber-200 rounded-md text-[11px] font-mono font-bold">
                   HUMAN-IN-THE-LOOP
                 </span>
-                {storedApiKey ? (
+                {aiQuestionService.hasActiveConfig() ? (
                   <span className="px-2 py-0.5 bg-emerald-400/20 border border-emerald-300/30 text-emerald-200 rounded-md text-[11px] font-sans font-bold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Gemini AI: {storedApiKey.slice(0, 6)}...{storedApiKey.slice(-4)}
+                    AI: {aiQuestionService.getActiveProviderInfo().providerName}
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 bg-rose-400/20 border border-rose-300/30 text-rose-200 rounded-md text-[11px] font-sans font-bold">
@@ -410,7 +558,7 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
               title="Pengaturan API Key Google Gemini"
             >
               <Key className="w-3.5 h-3.5 text-amber-300" />
-              <span>{showApiKeySettings ? 'Tutup Key' : storedApiKey ? 'Ubah Key' : 'Atur Key AI'}</span>
+              <span>{showApiKeySettings ? 'Tutup Key' : aiQuestionService.hasActiveConfig() ? 'Ubah Key' : 'Atur Key AI'}</span>
             </button>
 
             <button
@@ -427,6 +575,9 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
         {showApiKeySettings && (
           <div className="bg-indigo-950 border-b border-indigo-800 p-4 text-white animate-in slide-in-from-top duration-200">
             <div className="max-w-xl space-y-2">
+              <p className="text-xs text-indigo-200 leading-relaxed">
+                Kunci ini disinkronkan secara otomatis dengan <strong>Pengaturan Sekolah</strong> dan fitur <strong>Buat Soal AI</strong>. Anda juga dapat memilih penyedia kustom (Groq, DeepSeek, OpenRouter) di Pengaturan Sekolah.
+              </p>
               <GeminiApiKeySettings
                 variant="dark"
                 currentKey={storedApiKey}
@@ -444,27 +595,47 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
           <div className="flex items-center gap-2 flex-wrap text-xs">
             <div className="h-8 px-3 bg-white border border-slate-200 rounded-xl flex items-center gap-2 shadow-2xs">
               <Layers className="w-3.5 h-3.5 text-slate-500" />
-              <span className="font-sans text-slate-600">Total Jawaban:</span>
+              <span className="font-sans text-slate-600">Total:</span>
               <span className="font-mono font-bold text-slate-900">{totalCount}</span>
             </div>
 
             <div className="h-8 px-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2 shadow-2xs">
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span className="font-sans text-emerald-800">Selesai Dinilai:</span>
+              <span className="font-sans text-emerald-800">Selesai:</span>
               <span className="font-mono font-bold text-emerald-950">{gradedCount}</span>
             </div>
 
             {pendingCount > 0 && (
               <div className="h-8 px-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 shadow-2xs">
                 <Clock className="w-3.5 h-3.5 text-amber-600" />
-                <span className="font-sans text-amber-800">Belum Dinilai:</span>
+                <span className="font-sans text-amber-800">Belum:</span>
                 <span className="font-mono font-bold text-amber-950">{pendingCount}</span>
+              </div>
+            )}
+
+            {emptyPendingCount > 0 && (
+              <div className="h-8 px-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-1.5 shadow-2xs text-rose-800">
+                <Ban className="w-3.5 h-3.5 text-rose-600" />
+                <span className="font-sans">Kosong:</span>
+                <span className="font-mono font-bold text-rose-950">{emptyPendingCount}</span>
               </div>
             )}
           </div>
 
-          {/* Right: AI Actions */}
+          {/* Right: Quick Batch Actions & AI */}
           <div className="flex items-center gap-2 flex-wrap">
+            {emptyPendingCount > 0 && (
+              <button
+                type="button"
+                onClick={handleAutoZeroEmptyAnswers}
+                className="h-8 px-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl text-xs font-display font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                title="Otomatis beri nilai 0 untuk jawaban uraian kosong tanpa membuang kuota AI"
+              >
+                <Ban className="w-3.5 h-3.5 text-amber-600" />
+                <span>Beri Skor 0 Kosong ({emptyPendingCount})</span>
+              </button>
+            )}
+
             {items.some((i) => typeof i.aiSuggestedScore === 'number') && (
               <button
                 type="button"
@@ -473,28 +644,45 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
                 title="Terapkan seluruh rekomendasi nilai AI ke kolom penilaian guru"
               >
                 <Check className="w-3.5 h-3.5 text-indigo-600 stroke-[3]" />
-                <span>Setujui Semua Usulan AI</span>
+                <span>Setujui Usulan AI</span>
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={handleStartAIEvaluation}
-              disabled={isAnalyzingAI || totalCount === 0}
-              className="h-8 px-3.5 bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-700 hover:via-indigo-700 hover:to-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-display font-bold transition-all shadow-xs shadow-indigo-500/20 cursor-pointer flex items-center gap-1.5"
-            >
-              {isAnalyzingAI ? (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
-                  <span>Menganalisis ({aiProgress.current}/{aiProgress.total})...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-3.5 h-3.5 text-amber-300 fill-amber-300 animate-pulse" />
-                  <span>Koreksi Semua dengan AI (1-Klik)</span>
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl pl-2.5 pr-1 py-0.5 shadow-2xs">
+              <label className="hidden sm:inline-flex items-center gap-1.5 text-[11px] font-sans text-slate-600 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={skipGradedInAI}
+                  onChange={(e) => setSkipGradedInAI(e.target.checked)}
+                  className="w-3.5 h-3.5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                />
+                <span>Lewati yg sudah dinilai</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={handleStartAIEvaluation}
+                disabled={isAnalyzingAI || itemsToEvalCount === 0}
+                className="h-7 px-3 bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600 hover:from-violet-700 hover:via-indigo-700 hover:to-blue-700 disabled:opacity-40 text-white rounded-lg text-xs font-display font-bold transition-all shadow-xs shadow-indigo-500/20 cursor-pointer flex items-center gap-1.5"
+                title="Jalankan evaluasi AI sesuai filter yang aktif"
+              >
+                {isAnalyzingAI ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-white" />
+                    <span>Menganalisis ({aiProgress.current}/{aiProgress.total})...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300 fill-amber-300 animate-pulse" />
+                    <span>
+                      {hasActiveFilter 
+                        ? `Koreksi AI Terfilter (${itemsToEvalCount})` 
+                        : `Koreksi AI (${itemsToEvalCount})`}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -506,6 +694,20 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
           </div>
         )}
 
+        {infoMessage && (
+          <div className="p-3 mx-5 mt-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-xs flex items-center gap-2 animate-in fade-in">
+            <CheckCircle2 className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span className="flex-1 font-medium">{infoMessage}</span>
+            <button
+              type="button"
+              onClick={() => setInfoMessage(null)}
+              className="text-amber-500 hover:text-amber-700 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {saveSuccess && (
           <div className="p-3 mx-5 mt-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center gap-2 animate-in fade-in">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
@@ -513,61 +715,152 @@ export const EssayGradingModal: React.FC<EssayGradingModalProps> = ({
           </div>
         )}
 
-        {/* 4. Filters Bar */}
-        <div className="p-3.5 px-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+        {/* 4. Enriched Filters & Search Bar */}
+        <div className="p-3.5 px-5 border-b border-slate-100 space-y-3 bg-white">
           
-          {/* Question Filter Pills */}
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hover py-0.5">
-            <button
-              type="button"
-              onClick={() => setSelectedQuestionFilter('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-display font-bold border transition-colors cursor-pointer flex-shrink-0 ${
-                selectedQuestionFilter === 'all'
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              Semua Soal Uraian ({distinctQuestions.length})
-            </button>
-            {distinctQuestions.map((q) => (
+          {/* Row 1: Question Pills & Search Box */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Question Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hover py-0.5 max-w-full">
               <button
-                key={q.id}
                 type="button"
-                onClick={() => setSelectedQuestionFilter(q.id)}
+                onClick={() => setSelectedQuestionFilter('all')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-display font-bold border transition-colors cursor-pointer flex-shrink-0 ${
-                  selectedQuestionFilter === q.id
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  selectedQuestionFilter === 'all'
+                    ? 'bg-slate-900 text-white border-slate-900'
                     : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                 }`}
               >
-                Soal #{q.number} ({q.maxPoints} pt)
+                Semua Soal ({distinctQuestions.length})
               </button>
-            ))}
-          </div>
+              {distinctQuestions.map((q) => (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => setSelectedQuestionFilter(q.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-display font-bold border transition-colors cursor-pointer flex-shrink-0 ${
+                    selectedQuestionFilter === q.id
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                      : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  Soal #{q.number} ({q.maxPoints} pt)
+                </button>
+              ))}
+            </div>
 
-          {/* Right: Search & Status Filter */}
-          <div className="flex items-center gap-2 flex-wrap">
+            {/* Search Input with Clear Button */}
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Cari siswa atau NISN..."
+                placeholder="Cari siswa, NISN, atau kelas..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-8 pl-8 pr-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 w-44"
+                className="h-8 pl-8 pr-7 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 w-52 sm:w-60"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  title="Hapus pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Granular Select Filters & Sorting Controls */}
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-slate-100">
+            <div className="flex flex-wrap items-center gap-2">
+              
+              {/* Filter Kelas */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 min-w-[130px]">
+                <Layers className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                <select
+                  value={selectedClassFilter}
+                  onChange={(e) => setSelectedClassFilter(e.target.value)}
+                  className="w-full bg-transparent text-xs font-display font-semibold text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Semua Kelas ({availableClasses.length})</option>
+                  {availableClasses.map((cls) => (
+                    <option key={cls} value={cls}>
+                      Kelas {cls.replace(/^kelas\s*/i, '')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filter Status Penilaian & AI */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 min-w-[140px]">
+                <Filter className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                <select
+                  value={filterGradedStatus}
+                  onChange={(e) => setFilterGradedStatus(e.target.value as any)}
+                  className="w-full bg-transparent text-xs font-display font-semibold text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Semua Status</option>
+                  <option value="pending">Belum Dinilai ({pendingCount})</option>
+                  <option value="graded">Sudah Dinilai ({gradedCount})</option>
+                  <option value="has_ai">Ada Usulan AI</option>
+                  <option value="no_ai">Belum Ada AI</option>
+                </select>
+              </div>
+
+              {/* Filter Kualitas / Panjang Jawaban */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 min-w-[145px]">
+                <FileText className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                <select
+                  value={filterAnswerQuality}
+                  onChange={(e) => setFilterAnswerQuality(e.target.value as any)}
+                  className="w-full bg-transparent text-xs font-display font-semibold text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="all">Semua Jawaban</option>
+                  <option value="empty">Jawaban Kosong</option>
+                  <option value="short">Jawaban Singkat (&lt; 10 kata)</option>
+                  <option value="long">Jawaban Panjang (≥ 10 kata)</option>
+                </select>
+              </div>
+
+              {/* Urutkan / Sorting */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1 min-w-[140px]">
+                <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="w-full bg-transparent text-xs font-display font-semibold text-slate-700 focus:outline-none cursor-pointer"
+                >
+                  <option value="name_asc">Nama (A - Z)</option>
+                  <option value="name_desc">Nama (Z - A)</option>
+                  <option value="class_asc">Kelas &amp; Nama</option>
+                  <option value="length_desc">Jawaban Terpanjang</option>
+                  <option value="score_desc">Skor Tertinggi</option>
+                  <option value="score_asc">Skor Terendah</option>
+                </select>
+              </div>
+
+              {/* Reset Filter Button */}
+              {hasActiveFilter && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-display font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors cursor-pointer whitespace-nowrap"
+                  title="Reset seluruh filter ke pengaturan awal"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset Filter</span>
+                </button>
+              )}
             </div>
 
-            <select
-              value={filterGradedStatus}
-              onChange={(e) => setFilterGradedStatus(e.target.value as any)}
-              className="h-8 px-2.5 text-xs font-display font-bold bg-slate-50 border border-slate-200 rounded-xl text-slate-700 focus:outline-none"
-            >
-              <option value="all">Semua Status</option>
-              <option value="pending">Belum Dinilai</option>
-              <option value="graded">Sudah Dinilai</option>
-            </select>
+            {/* Result Counter Label */}
+            <div className="text-[11px] font-sans font-medium text-slate-500">
+              Menampilkan <span className="font-bold text-slate-800">{filteredItems.length}</span> dari {totalCount} jawaban
+            </div>
           </div>
+
         </div>
 
         {/* 5. Scrollable Submissions List */}

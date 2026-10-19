@@ -18,14 +18,26 @@ import {
   ArrowLeft,
   X,
   Search,
+  RotateCcw,
+  MessageSquare,
 } from 'lucide-react';
 import { AppLogoBadge } from '../common/AppLogo';
 import { authService } from '../../services/authService';
 import { whatsappVerificationService } from '../../services/whatsappVerificationService';
+import { whatsappOtpService } from '../../services/whatsappOtpService';
 import { SchoolDirectoryModal } from '../common/SchoolDirectoryModal';
 
 interface AuthPageProps {
-  onLoginSuccess: (userData: { id?: string; name: string; email: string; school: string; subject: string }) => void;
+  onLoginSuccess: (userData: { 
+    id?: string; 
+    name: string; 
+    email: string; 
+    school: string; 
+    subject: string;
+    nip?: string;
+    npsn?: string;
+    whatsapp?: string;
+  }) => void;
   onBackToLanding?: () => void;
   initialMode?: 'login' | 'signup' | 'forgot';
 }
@@ -58,14 +70,27 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Forgot password 2-step state
-  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
+  // Forgot password 3-step state (WhatsApp OTP flow)
+  const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);
+  const [otpCode, setOtpCode] = useState('');
+  const [maskedPhone, setMaskedPhone] = useState('');
+  const [targetPhone, setTargetPhone] = useState('');
+  const [resendCountdown, setResendCountdown] = useState<number>(0);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [verifiedName, setVerifiedName] = useState<string>('');
   const isBelajarId = mode === 'signup' && email.toLowerCase().includes('belajar.id');
+
+  // Countdown timer for OTP resend
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setResendCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [resendCountdown]);
 
   // Floating Popover Card State for Email Field
   const [showEmailTip, setShowEmailTip] = useState(false);
@@ -86,24 +111,71 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setIsLoading(true);
     setNotification(null);
 
-    // 1. FORGOT PASSWORD STEP 1: Verifikasi Email & Nomor WhatsApp
+    // 1. FORGOT PASSWORD STEP 1: Cari Nomor WhatsApp Guru & Kirim Kode Token Unik via WAHA
     if (mode === 'forgot' && forgotStep === 1) {
-      const verifyRes = await authService.verifyTeacherIdentity(email, whatsapp);
-      setIsLoading(false);
-
-      if (!verifyRes.success) {
-        setNotification(verifyRes.error || 'Data Email dan Nomor WhatsApp tidak sesuai dengan akun terdaftar.');
+      const cleanEmail = email.trim();
+      if (!cleanEmail || !cleanEmail.includes('@')) {
+        setIsLoading(false);
+        setNotification('Silakan masukkan alamat email yang valid.');
         return;
       }
 
-      setVerifiedName(verifyRes.profile?.name || '');
+      // Cari nomor WhatsApp terdaftar berdasarkan email
+      const teacherRes = await authService.findTeacherByEmail(cleanEmail);
+      if (!teacherRes.success || !teacherRes.profile?.whatsapp) {
+        setIsLoading(false);
+        setNotification(
+          teacherRes.error ||
+          'Email tidak ditemukan atau akun ini belum memiliki nomor WhatsApp terdaftar. Silakan hubungi admin sekolah.'
+        );
+        return;
+      }
+
+      const teacherPhone = teacherRes.profile.whatsapp;
+      const teacherName = teacherRes.profile.name || 'Bapak/Ibu Guru';
+      setVerifiedName(teacherName);
+      setTargetPhone(teacherPhone);
+      setMaskedPhone(whatsappOtpService.maskPhoneNumber(teacherPhone));
+
+      // Kirim kode token OTP 6-digit via WhatsApp WAHA
+      const sendRes = await whatsappOtpService.sendVerificationOtp(cleanEmail, teacherPhone, teacherName);
+      setIsLoading(false);
+
+      if (!sendRes.success) {
+        setNotification(sendRes.message || sendRes.error || 'Gagal mengirim kode token ke WhatsApp Anda. Silakan coba sesaat lagi.');
+        return;
+      }
+
       setForgotStep(2);
+      setResendCountdown(60);
       setNotification(null);
       return;
     }
 
-    // 2. FORGOT PASSWORD STEP 2: Ganti Password Baru
+    // 2. FORGOT PASSWORD STEP 2: Verifikasi Kode Token OTP
     if (mode === 'forgot' && forgotStep === 2) {
+      const cleanOtp = otpCode.trim();
+      if (!cleanOtp || cleanOtp.length !== 6) {
+        setIsLoading(false);
+        setNotification('Masukkan 6 digit kode token yang dikirimkan ke WhatsApp Anda.');
+        return;
+      }
+
+      const verifyRes = whatsappOtpService.verifyOtp(email, cleanOtp);
+      setIsLoading(false);
+
+      if (!verifyRes.success) {
+        setNotification(verifyRes.message || verifyRes.error || 'Kode token tidak valid atau telah kadaluarsa.');
+        return;
+      }
+
+      setForgotStep(3);
+      setNotification(null);
+      return;
+    }
+
+    // 3. FORGOT PASSWORD STEP 3: Ganti Kata Sandi Baru
+    if (mode === 'forgot' && forgotStep === 3) {
       if (!newPassword || newPassword.length < 6) {
         setIsLoading(false);
         setNotification('Kata sandi baru minimal 6 karakter.');
@@ -130,6 +202,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       setPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setOtpCode('');
+      setMaskedPhone('');
+      setTargetPhone('');
       return;
     }
 
@@ -174,10 +249,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       }
       onLoginSuccess({
         id: res.user?.id,
-        name: res.profile?.name || fullName || 'Rahmat, S.Pd.',
-        email: email || 'rahmat.guru@gmail.com',
-        school: res.profile?.school || schoolName || 'SMA Negeri 1 Indonesia',
+        name: res.profile?.name || fullName || 'Guru Penguji',
+        email: email || '',
+        school: res.profile?.school || schoolName || '',
         subject: res.profile?.subject || subject || 'Matematika Wajib',
+        nip: (res.profile as any)?.nip || '',
+        npsn: (res.profile as any)?.npsn || npsn || '',
+        whatsapp: (res.profile as any)?.whatsapp || whatsapp || '',
       });
     } else {
       // 4. LOGIN AKUN
@@ -207,10 +285,13 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       }
       onLoginSuccess({
         id: res.user?.id,
-        name: res.profile?.name || 'Rahmat, S.Pd.',
-        email: email || 'rahmat.guru@gmail.com',
-        school: res.profile?.school || 'SMA Negeri 1 Indonesia',
+        name: res.profile?.name || 'Guru Penguji',
+        email: email || '',
+        school: res.profile?.school || '',
         subject: res.profile?.subject || 'Matematika Wajib',
+        nip: (res.profile as any)?.nip || '',
+        npsn: (res.profile as any)?.npsn || '',
+        whatsapp: (res.profile as any)?.whatsapp || '',
       });
     }
   };
@@ -232,6 +313,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     }
   };
 
+  const handleResendOtp = async () => {
+    if (resendCountdown > 0 || !email || !targetPhone || isLoading) return;
+    setIsLoading(true);
+    setNotification(null);
+    const sendRes = await whatsappOtpService.sendVerificationOtp(email, targetPhone, verifiedName);
+    setIsLoading(false);
+    if (!sendRes.success) {
+      setNotification(sendRes.message || sendRes.error || 'Gagal mengirim ulang token WhatsApp.');
+    } else {
+      setResendCountdown(60);
+      setNotification('Kode token verifikasi baru telah dikirimkan ke nomor WhatsApp Anda.');
+    }
+  };
+
   const clearAllFields = () => {
     setEmail('');
     setPassword('');
@@ -242,6 +337,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setNewPassword('');
     setConfirmPassword('');
     setVerifiedName('');
+    setOtpCode('');
+    setMaskedPhone('');
+    setTargetPhone('');
+    setResendCountdown(0);
     setNotification(null);
   };
 
@@ -266,10 +365,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   return (
     <div className="min-h-screen bg-slate-100/90 flex items-center justify-center p-3 sm:p-6 lg:p-8 font-sans select-none">
       {/* Main Split Container */}
-      <div className="max-w-5xl w-full bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-0 md:min-h-[580px]">
+      <div className="max-w-6xl w-full bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-0 md:min-h-[580px]">
         
-        {/* Left Side: Brand Showcase (Hidden on Mobile, 5 Cols on Tablet & Desktop) */}
-        <div className="hidden md:flex md:col-span-5 lg:col-span-5 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 md:p-6 lg:p-9 text-white flex-col justify-between relative overflow-hidden">
+        {/* Left Side: Brand Showcase (Hidden on Mobile, 4 Cols on Tablet & Desktop) */}
+        <div className="hidden md:flex md:col-span-5 lg:col-span-4 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-950 p-6 md:p-6 lg:p-10 text-white flex-col justify-between relative overflow-hidden">
           {/* Background Glow */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -348,8 +447,8 @@ export const AuthPage: React.FC<AuthPageProps> = ({
           </div>
         </div>
 
-        {/* Right Side: Auth Form (Full on Mobile, 7 Cols on Tablet & Desktop) */}
-        <div className="col-span-1 md:col-span-7 lg:col-span-7 p-5 sm:p-7 lg:p-10 flex flex-col justify-between bg-white">
+        {/* Right Side: Auth Form (Full on Mobile, 8 Cols on Tablet & Desktop) */}
+        <div className="col-span-1 md:col-span-8 lg:col-span-8 p-5 sm:p-7 lg:p-12 flex flex-col justify-between bg-white">
           
           <div>
             {/* Mobile-Only Header Brand Bar */}
@@ -389,14 +488,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 <h3 className="text-lg sm:text-xl font-display font-extrabold text-slate-900 tracking-tight">
                   {mode === 'login' && 'Masuk ke Portal Guru'}
                   {mode === 'signup' && 'Daftar Akun Guru Baru'}
-                  {mode === 'forgot' && forgotStep === 1 && 'Autentikasi & Verifikasi Akun'}
-                  {mode === 'forgot' && forgotStep === 2 && 'Ganti Kata Sandi Baru'}
+                  {mode === 'forgot' && forgotStep === 1 && 'Pemulihan Akun via WhatsApp'}
+                  {mode === 'forgot' && forgotStep === 2 && 'Masukkan Token Verifikasi'}
+                  {mode === 'forgot' && forgotStep === 3 && 'Buat Kata Sandi Baru'}
                 </h3>
                 <p className="text-xs text-slate-500 font-sans mt-0.5">
                   {mode === 'login' && 'Kelola bank soal dan pantau ujian siswa secara real-time'}
                   {mode === 'signup' && 'Buat akun gratis dan mulai terbitkan ujian sekolah Anda'}
-                  {mode === 'forgot' && forgotStep === 1 && 'Lampirkan Email & No. WhatsApp terdaftar untuk autentikasi'}
-                  {mode === 'forgot' && forgotStep === 2 && 'Masukkan kata sandi baru untuk akun guru Anda'}
+                  {mode === 'forgot' && forgotStep === 1 && 'Masukkan alamat email Anda untuk menerima token unik di WhatsApp terdaftar'}
+                  {mode === 'forgot' && forgotStep === 2 && `Sistem telah mengirim 6-digit token ke WhatsApp ${maskedPhone || ''}`}
+                  {mode === 'forgot' && forgotStep === 3 && 'Token terverifikasi. Silakan tentukan kata sandi baru untuk akun Anda'}
                 </p>
               </div>
 
@@ -447,7 +548,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
             {/* Google SSO Button (Login & Signup) */}
             {(mode === 'login' || mode === 'signup') && (
-              <div className="mt-5 space-y-4">
+              <div className="mt-6 space-y-4">
                 <button
                   type="button"
                   onClick={handleGoogleLogin}
@@ -494,11 +595,12 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             )}
 
             {/* Email Form */}
-            <form onSubmit={handleSubmit} autoComplete="off" className="mt-4 space-y-3.5">
+            <form onSubmit={handleSubmit} autoComplete="off" className="mt-5 space-y-5">
               
               {/* Extra Fields for Sign Up Mode */}
               {mode === 'signup' && (
                 <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                   <div>
                     <label htmlFor="signup-fullname" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
                       Nama Lengkap & Gelar Guru
@@ -518,21 +620,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label htmlFor="signup-school" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider">
-                          Nama Sekolah / Instansi
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setIsSchoolModalOpen(true)}
-                          className="inline-flex items-center gap-1 text-[11px] font-display font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
-                        >
-                          <Search className="w-3 h-3" />
-                          <span>Cari Sekolah Resmi</span>
-                        </button>
-                      </div>
+                  <div>
+                      <label htmlFor="signup-school" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
+                        Nama Sekolah / Instansi
+                      </label>
                       <div className="relative">
                         <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                         <input
@@ -543,10 +634,22 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                           placeholder="Contoh: SMKN 1 Banggai"
                           value={schoolName}
                           onChange={(e) => setSchoolName(e.target.value)}
-                          className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                          className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-12 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                         />
+                        {/* Cari Sekolah Resmi: ikon mandiri */}
+                        <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                          <button
+                            type="button"
+                            onClick={() => setIsSchoolModalOpen(true)}
+                            aria-label="Cari sekolah resmi dari direktori"
+                            title="Cari Sekolah Resmi"
+                            className="flex items-center justify-center w-7 h-7 rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-colors cursor-pointer"
+                          >
+                            <Search className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                      {npsn ? (
+                      {npsn && (
                         <div className="mt-1.5 flex items-center justify-between text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
                           <span className="font-semibold">NPSN: <span className="font-mono font-bold">{npsn}</span> (Terdata Resmi)</span>
                           <button
@@ -558,10 +661,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                             <X className="w-3 h-3" />
                           </button>
                         </div>
-                      ) : (
-                        <p className="text-[11px] text-slate-400 font-sans mt-1">
-                          Ketik manual atau klik <strong>Cari Sekolah Resmi</strong> untuk mengisi otomatis beserta NPSN.
-                        </p>
                       )}
                     </div>
 
@@ -583,7 +682,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                         />
                       </div>
                     </div>
-                  </div>
 
                   {/* WhatsApp Field for Sign Up */}
                   <div>
@@ -603,6 +701,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                         className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                       />
                     </div>
+                  </div>
                   </div>
                 </>
               )}
@@ -639,11 +738,15 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     />
                   </div>
 
+                  {mode === 'forgot' && forgotStep === 1 && (
+                    <span className="text-[11px] text-slate-500 font-sans mt-1.5 block leading-relaxed">
+                      Sistem akan mencocokkan nomor WhatsApp terdaftar pada akun Anda dan mengirimkan 6 digit kode token unik secara instan.
+                    </span>
+                  )}
+
                   {/* Floating Popover Card (Opsi 1: Melayang tanpa mendorong form / tidak sesak) */}
                   {showEmailTip && mode === 'signup' && (
-                    <div className="absolute top-full left-0 right-0 mt-2.5 z-50 bg-white/95 backdrop-blur-md rounded-2xl p-4 shadow-2xl border border-slate-200/90 ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-150">
-                      {/* Triangle Pointer */}
-                      <div className="absolute -top-1.5 left-7 w-3 h-3 bg-white rotate-45 border-t border-l border-slate-200/90"></div>
+                    <div className="mt-2.5 bg-white rounded-2xl p-4 shadow-xl border border-slate-200/90 ring-1 ring-slate-900/5 animate-in fade-in zoom-in-95 duration-150">
 
                       <div className="flex items-start justify-between gap-3 pb-2.5 border-b border-slate-100">
                         <div className="flex items-center gap-2">
@@ -703,42 +806,89 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 </div>
               )}
 
-              {/* FORGOT PASSWORD: STEP 1 (WhatsApp Input) */}
-              {mode === 'forgot' && forgotStep === 1 && (
-                <div>
-                  <label htmlFor="forgot-whatsapp" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1">
-                    Nomor WhatsApp Terdaftar
-                  </label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                    <input
-                      id="forgot-whatsapp"
-                      type="tel"
-                      required
-                      autoComplete="tel"
-                      placeholder="Contoh: 081234567890"
-                      value={whatsapp}
-                      onChange={(e) => setWhatsapp(e.target.value)}
-                      className="w-full h-11 bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3.5 text-sm font-semibold text-slate-800 placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                    />
+              {/* FORGOT PASSWORD: STEP 2 (Input Token OTP WhatsApp) */}
+              {mode === 'forgot' && forgotStep === 2 && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="p-3.5 bg-blue-50/80 border border-blue-200/80 rounded-2xl flex items-start justify-between gap-3 text-blue-950">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0 mt-0.5">
+                        <MessageSquare className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-display font-bold">Token Terkirim ke WhatsApp</div>
+                        <div className="text-[11px] text-blue-700 font-mono mt-0.5">
+                          {verifiedName} • <span className="font-bold">{maskedPhone}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Periksa pesan masuk di WhatsApp Anda untuk melihat 6 digit kode token unik.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotStep(1);
+                        setOtpCode('');
+                      }}
+                      className="text-[11px] text-blue-600 hover:text-blue-800 font-bold underline cursor-pointer flex-shrink-0"
+                    >
+                      Ubah Email
+                    </button>
                   </div>
-                  <span className="text-[11px] text-slate-400 font-sans mt-1 block">
-                    Sistem akan memverifikasi kecocokan Email & No. WhatsApp untuk mengaktifkan sesi ganti kata sandi.
-                  </span>
+
+                  <div>
+                    <label htmlFor="forgot-otp-code" className="block text-xs font-display font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Masukkan 6-Digit Token Verifikasi
+                    </label>
+                    <div className="relative">
+                      <input
+                        id="forgot-otp-code"
+                        type="text"
+                        required
+                        autoFocus
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="••••••"
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        className="w-full h-12 bg-slate-50 border-2 border-blue-300 focus:border-blue-600 rounded-xl text-center text-2xl font-mono font-extrabold tracking-[0.4em] text-slate-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all placeholder:text-slate-300"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between mt-2 text-xs">
+                      <span className="text-[11px] text-slate-500">
+                        Token berlaku selama <strong className="text-slate-700">10 menit</strong>.
+                      </span>
+                      {resendCountdown > 0 ? (
+                        <span className="text-[11px] text-slate-400 font-medium">
+                          Kirim ulang dalam <span className="font-mono font-bold text-slate-600">{resendCountdown}s</span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleResendOtp}
+                          disabled={isLoading}
+                          className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 font-bold cursor-pointer disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>Kirim Ulang Token</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* FORGOT PASSWORD: STEP 2 (Ganti Password Baru) */}
-              {mode === 'forgot' && forgotStep === 2 && (
+              {/* FORGOT PASSWORD: STEP 3 (Ganti Password Baru) */}
+              {mode === 'forgot' && forgotStep === 3 && (
                 <>
                   <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3 text-emerald-900 animate-in fade-in">
                     <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
                       <CheckCircle2 className="w-4 h-4" />
                     </div>
                     <div>
-                      <div className="text-xs font-display font-bold">Identitas Terverifikasi</div>
+                      <div className="text-xs font-display font-bold">Token Terverifikasi!</div>
                       <div className="text-[11px] text-emerald-700 font-mono mt-0.5">
-                        {verifiedName || email} • {whatsapp}
+                        {verifiedName || email} • {maskedPhone}
                       </div>
                     </div>
                   </div>
@@ -854,7 +1004,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               )}
 
               {/* Submit Button */}
-              <div className="pt-2">
+              <div className="pt-3">
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -867,11 +1017,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       <span>
                         {mode === 'login' && 'Masuk ke Dashboard Guru'}
                         {mode === 'signup' && 'Daftar & Terbitkan Ujian'}
-                        {mode === 'forgot' && forgotStep === 1 && 'Autentikasi Email & WhatsApp'}
-                        {mode === 'forgot' && forgotStep === 2 && 'Simpan Kata Sandi Baru'}
+                        {mode === 'forgot' && forgotStep === 1 && 'Kirim Token ke WhatsApp'}
+                        {mode === 'forgot' && forgotStep === 2 && 'Verifikasi Token'}
+                        {mode === 'forgot' && forgotStep === 3 && 'Simpan Kata Sandi Baru'}
                       </span>
-                      {mode === 'forgot' && forgotStep === 2 ? (
+                      {mode === 'forgot' && forgotStep === 3 ? (
                         <KeyRound className="w-4 h-4" />
+                      ) : mode === 'forgot' && forgotStep === 2 ? (
+                        <CheckCircle2 className="w-4 h-4" />
                       ) : (
                         <ArrowRight className="w-4 h-4" />
                       )}

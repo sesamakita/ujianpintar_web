@@ -19,10 +19,26 @@ import {
   HardDrive,
   Clock,
   Sparkles,
-  Search
+  Search,
+  Cpu,
+  Zap,
+  ExternalLink,
+  Key,
+  RefreshCw,
+  Bot
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { examService } from '../../services/examService';
+import { 
+  aiQuestionService, 
+  getStoredAISettings, 
+  setStoredAISettings, 
+  testCustomOpenAIConnection,
+  getChatbotAISummary,
+  syncAISettingsFromChatbot,
+  type AIProviderType,
+  type ChatbotAISummary
+} from '../../services/aiQuestionService';
 import { SchoolDirectoryModal } from '../common/SchoolDirectoryModal';
 import type { DataRetentionStats } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
@@ -86,6 +102,40 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
   const [isCleaning, setIsCleaning] = useState(false);
   const [cleanupMessage, setCleanupMessage] = useState<string | null>(null);
   const isPro = Boolean(subscription?.tier === 'pro' || subscription?.tier === 'school' || retentionStats?.isPro);
+
+  // AI Engine & BYOK Integration state
+  const [aiActiveProvider, setAiActiveProvider] = useState<AIProviderType>('gemini');
+  const [geminiApiKey, setGeminiApiKey] = useState('');
+  const [customBaseUrl, setCustomBaseUrl] = useState('https://api.groq.com/openai/v1');
+  const [customApiKey, setCustomApiKey] = useState('');
+  const [customModel, setCustomModel] = useState('llama-3.3-70b-versatile');
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [showCustomKey, setShowCustomKey] = useState(false);
+  const [activeAITab, setActiveAITab] = useState<'gemini' | 'custom_openai'>('gemini');
+
+  const [isTestingGemini, setIsTestingGemini] = useState(false);
+  const [geminiTestResult, setGeminiTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const [isTestingCustom, setIsTestingCustom] = useState(false);
+  const [customTestResult, setCustomTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const [aiSavedSuccess, setAiSavedSuccess] = useState(false);
+  const [chatbotSummary, setChatbotSummary] = useState<ChatbotAISummary>(() => getChatbotAISummary());
+  const [useChatbotAI, setUseChatbotAI] = useState<boolean>(true);
+  const [isInheritedFromChatbot, setIsInheritedFromChatbot] = useState<boolean>(false);
+
+  useEffect(() => {
+    const config = getStoredAISettings();
+    setAiActiveProvider(config.activeProvider);
+    setActiveAITab(config.activeProvider);
+    setGeminiApiKey(config.geminiApiKey);
+    setCustomBaseUrl(config.customBaseUrl);
+    setCustomApiKey(config.customApiKey);
+    setCustomModel(config.customModel);
+    setUseChatbotAI(config.useChatbotAI !== false);
+    setIsInheritedFromChatbot(Boolean(config.isInheritedFromChatbot));
+    setChatbotSummary(getChatbotAISummary());
+  }, []);
 
   useEffect(() => {
     if (currentUser.id) {
@@ -228,10 +278,148 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
     }
   };
 
+  const handleTestGemini = async () => {
+    const cleanKey = geminiApiKey.trim();
+    if (!cleanKey) {
+      setGeminiTestResult({ success: false, message: 'Harap masukkan API Key Google Gemini terlebih dahulu.' });
+      return;
+    }
+    setIsTestingGemini(true);
+    setGeminiTestResult(null);
+    try {
+      const res = await aiQuestionService.testApiKey(cleanKey);
+      if (res.valid) {
+        setGeminiTestResult({
+          success: true,
+          message: `Berhasil terhubung ke Google AI Studio! Model aktif: ${res.model || 'Gemini Flash'}.`,
+        });
+      } else {
+        setGeminiTestResult({
+          success: false,
+          message: res.error || 'Gagal memvalidasi API Key Gemini.',
+        });
+      }
+    } catch (err: any) {
+      setGeminiTestResult({
+        success: false,
+        message: err.message || 'Kesalahan jaringan saat menguji koneksi.',
+      });
+    } finally {
+      setIsTestingGemini(false);
+    }
+  };
+
+  const handleTestCustom = async () => {
+    if (!customBaseUrl.trim()) {
+      setCustomTestResult({ success: false, message: 'Harap masukkan Base URL penyedia AI.' });
+      return;
+    }
+    if (!customApiKey.trim()) {
+      setCustomTestResult({ success: false, message: 'Harap masukkan API Key / Token penyedia AI.' });
+      return;
+    }
+    setIsTestingCustom(true);
+    setCustomTestResult(null);
+    try {
+      const res = await testCustomOpenAIConnection({
+        baseUrl: customBaseUrl,
+        apiKey: customApiKey,
+        model: customModel,
+      });
+      if (res.valid) {
+        setCustomTestResult({
+          success: true,
+          message: `Berhasil terhubung ke penyedia AI kustom! Model aktif: ${res.model || customModel}.`,
+        });
+      } else {
+        setCustomTestResult({
+          success: false,
+          message: res.error || 'Gagal memvalidasi endpoint AI kustom.',
+        });
+      }
+    } catch (err: any) {
+      setCustomTestResult({
+        success: false,
+        message: err.message || 'Kesalahan jaringan atau diblokir CORS.',
+      });
+    } finally {
+      setIsTestingCustom(false);
+    }
+  };
+
+  const handleSyncWithChatbot = () => {
+    const res = syncAISettingsFromChatbot();
+    if (res.success && res.settings) {
+      setAiActiveProvider(res.settings.activeProvider);
+      setActiveAITab(res.settings.activeProvider);
+      setGeminiApiKey(res.settings.geminiApiKey);
+      setCustomBaseUrl(res.settings.customBaseUrl);
+      setCustomApiKey(res.settings.customApiKey);
+      setCustomModel(res.settings.customModel);
+      setUseChatbotAI(true);
+      setIsInheritedFromChatbot(false);
+      setChatbotSummary(getChatbotAISummary());
+      setAiSavedSuccess(true);
+      setTimeout(() => setAiSavedSuccess(false), 3500);
+    } else {
+      alert(res.message);
+    }
+  };
+
+  const handleSaveAISettings = () => {
+    setStoredAISettings({
+      activeProvider: aiActiveProvider,
+      geminiApiKey: geminiApiKey.trim(),
+      customBaseUrl: customBaseUrl.trim(),
+      customApiKey: customApiKey.trim(),
+      customModel: customModel.trim(),
+      useChatbotAI,
+    });
+    const refreshed = getStoredAISettings();
+    setIsInheritedFromChatbot(Boolean(refreshed.isInheritedFromChatbot));
+    setAiSavedSuccess(true);
+    setTimeout(() => setAiSavedSuccess(false), 3500);
+  };
+
+  const handleClearGeminiKey = () => {
+    setGeminiApiKey('');
+    setStoredAISettings({ geminiApiKey: '' });
+    setGeminiTestResult(null);
+  };
+
+  const applyCustomPreset = (preset: 'groq' | 'deepseek' | 'openrouter' | 'openai' | 'ollama' | 'qodeer' | 'vpsmurah') => {
+    if (preset === 'qodeer') {
+      setCustomBaseUrl('https://organization.api-github.com/v1');
+      setCustomModel('gpt-4o');
+    } else if (preset === 'vpsmurah') {
+      setCustomBaseUrl('https://my.vpsmurah.co.id/api/v1');
+      setCustomModel('gpt-4o-mini');
+    } else if (preset === 'groq') {
+      setCustomBaseUrl('https://api.groq.com/openai/v1');
+      setCustomModel('llama-3.3-70b-versatile');
+    } else if (preset === 'deepseek') {
+      setCustomBaseUrl('https://api.deepseek.com/v1');
+      setCustomModel('deepseek-chat');
+    } else if (preset === 'openrouter') {
+      setCustomBaseUrl('https://openrouter.ai/api/v1');
+      setCustomModel('google/gemini-2.0-flash-001');
+    } else if (preset === 'openai') {
+      setCustomBaseUrl('https://api.openai.com/v1');
+      setCustomModel('gpt-4o-mini');
+    } else if (preset === 'ollama') {
+      setCustomBaseUrl('http://localhost:11434/v1');
+      setCustomModel('llama3');
+    }
+    setCustomTestResult(null);
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     setErrorMessage(null);
+
+    // Save AI configuration in sync
+    handleSaveAISettings();
 
     const updatedProfile = {
       name: name.trim(),
@@ -289,9 +477,15 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
       {/* Peringatan Lengkapi Biodata jika belum terisi */}
       {(() => {
         const missing: { field: string; label: string }[] = [];
-        if (!school || school.trim() === '' || school === 'Satuan Pendidikan') missing.push({ field: 'school', label: 'Nama Sekolah' });
-        if (!nip || nip.trim() === '') missing.push({ field: 'nip', label: 'NIP Guru' });
-        if (!npsn || npsn.trim() === '') missing.push({ field: 'npsn', label: 'NPSN Sekolah' });
+        const isSchoolEmpty = !school || school.trim() === '' || school === 'Satuan Pendidikan' || school === 'SMA Negeri 1 Indonesia' || school === 'Sekolah';
+        if (isSchoolEmpty) missing.push({ field: 'school', label: 'Nama Sekolah' });
+
+        const isNipEmpty = !nip || nip.trim() === '' || nip === '-' || nip === '19850412 200902 1 004';
+        if (isNipEmpty) missing.push({ field: 'nip', label: 'NIP Guru' });
+
+        const isNpsnEmpty = !npsn || npsn.trim() === '' || npsn === '-' || npsn === '20104829';
+        if (isNpsnEmpty) missing.push({ field: 'npsn', label: 'NPSN Sekolah' });
+
         if (missing.length === 0) return null;
         return (
           <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200/90 text-amber-900 animate-in fade-in flex items-start gap-3.5 shadow-xs">
@@ -300,10 +494,10 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             </div>
             <div className="space-y-1.5">
               <h4 className="text-xs font-display font-bold text-amber-900 uppercase tracking-wide">
-                Data Profil Belum Lengkap — {missing.length} Field Wajib Kosong
+                Data Profil Belum Lengkap — {missing.length} Field Wajib Belum Sesuai
               </h4>
               <p className="text-xs text-amber-800 leading-relaxed">
-                Field berikut masih kosong:{' '}
+                Field berikut masih kosong atau belum disesuaikan:{' '}
                 {missing.map((m, i) => (
                   <span key={m.field}>
                     <strong>{m.label}</strong>{i < missing.length - 1 ? ', ' : '.'}
@@ -421,7 +615,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             <div>
               <label htmlFor="set-3" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
                 NIP / NUPTK Guru
-                {(!nip || nip.trim() === '') && (
+                {(!nip || nip.trim() === '' || nip === '-' || nip === '19850412 200902 1 004') && (
                   <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold normal-case tracking-normal">Belum diisi</span>
                 )}
               </label>
@@ -430,7 +624,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 value={nip}
                 onChange={(e) => setNip(e.target.value)}
                 placeholder="19850412 200902 1 004"
-                className={`w-full h-10 bg-slate-50 border rounded-xl px-3.5 font-mono text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${!nip || nip.trim() === '' ? 'border-amber-300' : 'border-slate-200'}`}
+                className={`w-full h-10 bg-slate-50 border rounded-xl px-3.5 font-mono text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${!nip || nip.trim() === '' || nip === '-' || nip === '19850412 200902 1 004' ? 'border-amber-300' : 'border-slate-200'}`}
               />
             </div>
 
@@ -485,7 +679,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
             <div className="md:col-span-2">
               <label htmlFor="set-5" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
                 Nama Sekolah
-                {(!school || school.trim() === '' || school === 'Satuan Pendidikan') && (
+                {(!school || school.trim() === '' || school === 'Satuan Pendidikan' || school === 'SMA Negeri 1 Indonesia' || school === 'Sekolah') && (
                   <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold normal-case tracking-normal">Belum diisi</span>
                 )}
               </label>
@@ -495,14 +689,14 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 value={school}
                 onChange={(e) => setSchool(e.target.value)}
                 placeholder="Contoh: SMA Negeri 1 Indonesia"
-                className={`w-full h-10 bg-slate-50 border rounded-xl px-3.5 text-sm font-sans font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${!school || school.trim() === '' ? 'border-amber-300' : 'border-slate-200'}`}
+                className={`w-full h-10 bg-slate-50 border rounded-xl px-3.5 text-sm font-sans font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${!school || school.trim() === '' || school === 'Satuan Pendidikan' || school === 'SMA Negeri 1 Indonesia' || school === 'Sekolah' ? 'border-amber-300' : 'border-slate-200'}`}
               />
             </div>
 
             <div>
               <label htmlFor="set-6" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
                 NPSN Sekolah
-                {(!npsn || npsn.trim() === '') && (
+                {(!npsn || npsn.trim() === '' || npsn === '-' || npsn === '20104829') && (
                   <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded text-[10px] font-bold normal-case tracking-normal">Belum diisi</span>
                 )}
               </label>
@@ -511,7 +705,7 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
                 value={npsn}
                 onChange={(e) => setNpsn(e.target.value)}
                 placeholder="Contoh: 20104829"
-                className={`w-full h-10 bg-slate-50 border rounded-xl px-3.5 font-mono text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${!npsn || npsn.trim() === '' ? 'border-amber-300' : 'border-slate-200'}`}
+                className={`w-full h-10 bg-slate-50 border rounded-xl px-3.5 font-mono text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors ${!npsn || npsn.trim() === '' || npsn === '-' || npsn === '20104829' ? 'border-amber-300' : 'border-slate-200'}`}
               />
             </div>
 
@@ -626,6 +820,480 @@ export const SystemSettings: React.FC<SystemSettingsProps> = ({
               <KeyRound className="w-3.5 h-3.5" />
               <span>{isSavingPassword ? 'Menyimpan Kata Sandi...' : 'Simpan Kata Sandi Akun'}</span>
             </button>
+          </div>
+        </div>
+
+        {/* Integrasi Kecerdasan Buatan (AI Engine & BYOK) */}
+        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-display font-bold text-slate-900 text-sm tracking-tight flex items-center gap-2">
+                  <span>Integrasi Kecerdasan Buatan (AI Engine &amp; BYOK)</span>
+                </h3>
+                <p className="text-xs text-slate-500 font-sans mt-0.5">
+                  Konfigurasi kunci API terpusat untuk generator soal CBT dan koreksi esai otomatis tanpa perlu input berulang
+                </p>
+              </div>
+            </div>
+
+            {/* Active Provider Badge */}
+            <div className="flex items-center gap-2">
+              {aiActiveProvider === 'gemini' ? (
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border ${
+                  geminiApiKey
+                    ? isInheritedFromChatbot
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : 'bg-blue-50 text-blue-800 border-blue-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${
+                    geminiApiKey 
+                      ? isInheritedFromChatbot ? 'bg-emerald-500' : 'bg-blue-600' 
+                      : 'bg-amber-500 animate-pulse'
+                  }`} />
+                  <span>
+                    Google Gemini {geminiApiKey ? (isInheritedFromChatbot ? '(Tersinkron dari Chatbot)' : '(Aktif & Terpasang)') : '(Aktif - Kunci Belum Diisi)'}
+                  </span>
+                </span>
+              ) : (
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border ${
+                  customApiKey && customBaseUrl
+                    ? isInheritedFromChatbot
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : 'bg-purple-50 text-purple-800 border-purple-200'
+                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${
+                    customApiKey && customBaseUrl 
+                      ? isInheritedFromChatbot ? 'bg-emerald-500' : 'bg-purple-600' 
+                      : 'bg-amber-500 animate-pulse'
+                  }`} />
+                  <span>
+                    AI Kustom {customApiKey && customBaseUrl ? (isInheritedFromChatbot ? '(Tersinkron dari Chatbot)' : '(Aktif & Terpasang)') : '(Aktif - Token Belum Diisi)'}
+                  </span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* SINKRONISASI DENGAN OTAK CHATBOT SUPER ADMIN */}
+          <div className="p-4 bg-gradient-to-r from-indigo-50/80 via-slate-50 to-blue-50/80 rounded-xl border border-indigo-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-indigo-600 text-white flex items-center justify-center flex-shrink-0 shadow-xs">
+                <Bot className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h4 className="font-display font-bold text-xs text-slate-900">
+                    Sinkronisasi Layanan AI Terpusat (Otak Chatbot)
+                  </h4>
+                  {chatbotSummary.hasConfig ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      Tersedia: {chatbotSummary.providerLabel}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold font-mono bg-slate-200 text-slate-700">
+                      Kunci Chatbot Kosong
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-600 mt-0.5">
+                  {chatbotSummary.hasConfig
+                    ? `Setelan aktif di Chatbot: ${chatbotSummary.providerLabel} (${chatbotSummary.model}). Anda dapat menarik kunci ini langsung ke pengaturan sekolah ini.`
+                    : 'Belum ada kunci API di setelan Chatbot Super Admin. Anda dapat mengisinya di portal Super Admin > Otak Chatbot WA.'}
+                </p>
+                <label className="flex items-center gap-2 text-[11px] font-medium text-slate-700 cursor-pointer pt-1.5">
+                  <input
+                    type="checkbox"
+                    checked={useChatbotAI}
+                    onChange={(e) => {
+                      setUseChatbotAI(e.target.checked);
+                      setStoredAISettings({ useChatbotAI: e.target.checked });
+                      const refreshed = getStoredAISettings();
+                      setIsInheritedFromChatbot(Boolean(refreshed.isInheritedFromChatbot));
+                    }}
+                    className="rounded text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>Otomatis warisi layanan AI Chatbot jika kunci sekolah ini belum diisi</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {chatbotSummary.hasConfig && (
+                <button
+                  type="button"
+                  onClick={handleSyncWithChatbot}
+                  className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                  title="Salin dan terapkan kunci API dari Chatbot ke setelan sekolah ini"
+                >
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Tarik Kunci dari Chatbot</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Selector Tab: Google Studio vs Custom AI Provider */}
+          <div className="flex p-1 bg-slate-100 rounded-xl gap-1 text-xs font-display font-bold">
+            <button
+              type="button"
+              onClick={() => setActiveAITab('gemini')}
+              className={`flex-1 py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeAITab === 'gemini'
+                  ? 'bg-white text-blue-700 shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Google Gemini AI Studio (Gratis)</span>
+              {aiActiveProvider === 'gemini' && (
+                <span className="ml-1 px-1.5 py-0.5 bg-blue-100 text-blue-700 text-[10px] rounded-full">Mesin Utama</span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveAITab('custom_openai')}
+              className={`flex-1 py-2 px-3 rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activeAITab === 'custom_openai'
+                  ? 'bg-white text-purple-700 shadow-2xs font-extrabold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5" />
+              <span>Penyedia AI Kustom / OpenAI (Groq, DeepSeek, dll.)</span>
+              {aiActiveProvider === 'custom_openai' && (
+                <span className="ml-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px] rounded-full">Mesin Utama</span>
+              )}
+            </button>
+          </div>
+
+          {/* TAB 1: GOOGLE GEMINI AI STUDIO */}
+          {activeAITab === 'gemini' && (
+            <div className="space-y-3 pt-1">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="gemini-key-input" className="text-xs font-display font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Google Gemini API Key</span>
+                  </label>
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1 hover:underline"
+                  >
+                    <span>Dapatkan Kunci Gratis di Google AI Studio</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="relative">
+                  <input
+                    id="gemini-key-input"
+                    type={showGeminiKey ? 'text' : 'password'}
+                    value={geminiApiKey}
+                    onChange={(e) => {
+                      setGeminiApiKey(e.target.value);
+                      setGeminiTestResult(null);
+                    }}
+                    placeholder="Contoh: AIzaSyD..."
+                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3.5 pr-10 font-mono text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowGeminiKey(!showGeminiKey)}
+                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {showGeminiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Gemini Test Result Alert */}
+              {geminiTestResult && (
+                <div className={`p-3 rounded-xl text-xs font-semibold flex items-start gap-2 border ${
+                  geminiTestResult.success
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                }`}>
+                  {geminiTestResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                  )}
+                  <span className="leading-relaxed">{geminiTestResult.message}</span>
+                </div>
+              )}
+
+              {/* Action buttons for Gemini */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleTestGemini}
+                  disabled={isTestingGemini || !geminiApiKey.trim()}
+                  className="h-9 px-4 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-display font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingGemini ? 'animate-spin' : ''}`} />
+                  <span>{isTestingGemini ? 'Menguji ke Google Studio...' : 'Uji Koneksi Gemini'}</span>
+                </button>
+                {geminiApiKey && (
+                  <button
+                    type="button"
+                    onClick={handleClearGeminiKey}
+                    className="h-9 px-3 bg-slate-50 hover:bg-rose-50 text-slate-600 hover:text-rose-700 border border-slate-200 hover:border-rose-200 rounded-xl font-display font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Hapus Kunci</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Guidance Box */}
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 text-xs text-slate-600 space-y-1">
+                <p className="font-semibold text-blue-900 flex items-center gap-1">
+                  <Zap className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Tentang Google AI Studio:</span>
+                </p>
+                <p className="text-[11.5px] leading-relaxed text-slate-600">
+                  Google AI Studio menyediakan kuota gratis untuk pembuatan soal dan analisis nilai esai dengan model Gemini Flash. Cukup buat API Key gratis sekali di Google AI Studio, maka seluruh fitur AI di aplikasi siap digunakan selamanya tanpa biaya server.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: CUSTOM OPENAI-COMPATIBLE PROVIDER */}
+          {activeAITab === 'custom_openai' && (
+            <div className="space-y-3 pt-1">
+              {/* Presets Bar */}
+              <div>
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                  Template Cepat Provider Populer:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => applyCustomPreset('qodeer')}
+                    className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200 transition-colors cursor-pointer"
+                  >
+                    Qodeer / GitHub API (gpt-4o)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyCustomPreset('vpsmurah')}
+                    className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-bold border border-blue-200 transition-colors cursor-pointer"
+                  >
+                    VPS Murah (gpt-4o-mini)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyCustomPreset('groq')}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200/80 transition-colors cursor-pointer"
+                  >
+                    Groq (LLaMA 3.3)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyCustomPreset('deepseek')}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200/80 transition-colors cursor-pointer"
+                  >
+                    DeepSeek (V3/Chat)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyCustomPreset('openrouter')}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200/80 transition-colors cursor-pointer"
+                  >
+                    OpenRouter
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyCustomPreset('openai')}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200/80 transition-colors cursor-pointer"
+                  >
+                    OpenAI (GPT-4o-mini)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyCustomPreset('ollama')}
+                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200/80 transition-colors cursor-pointer"
+                  >
+                    Ollama (Lokal)
+                  </button>
+                </div>
+              </div>
+
+              {/* Grid 3 Input Fields */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-1">
+                  <label htmlFor="custom-base-url" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+                    Base URL API
+                  </label>
+                  <input
+                    id="custom-base-url"
+                    type="text"
+                    value={customBaseUrl}
+                    onChange={(e) => {
+                      setCustomBaseUrl(e.target.value);
+                      setCustomTestResult(null);
+                    }}
+                    placeholder="https://api.groq.com/openai/v1"
+                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 font-mono text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">Endpoint berakhiran /v1</span>
+                </div>
+
+                <div className="md:col-span-1">
+                  <label htmlFor="custom-api-key" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+                    API Key / Token Bearer
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="custom-api-key"
+                      type={showCustomKey ? 'text' : 'password'}
+                      value={customApiKey}
+                      onChange={(e) => {
+                        setCustomApiKey(e.target.value);
+                        setCustomTestResult(null);
+                      }}
+                      placeholder="gsk_... / sk-..."
+                      className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 pr-9 font-mono text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomKey(!showCustomKey)}
+                      className="absolute right-2.5 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showCustomKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-1 block">Token dari konsol penyedia AI</span>
+                </div>
+
+                <div className="md:col-span-1">
+                  <label htmlFor="custom-model" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider">
+                    Nama Model (Model ID)
+                  </label>
+                  <input
+                    id="custom-model"
+                    type="text"
+                    value={customModel}
+                    onChange={(e) => {
+                      setCustomModel(e.target.value);
+                      setCustomTestResult(null);
+                    }}
+                    placeholder="llama-3.3-70b-versatile"
+                    className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3 font-mono text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-1 block">ID model sesuai dokumentasi</span>
+                </div>
+              </div>
+
+              {/* Custom Test Result Alert */}
+              {customTestResult && (
+                <div className={`p-3 rounded-xl text-xs font-semibold flex items-start gap-2 border ${
+                  customTestResult.success
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border-rose-200'
+                }`}>
+                  {customTestResult.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                  )}
+                  <span className="leading-relaxed">{customTestResult.message}</span>
+                </div>
+              )}
+
+              {/* Action button for Custom Provider */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={handleTestCustom}
+                  disabled={isTestingCustom || !customBaseUrl.trim() || !customApiKey.trim()}
+                  className="h-9 px-4 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl font-display font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isTestingCustom ? 'animate-spin' : ''}`} />
+                  <span>{isTestingCustom ? 'Menguji Endpoint Kustom...' : 'Uji Koneksi Provider Kustom'}</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ACTIVE PROVIDER SWITCH (PILIH MESIN UTAMA) */}
+          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+              Pilih Mesin AI Utama untuk CBT &amp; Koreksi Esai:
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <label
+                className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  aiActiveProvider === 'gemini'
+                    ? 'bg-white border-blue-500 shadow-2xs text-blue-900'
+                    : 'bg-transparent border-slate-200 text-slate-700 hover:bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="active_ai_provider"
+                  value="gemini"
+                  checked={aiActiveProvider === 'gemini'}
+                  onChange={() => setAiActiveProvider('gemini')}
+                  className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500"
+                />
+                <div>
+                  <div className="text-xs font-bold">Google Gemini AI Studio</div>
+                  <div className="text-[11px] text-slate-500">Gratis, cepat, dan rekomendasi standar</div>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  aiActiveProvider === 'custom_openai'
+                    ? 'bg-white border-purple-500 shadow-2xs text-purple-900'
+                    : 'bg-transparent border-slate-200 text-slate-700 hover:bg-white'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="active_ai_provider"
+                  value="custom_openai"
+                  checked={aiActiveProvider === 'custom_openai'}
+                  onChange={() => setAiActiveProvider('custom_openai')}
+                  className="w-4 h-4 text-purple-600 border-slate-300 focus:ring-purple-500"
+                />
+                <div>
+                  <div className="text-xs font-bold">Penyedia Kustom (OpenAI-Compatible)</div>
+                  <div className="text-[11px] text-slate-500">Groq, DeepSeek, OpenRouter, Mistral, dll.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* AI Save feedback alert */}
+          {aiSavedSuccess && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 animate-in fade-in">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>Konfigurasi AI Berhasil Disimpan! Kunci ini langsung aktif di Buat Soal AI dan Koreksi Uraian AI.</span>
+            </div>
+          )}
+
+          {/* Quick Save AI Button */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <button
+              type="button"
+              onClick={handleSaveAISettings}
+              className="h-9 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-display font-bold text-xs flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>Simpan Konfigurasi AI</span>
+            </button>
+            <p className="text-[11px] text-slate-500 italic">
+              *Tersimpan langsung di peramban Anda. Anda tidak perlu memasukkan kunci lagi di menu lain.
+            </p>
           </div>
         </div>
 

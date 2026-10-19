@@ -50,6 +50,7 @@ interface QuestionBuilderProps {
   onCreateNewExam: (newExam: ExamSettings) => void;
   onDeleteExam: (examId: string) => Promise<void>;
   onToggleExamAccess?: (examId: string, newStatus: 'published' | 'closed') => Promise<void>;
+  onRequireCompleteProfile?: (action: () => void, promptReason?: { title?: string; description?: string }) => void;
   builderView: 'list' | 'editor';
   setBuilderView: (view: 'list' | 'editor') => void;
   isExamsLoading?: boolean;
@@ -88,6 +89,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
   setIsMobilePreviewOpen,
   onStudentSubmit,
   onToggleExamAccess,
+  onRequireCompleteProfile,
 }) => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
@@ -254,9 +256,20 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
   };
 
   const handleCopyPinInEditor = () => {
-    navigator.clipboard.writeText(examSettings.token);
-    setCopiedPin(true);
-    setTimeout(() => setCopiedPin(false), 2000);
+    const doCopy = () => {
+      navigator.clipboard.writeText(examSettings.token);
+      setCopiedPin(true);
+      setTimeout(() => setCopiedPin(false), 2000);
+    };
+
+    if (onRequireCompleteProfile) {
+      onRequireCompleteProfile(doCopy, {
+        title: 'Lengkapi Data Sekolah & WhatsApp',
+        description: 'Sebelum membagikan token ujian ke siswa, mohon lengkapi nama sekolah dan nomor WhatsApp Anda agar kop ujian resmi dan identitas pengajar tercantum valid.',
+      });
+    } else {
+      doCopy();
+    }
   };
 
   // If in Catalog List Mode, show ExamBankList component
@@ -280,6 +293,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
         onToggleExamAccess={onToggleExamAccess}
         subscription={subscription}
         onOpenUpgradeModal={onOpenUpgradeModal}
+        onRequireCompleteProfile={onRequireCompleteProfile}
       />
     );
   }

@@ -24,18 +24,20 @@ import {
   Key,
   Download,
   Smartphone,
-  MessageCircle
+  MessageCircle,
+  Bot
 } from 'lucide-react';
 import { schoolLicenseService } from '../../services/schoolLicenseService';
 import { superAdminService } from '../../services/superAdminService';
 import type { VpsTeacherUser, ApkDownloadLead } from '../../services/superAdminService';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { WhatsAppBotSettingsTab } from './WhatsAppBotSettingsTab';
 import type { SchoolLicense } from '../../types/schoolLicense';
 import { formatRupiah } from '../../utils/formatters';
 
 export const SuperAdminDashboard: React.FC = () => {
   // Navigation Sub-tab
-  const [activeTab, setActiveTab] = useState<'schools' | 'teachers' | 'downloads'>('schools');
+  const [activeTab, setActiveTab] = useState<'schools' | 'teachers' | 'downloads' | 'ai-bot'>('schools');
 
   // School Licenses State
   const [schools, setSchools] = useState<SchoolLicense[]>([]);
@@ -530,6 +532,24 @@ export const SuperAdminDashboard: React.FC = () => {
               activeTab === 'downloads' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
             }`}>
               {apkDownloads.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('ai-bot')}
+            className={`px-4 py-2 rounded-md text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer ${
+              activeTab === 'ai-bot'
+                ? 'bg-white text-indigo-950 border border-slate-300 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+            }`}
+          >
+            <Bot className="w-4 h-4 text-emerald-600" />
+            <span>Otak Chatbot WA (AI)</span>
+            <span className={`px-2 py-0.5 rounded font-mono font-bold text-[10px] ${
+              activeTab === 'ai-bot' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'
+            }`}>
+              LIVE
             </span>
           </button>
         </div>
@@ -1340,6 +1360,13 @@ export const SuperAdminDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 4: PUSAT OTAK & SETELAN CHATBOT WHATSAPP AI */}
+      {/* ========================================================================= */}
+      {activeTab === 'ai-bot' && (
+        <WhatsAppBotSettingsTab onNotify={(msg) => setFeedback(msg)} />
       )}
 
       {/* ========================================================================= */}

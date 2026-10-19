@@ -94,9 +94,10 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       const stored = aiQuestionService.getStoredApiKey();
+      const hasConfig = aiQuestionService.hasActiveConfig();
       setStoredApiKey(stored);
-      setIsApiKeySaved(Boolean(stored));
-      setShowApiKeySettings(!stored); // If no key, automatically expand setup
+      setIsApiKeySaved(hasConfig);
+      setShowApiKeySettings(!hasConfig);
       setSubject(defaultSubject);
       setGradeLevel(defaultGradeLevel);
       setErrorMessage(null);
@@ -137,6 +138,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
 
   const handleKeySaved = (key: string) => {
     setStoredApiKey(key);
+    aiQuestionService.setAISettings({ activeProvider: 'gemini', geminiApiKey: key });
     setIsApiKeySaved(true);
     setShowApiKeySettings(false);
   };
@@ -146,10 +148,11 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
   };
 
   const handleExecuteRemoveApiKey = () => {
-    aiQuestionService.setStoredApiKey('');
+    aiQuestionService.setAISettings({ geminiApiKey: '' });
     setStoredApiKey('');
-    setIsApiKeySaved(false);
-    setShowApiKeySettings(true);
+    const hasConfig = aiQuestionService.hasActiveConfig();
+    setIsApiKeySaved(hasConfig);
+    setShowApiKeySettings(!hasConfig);
     setIsConfirmRemoveKeyOpen(false);
   };
 
@@ -160,9 +163,10 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
       return;
     }
 
-    if (!isApiKeySaved && !storedApiKey.trim()) {
+    const hasConfig = aiQuestionService.hasActiveConfig();
+    if (!hasConfig && !storedApiKey.trim()) {
       setShowApiKeySettings(true);
-      setErrorMessage('Harap masukkan dan simpan API Key Google Gemini pribadi Anda terlebih dahulu.');
+      setErrorMessage('Harap atur API Key Google Gemini atau Token AI Kustom di Pengaturan Sekolah terlebih dahulu.');
       return;
     }
 
@@ -179,6 +183,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
     setErrorMessage(null);
     setIsGenerating(true);
 
+    const currentSettings = aiQuestionService.getAISettings();
     const params: AIGenerateParams = {
       subject: subject.trim() || 'Mata Pelajaran',
       gradeLevel: formatClassName(gradeLevel, false).trim() || 'Kelas X',
@@ -196,7 +201,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
             pointsPerType: typePoints,
           }),
       referenceMaterial: referenceMaterial.trim() || undefined,
-      apiKey: storedApiKey.trim(),
+      apiKey: currentSettings.activeProvider === 'gemini' ? storedApiKey.trim() : undefined,
     };
 
     const res = await aiQuestionService.generateQuestions(params);
@@ -238,11 +243,6 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
     setGeneratedQuestions([]);
   };
 
-  // Masked API key helper
-  const maskedKey = storedApiKey
-    ? `${storedApiKey.slice(0, 7)}...${storedApiKey.slice(-4)}`
-    : '';
-
   return (
     <div role="dialog" aria-modal="true" aria-label="Generator Soal AI" className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-200 overflow-hidden font-sans">
@@ -259,16 +259,16 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                   AI Question Generator
                 </h3>
                 <span className="px-2 py-0.5 bg-amber-400/20 border border-amber-300/30 text-amber-200 rounded-md text-[10px] font-mono font-bold">
-                  GEMINI AI
+                  {aiQuestionService.getActiveProviderInfo().provider === 'gemini' ? 'GOOGLE GEMINI' : 'CUSTOM AI'}
                 </span>
                 {isApiKeySaved ? (
                   <span className="px-2 py-0.5 bg-emerald-400/20 border border-emerald-300/30 text-emerald-200 rounded-md text-[10px] font-sans font-bold flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Key Pribadi Aktif
+                    {aiQuestionService.getActiveProviderInfo().providerName}
                   </span>
                 ) : (
                   <span className="px-2 py-0.5 bg-rose-400/20 border border-rose-300/30 text-rose-200 rounded-md text-[10px] font-sans font-bold">
-                    Key Belum Diisi
+                    Kunci AI Belum Diatur
                   </span>
                 )}
               </div>
@@ -896,9 +896,15 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                 <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <ShieldCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                       <span className="text-xs font-display font-bold text-slate-800">
-                        API Key Pribadi: <code className="font-mono text-indigo-700">{maskedKey}</code>
+                        Mesin AI Aktif:{' '}
+                        <span className="text-indigo-700 font-extrabold">
+                          {aiQuestionService.getActiveProviderInfo().providerName}
+                        </span>{' '}
+                        <span className="text-slate-500 font-mono text-[11px]">
+                          ({aiQuestionService.getActiveProviderInfo().modelName})
+                        </span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -907,21 +913,26 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                         onClick={() => setShowApiKeySettings(!showApiKeySettings)}
                         className="text-xs text-indigo-600 hover:underline font-semibold cursor-pointer"
                       >
-                        {showApiKeySettings ? 'Tutup' : 'Ubah Key'}
+                        {showApiKeySettings ? 'Tutup' : 'Ubah / Atur Key'}
                       </button>
-                      <button
-                        type="button"
-                        onClick={handleRemoveApiKey}
-                        className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer flex items-center gap-1"
-                        title="Hapus Key"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+                      {aiQuestionService.getActiveProviderInfo().provider === 'gemini' && storedApiKey && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveApiKey}
+                          className="text-xs text-rose-600 hover:underline font-semibold cursor-pointer flex items-center gap-1"
+                          title="Hapus Key"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
                   {showApiKeySettings && (
                     <div className="pt-2 border-t border-slate-200 space-y-2">
+                      <p className="text-[11px] text-slate-500">
+                        Untuk mengubah penyedia AI kustom (Groq, DeepSeek, OpenRouter), silakan buka menu <strong>Pengaturan Sekolah</strong>. Di sini Anda juga dapat mengatur kunci Google Gemini langsung:
+                      </p>
                       <GeminiApiKeySettings
                         variant="light"
                         currentKey={storedApiKey}
@@ -948,7 +959,7 @@ export const AIGeneratorModal: React.FC<AIGeneratorModalProps> = ({
                   {isGenerating ? (
                     <>
                       <RefreshCw className="w-4 h-4 animate-spin text-white" />
-                      <span>Gemini AI Sedang Menyusun {genMode === 'mixed' ? mixedTotalQuestions : singleCount} Butir Soal & Kunci Jawaban...</span>
+                      <span>{aiQuestionService.getActiveProviderInfo().providerName} Sedang Menyusun {genMode === 'mixed' ? mixedTotalQuestions : singleCount} Butir Soal & Kunci Jawaban...</span>
                     </>
                   ) : !isApiKeySaved ? (
                     <>

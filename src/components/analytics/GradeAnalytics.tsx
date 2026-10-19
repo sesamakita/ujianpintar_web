@@ -31,6 +31,7 @@ interface GradeAnalyticsProps {
   subscription?: TeacherSubscription;
   questions?: Question[];
   onOpenUpgradeModal?: (title?: string, desc?: string) => void;
+  onRequireCompleteProfile?: (action: () => void, promptReason?: { title?: string; description?: string }) => void;
 }
 
 // Helper to extract date key (YYYY-MM-DD) and human label for filtering
@@ -72,6 +73,7 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
   subscription,
   questions,
   onOpenUpgradeModal,
+  onRequireCompleteProfile,
 }) => {
   const [liveGrades, setLiveGrades] = useState<GradeRecord[]>(grades);
   const [isEssayGradingOpen, setIsEssayGradingOpen] = useState(false);
@@ -173,38 +175,49 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
   };
 
   const handleExportCSV = () => {
-    if (filteredGrades.length === 0) {
-      alert('Tidak ada data nilai yang sesuai dengan filter saat ini untuk diekspor.');
-      return;
+    const doExport = () => {
+      if (filteredGrades.length === 0) {
+        alert('Tidak ada data nilai yang sesuai dengan filter saat ini untuk diekspor.');
+        return;
+      }
+
+      const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Nilai Akhir', 'Batas KKM', 'Status Kelulusan', 'Waktu Selesai', 'Durasi (Menit)', 'Pelanggaran Tab'];
+      const rows = filteredGrades.map((g, idx) => [
+        idx + 1,
+        `="${g.nisn}"`, // Preserve leading zeros in Excel
+        `"${g.name.replace(/"/g, '""')}"`,
+        `"${(g.className || '-').replace(/"/g, '""')}"`,
+        g.score,
+        75,
+        `"${g.status}"`,
+        `"${g.submittedAt}"`,
+        g.timeSpentMinutes,
+        g.tabViolations,
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+
+      const filterSuffix = selectedClass !== 'all' ? `_${selectedClass.replace(/\s+/g, '_')}` : '';
+      const cleanSubject = examSettings.subject.replace(/\s+/g, '_') || 'Ujian';
+      link.setAttribute('download', `Rekap_Nilai_${cleanSubject}${filterSuffix}_${examSettings.scheduleDate || 'Export'}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    };
+
+    if (onRequireCompleteProfile) {
+      onRequireCompleteProfile(doExport, {
+        title: 'Lengkapi Data Sekolah untuk Rekap Nilai',
+        description: 'Mohon lengkapi nama sekolah dan nomor WhatsApp Anda agar file rekap nilai mencantumkan instansi dan penguji resmi.',
+      });
+    } else {
+      doExport();
     }
-
-    const headers = ['No', 'NISN', 'Nama Siswa', 'Kelas', 'Nilai Akhir', 'Batas KKM', 'Status Kelulusan', 'Waktu Selesai', 'Durasi (Menit)', 'Pelanggaran Tab'];
-    const rows = filteredGrades.map((g, idx) => [
-      idx + 1,
-      `="${g.nisn}"`, // Preserve leading zeros in Excel
-      `"${g.name.replace(/"/g, '""')}"`,
-      `"${(g.className || '-').replace(/"/g, '""')}"`,
-      g.score,
-      75,
-      `"${g.status}"`,
-      `"${g.submittedAt}"`,
-      g.timeSpentMinutes,
-      g.tabViolations,
-    ]);
-
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-
-    const filterSuffix = selectedClass !== 'all' ? `_${selectedClass.replace(/\s+/g, '_')}` : '';
-    const cleanSubject = examSettings.subject.replace(/\s+/g, '_') || 'Ujian';
-    link.setAttribute('download', `Rekap_Nilai_${cleanSubject}${filterSuffix}_${examSettings.scheduleDate || 'Export'}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const handleExportXLSX = () => {
@@ -218,10 +231,11 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
       return;
     }
 
-    if (filteredGrades.length === 0) {
-      alert('Tidak ada data nilai yang sesuai dengan filter saat ini untuk diekspor.');
-      return;
-    }
+    const doExport = () => {
+      if (filteredGrades.length === 0) {
+        alert('Tidak ada data nilai yang sesuai dengan filter saat ini untuk diekspor.');
+        return;
+      }
 
     // Official school-ready Excel worksheet
     const classLabel = selectedClass === 'all' ? 'Semua Kelas' : selectedClass;
@@ -279,6 +293,16 @@ export const GradeAnalytics: React.FC<GradeAnalyticsProps> = ({
     const cleanSubject = examSettings.subject.replace(/\s+/g, '_') || 'Ujian';
     XLSX.writeFile(wb, `Rekap_Nilai_${cleanSubject}${filterSuffix}_${examSettings.scheduleDate || 'Export'}.xlsx`);
   };
+
+  if (onRequireCompleteProfile) {
+    onRequireCompleteProfile(doExport, {
+      title: 'Lengkapi Data Sekolah untuk Raport Excel',
+      description: 'Mohon lengkapi nama sekolah dan nomor WhatsApp Anda agar kop laporan resmi Excel tercantum lengkap.',
+    });
+  } else {
+    doExport();
+  }
+};
 
   return (
     <div className="p-5 space-y-4 max-w-7xl mx-auto">

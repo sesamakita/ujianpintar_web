@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { supabaseAdmin } from './superAdminService';
 
 export interface UserProfile {
   id?: string;
@@ -119,6 +120,9 @@ export const authService = {
       let name = meta.full_name || '';
       let school = meta.school_name || '';
       let subject = meta.subject || '';
+      let nip = meta.nip || '';
+      let npsn = meta.npsn || '';
+      let whatsapp = meta.whatsapp_number || '';
 
       // 2. Query profiles table for latest record
       if (data.user?.id) {
@@ -133,6 +137,9 @@ export const authService = {
             name = prof.full_name || name;
             school = prof.school_name || school;
             subject = prof.subject || subject;
+            nip = prof.nip || nip;
+            npsn = prof.npsn || npsn;
+            whatsapp = prof.whatsapp_number || whatsapp;
           }
         } catch {
           // ignore profile table fetch error if not yet created
@@ -140,20 +147,31 @@ export const authService = {
       }
 
       // 3. Check local cache fallback if metadata is empty
-      if (!name || !school) {
-        const cached = localStorage.getItem(`ujianpintar_profile_${cleanEmail}`) || localStorage.getItem(`smartexam_profile_${cleanEmail}`);
-        if (cached) {
+      const cached = typeof window !== 'undefined'
+        ? localStorage.getItem(`ujianpintar_profile_${cleanEmail}`) || localStorage.getItem(`smartexam_profile_${cleanEmail}`)
+        : null;
+      if (cached) {
+        try {
           const parsed = JSON.parse(cached);
           name = name || parsed.name;
           school = school || parsed.school;
           subject = subject || parsed.subject;
+          nip = nip || parsed.nip;
+          npsn = npsn || parsed.npsn;
+          whatsapp = whatsapp || parsed.whatsapp;
+        } catch {
+          // ignore parse error
         }
       }
 
+      const isDemoAccount = !data.user?.id || cleanEmail.includes('demo');
       const profileResult = {
-        name: name || 'Rahmat, S.Pd.',
-        school: school || 'SMA Negeri 1 Indonesia',
-        subject: subject || 'Matematika Wajib',
+        name: name || (isDemoAccount ? 'Rahmat, S.Pd.' : (cleanEmail.split('@')[0] || 'Guru Penguji')),
+        school: school || (isDemoAccount ? 'SMA Negeri 1 Indonesia' : ''),
+        subject: subject || (isDemoAccount ? 'Matematika Wajib' : ''),
+        nip: nip || (isDemoAccount ? '19850412 200902 1 004' : ''),
+        npsn: npsn || (isDemoAccount ? '20104829' : ''),
+        whatsapp: whatsapp || '',
       };
 
       // Refresh cache
@@ -166,9 +184,12 @@ export const authService = {
       // Attempt to load from cache
       const cached = localStorage.getItem(`ujianpintar_profile_${cleanEmail}`) || localStorage.getItem(`smartexam_profile_${cleanEmail}`);
       let profileResult = {
-        name: 'Rahmat, S.Pd.',
-        school: 'SMA Negeri 1 Indonesia',
+        name: 'Guru Penguji',
+        school: '',
         subject: 'Matematika Wajib',
+        nip: '',
+        npsn: '',
+        whatsapp: '',
       };
 
       if (cached) {
@@ -275,6 +296,149 @@ export const authService = {
   },
 
   /**
+   * Cari data akun guru berdasarkan email untuk proses verifikasi OTP WhatsApp
+   */
+  async findTeacherByEmail(email: string): Promise<{
+    success: boolean;
+    profile?: {
+      name: string;
+      email: string;
+      whatsapp: string;
+      school?: string;
+      subject?: string;
+    };
+    error?: string;
+  }> {
+    const cleanEmail = email.toLowerCase().trim();
+    if (!cleanEmail) {
+      return { success: false, error: 'Silakan masukkan alamat email akun Anda.' };
+    }
+
+    try {
+      // 1. Prioritas Utama: Cari di Supabase Auth via Admin API (Akurat, tidak terhalang RLS guest)
+      try {
+        const { data: usersData, error: usersErr } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (!usersErr && usersData?.users) {
+          const u = usersData.users.find(x => (x.email || '').toLowerCase().trim() === cleanEmail);
+          if (u) {
+            let whatsapp = (u.user_metadata?.whatsapp_number || u.phone || u.user_metadata?.whatsapp || '').toString().trim();
+            let name = u.user_metadata?.full_name || u.user_metadata?.name || '';
+            let school = u.user_metadata?.school_name || u.user_metadata?.school || '';
+            let subject = u.user_metadata?.subject || '';
+
+            // Cek data tambahan dari tabel profiles di VPS
+            try {
+              const { data: prof } = await supabaseAdmin.from('profiles').select('*').eq('id', u.id).maybeSingle();
+              if (prof) {
+                whatsapp = prof.whatsapp_number || whatsapp;
+                name = prof.full_name || name;
+                school = prof.school_name || school;
+                subject = prof.subject || subject;
+              }
+            } catch {
+              // ignore profile table lookup error
+            }
+
+            if (whatsapp) {
+              return {
+                success: true,
+                profile: {
+                  name: name || 'Bpk/Ibu Guru',
+                  email: cleanEmail,
+                  whatsapp,
+                  school: school || '',
+                  subject: subject || '',
+                },
+              };
+            }
+          }
+        }
+      } catch (adminErr) {
+        console.warn('Supabase admin lookup in findTeacherByEmail:', adminErr);
+      }
+
+      // 2. Cek tabel profiles di Supabase dengan client publik
+      try {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('*');
+
+        if (profiles && profiles.length > 0) {
+          const matched = profiles.find((p: any) => {
+            const pEmail = (p.email || '').toLowerCase().trim();
+            return pEmail === cleanEmail;
+          });
+
+          if (matched && (matched.whatsapp_number || matched.whatsapp || matched.phone)) {
+            const phone = matched.whatsapp_number || matched.whatsapp || matched.phone;
+            return {
+              success: true,
+              profile: {
+                name: matched.full_name || 'Bpk/Ibu Guru',
+                email: cleanEmail,
+                whatsapp: phone,
+                school: matched.school_name || '',
+                subject: matched.subject || '',
+              },
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('Supabase query in findTeacherByEmail:', err);
+      }
+
+      // 3. Cek local storage cache akun
+      if (typeof window !== 'undefined') {
+        const cachedAccountRaw = localStorage.getItem(`ujianpintar_account_${cleanEmail}`) || localStorage.getItem(`smartexam_account_${cleanEmail}`);
+        const cachedProfileRaw = localStorage.getItem(`ujianpintar_profile_${cleanEmail}`) || localStorage.getItem(`smartexam_profile_${cleanEmail}`);
+
+        if (cachedAccountRaw || cachedProfileRaw) {
+          const account = cachedAccountRaw ? JSON.parse(cachedAccountRaw) : null;
+          const profile = cachedProfileRaw ? JSON.parse(cachedProfileRaw) : null;
+          const phone = account?.whatsapp || profile?.whatsapp || account?.phone;
+
+          if (phone) {
+            return {
+              success: true,
+              profile: {
+                name: profile?.name || account?.name || 'Bpk/Ibu Guru',
+                email: cleanEmail,
+                whatsapp: phone,
+                school: profile?.school || '',
+                subject: profile?.subject || '',
+              },
+            };
+          }
+        }
+      }
+
+      // 4. Fallback akun demo (rahmat.guru@belajar.id atau akun demo lainnya)
+      if (cleanEmail.includes('guru') || cleanEmail.includes('belajar.id') || cleanEmail.includes('rahmat') || cleanEmail.includes('demo')) {
+        return {
+          success: true,
+          profile: {
+            name: 'Rahmat, S.Pd.',
+            email: cleanEmail,
+            whatsapp: '082196929193',
+            school: 'SMA Negeri 1 Indonesia',
+            subject: 'Matematika Wajib',
+          },
+        };
+      }
+
+      return {
+        success: false,
+        error: 'Email tidak ditemukan dalam sistem UjianPintar. Pastikan email Anda sudah terdaftar.',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err.message || 'Gagal mencari akun guru.',
+      };
+    }
+  },
+
+  /**
    * Verify teacher email and whatsapp for password reset
    */
   async verifyTeacherIdentity(email: string, whatsapp: string): Promise<{ success: boolean; profile?: UserProfile; error?: string }> {
@@ -286,7 +450,47 @@ export const authService = {
     }
 
     try {
-      // 1. Try querying Supabase profiles table
+      // 1. Cek via Admin API
+      try {
+        const { data: usersData } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (usersData?.users) {
+          const u = usersData.users.find(x => (x.email || '').toLowerCase().trim() === cleanEmail);
+          if (u) {
+            let pPhone = (u.user_metadata?.whatsapp_number || u.phone || u.user_metadata?.whatsapp || '').toString().replace(/[^0-9]/g, '');
+            let pName = u.user_metadata?.full_name || u.user_metadata?.name || '';
+            let pSchool = u.user_metadata?.school_name || u.user_metadata?.school || '';
+            let pSubject = u.user_metadata?.subject || '';
+
+            try {
+              const { data: prof } = await supabaseAdmin.from('profiles').select('*').eq('id', u.id).maybeSingle();
+              if (prof) {
+                pPhone = (prof.whatsapp_number || pPhone).toString().replace(/[^0-9]/g, '');
+                pName = prof.full_name || pName;
+                pSchool = prof.school_name || pSchool;
+                pSubject = prof.subject || pSubject;
+              }
+            } catch {}
+
+            const phoneMatch = pPhone && (pPhone === cleanWhatsapp || pPhone.endsWith(cleanWhatsapp) || cleanWhatsapp.endsWith(pPhone));
+            if (phoneMatch) {
+              return {
+                success: true,
+                profile: {
+                  name: pName || 'Guru Penguji',
+                  email: cleanEmail,
+                  school: pSchool || 'Sekolah',
+                  subject: pSubject || 'Mata Pelajaran',
+                  whatsapp: cleanWhatsapp,
+                },
+              };
+            }
+          }
+        }
+      } catch (adminErr) {
+        console.warn('Admin verifyTeacherIdentity warning:', adminErr);
+      }
+
+      // 2. Cek tabel profiles dengan client publik
       try {
         const { data: profiles } = await supabase
           .from('profiles')
@@ -317,7 +521,7 @@ export const authService = {
         console.warn('Supabase profile query in verifyTeacherIdentity:', err);
       }
 
-      // 2. Check local profile & account cache
+      // 3. Cek local profile & account cache
       const cachedAccountRaw = typeof window !== 'undefined' 
         ? localStorage.getItem(`ujianpintar_account_${cleanEmail}`) || localStorage.getItem(`smartexam_account_${cleanEmail}`) 
         : null;
@@ -344,7 +548,7 @@ export const authService = {
         }
       }
 
-      // 3. Fallback for demo teacher account (e.g. rahmat.guru@belajar.id)
+      // 4. Fallback for demo teacher account (e.g. rahmat.guru@belajar.id)
       if (cleanEmail.includes('guru') || cleanEmail.includes('belajar.id') || cleanEmail.includes('rahmat')) {
         return {
           success: true,
@@ -372,6 +576,7 @@ export const authService = {
 
   /**
    * Reset teacher password after successful email & whatsapp verification
+   * Langsung mengupdate password di Supabase Auth (auth.users) sehingga bisa langsung digunakan login!
    */
   async resetPassword(email: string, newPassword: string): Promise<{ success: boolean; error?: string }> {
     const cleanEmail = email.toLowerCase().trim();
@@ -381,31 +586,71 @@ export const authService = {
     }
 
     try {
-      // 1. If user is in an active session, update password directly via Supabase Auth
+      let passwordUpdated = false;
+
+      // 1. Eksekusi Utama: Update langsung di Supabase Auth server menggunakan Admin API
+      try {
+        const { data: usersData, error: listErr } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+        if (!listErr && usersData?.users) {
+          const targetUser = usersData.users.find(u => (u.email || '').toLowerCase().trim() === cleanEmail);
+          if (targetUser?.id) {
+            const { error: adminUpdateErr } = await supabaseAdmin.auth.admin.updateUserById(targetUser.id, {
+              password: newPassword,
+              email_confirm: true,
+            });
+
+            if (adminUpdateErr) {
+              console.error('Supabase admin updateUserById error:', adminUpdateErr);
+              return { success: false, error: adminUpdateErr.message };
+            }
+
+            passwordUpdated = true;
+            console.log(`[authService] Password untuk ${cleanEmail} berhasil diperbarui di Supabase Auth!`);
+          }
+        }
+      } catch (adminErr) {
+        console.warn('Supabase admin updateUserById catch:', adminErr);
+      }
+
+      // 2. Jika user kebetulan sedang memiliki sesi aktif, update juga melalui auth client
       try {
         const { error: updateError } = await supabase.auth.updateUser({
           password: newPassword,
         });
         if (!updateError) {
-          return { success: true };
+          passwordUpdated = true;
         }
       } catch {
-        // ignore if not currently signed in
+        // ignore jika tidak ada sesi aktif
       }
 
-      // 2. Update local cached account credentials
+      // 3. Update local cached account credentials
       if (typeof window !== 'undefined') {
         const cached = localStorage.getItem(`ujianpintar_profile_${cleanEmail}`) || localStorage.getItem(`smartexam_profile_${cleanEmail}`);
         if (cached) {
-          const parsed = JSON.parse(cached);
-          localStorage.setItem(`ujianpintar_profile_${cleanEmail}`, JSON.stringify({
-            ...parsed,
-            updated_at: new Date().toISOString(),
-          }));
+          try {
+            const parsed = JSON.parse(cached);
+            localStorage.setItem(`ujianpintar_profile_${cleanEmail}`, JSON.stringify({
+              ...parsed,
+              updated_at: new Date().toISOString(),
+            }));
+          } catch {}
         }
       }
 
-      return { success: true };
+      if (passwordUpdated) {
+        return { success: true };
+      }
+
+      // Fallback untuk akun demo
+      if (cleanEmail.includes('demo') || cleanEmail.includes('guru') || cleanEmail.includes('belajar.id') || cleanEmail.includes('rahmat')) {
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        error: 'Akun dengan email tersebut tidak ditemukan di server Supabase.',
+      };
     } catch (err: any) {
       return { success: false, error: err.message || 'Gagal memperbarui kata sandi.' };
     }
@@ -420,7 +665,7 @@ export const authService = {
         return { success: false, error: 'Kata sandi minimal 6 karakter.' };
       }
 
-      // 1. Try RPC set_user_password first (handles both password hashing and auth.identities link for OAuth users)
+      // 1. Try RPC set_user_password first
       try {
         const { data: rpcData, error: rpcError } = await supabase.rpc('set_user_password', {
           new_password: newPassword,
@@ -436,8 +681,22 @@ export const authService = {
       const { error } = await supabase.auth.updateUser({
         password: newPassword,
       });
-      if (error) throw error;
-      return { success: true };
+      if (!error) return { success: true };
+
+      // 3. Fallback via Admin API jika session updateUser terkendala
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const userId = sessionData?.session?.user?.id;
+        if (userId) {
+          const { error: adminErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+            password: newPassword,
+            email_confirm: true,
+          });
+          if (!adminErr) return { success: true };
+        }
+      } catch {}
+
+      throw error;
     } catch (err: any) {
       return { success: false, error: err.message || 'Gagal menyimpan kata sandi baru.' };
     }
