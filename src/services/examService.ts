@@ -12,6 +12,7 @@ import type {
   DataRetentionCleanupResult
 } from '../types/exam';
 import { subscriptionService, getWibDateString } from './subscriptionService';
+import { rosterService } from './rosterService';
 
 export const isValidUUID = (str?: string): boolean => {
   return Boolean(str && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str));
@@ -819,9 +820,14 @@ export const examService = {
   },
 
   /**
-   * Fetch Live Students from Supabase
+   * Fetch Live Students from Supabase and merge pre-populated student roster
+   * if exam has targetClass (shows unstarted/absent students as 'not_started')
    */
-  async getLiveStudents(examId?: string): Promise<StudentProctoring[]> {
+  async getLiveStudents(
+    examId?: string,
+    targetClass?: string,
+    defaultTotalQuestions: number = 5
+  ): Promise<StudentProctoring[]> {
     try {
       let query = supabase.from('student_sessions').select('*').order('started_at', { ascending: false });
       if (examId && examId !== 'all') {
@@ -831,13 +837,11 @@ export const examService = {
       const { data, error } = await query;
       if (error) {
         console.warn('getLiveStudents Supabase error:', error.message);
-        return [];
       }
-      if (!data) return [];
 
       // Deduplicate by student identity (NISN + Name, or Session ID) so students sharing a NISN are NOT lost
       const uniqueStudents = new Map<string, StudentProctoring>();
-      data.forEach((row: any) => {
+      (data || []).forEach((row: any) => {
         const cleanNisn = (row.nisn || '').trim();
         const cleanName = (row.student_name || '').trim().toLowerCase();
         // Unique per student attempt (cleanNisn + cleanName, or row.id)
@@ -852,7 +856,7 @@ export const examService = {
             status: row.status || 'working',
             remainingSeconds: row.remaining_seconds !== undefined && row.remaining_seconds !== null ? Number(row.remaining_seconds) : 0,
             startedAt: row.started_at || undefined,
-            totalQuestions: row.total_questions || 5,
+            totalQuestions: row.total_questions || defaultTotalQuestions || 5,
             progressCount: row.progress_count || 0,
             violationCount: row.violation_count || 0,
             connectionStatus: row.connection_status || 'online',
@@ -865,7 +869,79 @@ export const examService = {
         }
       });
 
-      return Array.from(uniqueStudents.values());
+      // Merge pre-populated student roster if target class is specified
+      if (examId && examId !== 'all') {
+        let effectiveClass = targetClass?.trim();
+        if (!effectiveClass) {
+          try {
+            const { data: exRow } = await supabase
+              .from('exams')
+              .select('target_class, grade_level, questions_count')
+              .eq('id', examId)
+              .maybeSingle();
+            if (exRow) {
+              effectiveClass = (exRow.target_class || exRow.grade_level || '').trim();
+              if (exRow.questions_count) {
+                defaultTotalQuestions = exRow.questions_count;
+              }
+            }
+          } catch {}
+        }
+
+        if (effectiveClass) {
+          try {
+            const roster = await rosterService.getRosterByClass(effectiveClass);
+            if (roster && roster.length > 0) {
+              roster.forEach((student) => {
+                const sNisn = (student.nisn || '').trim();
+                const sNameLower = (student.studentName || '').trim().toLowerCase();
+
+                // Check if this student already has an active session
+                let alreadyStarted = false;
+                for (const existing of uniqueStudents.values()) {
+                  const existingNisn = (existing.nisn || '').trim();
+                  const existingNameLower = (existing.name || '').trim().toLowerCase();
+                  if ((sNisn && existingNisn === sNisn) || (sNameLower && existingNameLower === sNameLower)) {
+                    alreadyStarted = true;
+                    break;
+                  }
+                }
+
+                if (!alreadyStarted) {
+                  const placeholderKey = `roster_${student.id || sNisn || Math.random().toString(36).substring(2)}`;
+                  uniqueStudents.set(placeholderKey, {
+                    id: placeholderKey,
+                    examId: examId,
+                    nisn: student.nisn,
+                    name: student.studentName,
+                    className: student.className,
+                    status: 'not_started',
+                    remainingSeconds: 0,
+                    startedAt: undefined,
+                    totalQuestions: defaultTotalQuestions || 5,
+                    progressCount: 0,
+                    violationCount: 0,
+                    connectionStatus: 'offline',
+                    isAway: false,
+                    leftAt: undefined,
+                    lastAwaySeconds: 0,
+                    totalAwaySeconds: 0,
+                    violationLogs: [],
+                  });
+                }
+              });
+            }
+          } catch (rErr) {
+            console.warn('Failed to merge roster students in getLiveStudents:', rErr);
+          }
+        }
+      }
+
+      // Sort students alphabetically by name for clear proctoring roster order
+      const studentList = Array.from(uniqueStudents.values());
+      studentList.sort((a, b) => a.name.localeCompare(b.name, 'id', { numeric: true }));
+
+      return studentList;
     } catch (err: any) {
       console.warn('getLiveStudents exception:', err?.message || err);
       return [];

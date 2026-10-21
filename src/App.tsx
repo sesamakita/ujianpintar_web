@@ -7,6 +7,7 @@ import { GradeAnalytics } from './components/analytics/GradeAnalytics';
 import { SystemSettings } from './components/settings/SystemSettings';
 import { SubscriptionAndAboutPage } from './components/subscription/SubscriptionAndAboutPage';
 import { MediaGalleryPage } from './components/media/MediaGalleryPage';
+import { StudentRosterManagement } from './components/roster/StudentRosterManagement';
 import { SuperAdminPortal } from './components/super-admin/SuperAdminPortal';
 import { MobilePreviewModal } from './components/question-builder/MobilePreviewModal';
 import { UpgradePromptModal } from './components/subscription/UpgradePromptModal';
@@ -148,6 +149,7 @@ export function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [isSessionLoading, setIsSessionLoading] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<{
+    id?: string;
     name: string;
     email: string;
     school: string;
@@ -165,7 +167,7 @@ export function App() {
     nip: '19850412 200902 1 004',
     npsn: '20104829',
   });
-  const [activeTab, setActiveTab] = useState<'builder' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription'>('builder');
+  const [activeTab, setActiveTab] = useState<'builder' | 'roster' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription'>('builder');
   const [builderView, setBuilderView] = useState<'list' | 'editor'>('list');
   const [allExams, setAllExams] = useState<ExamSettings[]>([]);
   const [isExamsLoading, setIsExamsLoading] = useState<boolean>(false);
@@ -305,6 +307,7 @@ export function App() {
 
         if (user) {
           setCurrentUser({
+            id: user.id,
             name: user.name,
             email: user.email,
             school: user.school,
@@ -467,7 +470,7 @@ export function App() {
     const fetchLatestData = async () => {
       try {
         const [remoteStudents, remoteGrades, remoteLogs] = await Promise.all([
-          examService.getLiveStudents(targetExamId),
+          examService.getLiveStudents(targetExamId, examSettings.targetClass || examSettings.gradeLevel, questions.length || 5),
           examService.getGradeRecords(targetExamId),
           examService.getViolationLogs(targetExamId),
         ]);
@@ -483,7 +486,7 @@ export function App() {
                 const keepLocalTimer = rs.status === 'working' && existing.remainingSeconds > 0 && !!rs.startedAt;
                 return {
                   ...rs,
-                  remainingSeconds: rs.status === 'submitted' 
+                  remainingSeconds: (rs.status === 'submitted' || rs.status === 'not_started')
                     ? 0 
                     : (keepLocalTimer ? existing.remainingSeconds : rs.remainingSeconds),
                 };
@@ -678,9 +681,10 @@ export function App() {
       }
 
       const targetId = selectedExam.id === 'all' ? undefined : selectedExam.id;
+      const targetClass = selectedExam.id === 'all' ? undefined : (selectedExam.targetClass || selectedExam.gradeLevel);
       const [data, remoteStudents, remoteGrades, remoteLogs] = await Promise.all([
         examService.getExamById(selectedExam.id),
-        examService.getLiveStudents(targetId),
+        examService.getLiveStudents(targetId, targetClass),
         examService.getGradeRecords(targetId),
         examService.getViolationLogs(targetId),
       ]);
@@ -1100,7 +1104,7 @@ export function App() {
     try {
       const [examData, remoteStudents, remoteGrades, remoteLogs] = await Promise.all([
         examService.getExamById(selected.id),
-        examService.getLiveStudents(selected.id),
+        examService.getLiveStudents(selected.id, selected.targetClass || selected.gradeLevel),
         examService.getGradeRecords(selected.id),
         examService.getViolationLogs(selected.id),
       ]);
@@ -1224,6 +1228,16 @@ export function App() {
                 onStudentSubmit={handleStudentSubmit}
                 onToggleExamAccess={handleToggleExamAccess}
                 onRequireCompleteProfile={executeWithProfileCheck}
+              />
+            )}
+
+            {activeTab === 'roster' && (
+              <StudentRosterManagement
+                teacherId={currentUser?.id || currentUser?.email || 'local_teacher'}
+                onSelectClassForExam={(cls) => {
+                  setExamSettings((prev) => ({ ...prev, targetClass: cls }));
+                  setActiveTab('builder');
+                }}
               />
             )}
 

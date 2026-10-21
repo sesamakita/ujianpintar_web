@@ -9,6 +9,7 @@ import {
   Award,
   Globe,
   Image as ImageIcon,
+  Users,
   X
 } from 'lucide-react';
 import { AppLogoBadge } from '../common/AppLogo';
@@ -16,8 +17,8 @@ import type { ExamSettings } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
 
 interface SidebarProps {
-  activeTab: 'builder' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription';
-  setActiveTab: (tab: 'builder' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription') => void;
+  activeTab: 'builder' | 'roster' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription';
+  setActiveTab: (tab: 'builder' | 'roster' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription') => void;
   examSettings?: ExamSettings;
   activeStudentCount?: number;
   onLogout?: () => void;
@@ -68,6 +69,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       sublabel: 'Editor soal & anti-cheat',
       icon: FileEdit,
       badge: null,
+    },
+    {
+      id: 'roster' as const,
+      label: 'Database Siswa & Kelas',
+      sublabel: 'Rombel, NISN & QR sync',
+      icon: Users,
+      badge: 'Baru',
+      badgeColor: 'bg-indigo-600 text-white font-mono',
     },
     {
       id: 'media' as const,

@@ -7,7 +7,8 @@ import {
   PlusCircle, 
   Lock,
   Radio,
-  Zap
+  Zap,
+  UserX
 } from 'lucide-react';
 import type { StudentProctoring } from '../../types/exam';
 import type { TeacherSubscription } from '../../types/subscription';
@@ -30,6 +31,7 @@ export const ProctoringKPIHeader: React.FC<ProctoringKPIHeaderProps> = ({
   const total = students.length;
   const submitted = students.filter((s) => s.status === 'submitted').length;
   const inProgress = students.filter((s) => s.status === 'working' || s.status === 'violation_flagged' || s.status === 'ready').length;
+  const notStarted = students.filter((s) => s.status === 'not_started').length;
   const violations = students.reduce((sum, s) => sum + s.violationCount, 0);
   const studentsWithViolation = students.filter((s) => s.violationCount > 0).length;
 
@@ -145,7 +147,7 @@ export const ProctoringKPIHeader: React.FC<ProctoringKPIHeaderProps> = ({
       )}
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {/* Total Siswa */}
         <div className={`p-3.5 rounded-2xl border shadow-xs flex items-center justify-between transition-colors ${
           isCapacityFull ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200'
@@ -182,6 +184,24 @@ export const ProctoringKPIHeader: React.FC<ProctoringKPIHeaderProps> = ({
             isCapacityFull ? 'bg-amber-100 text-amber-700' : 'bg-blue-50 text-blue-600'
           }`}>
             <Users className="w-4.5 h-4.5" />
+          </div>
+        </div>
+
+        {/* Belum Masuk */}
+        <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+          <div className="space-y-0.5">
+            <span className="text-[11px] font-display font-bold text-slate-500 uppercase tracking-wider block">
+              Belum Masuk
+            </span>
+            <div className="text-xl font-display font-black text-slate-700 tracking-tight leading-tight">
+              {notStarted} <span className="text-xs font-display font-semibold text-slate-400">Siswa</span>
+            </div>
+            <span className="text-[11px] text-slate-500 font-sans block">
+              {notStarted === 0 ? 'Semua hadir' : 'Belum scan QR / login'}
+            </span>
+          </div>
+          <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center flex-shrink-0">
+            <UserX className="w-4.5 h-4.5" />
           </div>
         </div>
 

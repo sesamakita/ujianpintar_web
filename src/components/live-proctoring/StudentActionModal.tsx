@@ -6,7 +6,9 @@ import {
   CheckCircle, 
   Lock, 
   History,
-  AlertTriangle
+  AlertTriangle,
+  UserX,
+  Sparkles
 } from 'lucide-react';
 import { ConfirmModal } from '../common/ConfirmModal';
 import type { StudentProctoring } from '../../types/exam';
@@ -140,6 +142,41 @@ export const StudentActionModal: React.FC<StudentActionModalProps> = ({
               className="mt-2 px-4 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-display font-bold transition-colors cursor-pointer"
             >
               Coba Lagi
+            </button>
+          </div>
+        ) : student.status === 'not_started' ? (
+          <div className="py-3.5 space-y-4">
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-center space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-500 flex items-center justify-center mx-auto">
+                <UserX className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-display font-bold text-slate-900 text-sm">Siswa Belum Memulai Ujian</h4>
+                <p className="text-xs text-slate-500 font-sans mt-1 leading-relaxed">
+                  Siswa ini terdaftar dalam database rombel kelas <strong>{student.className}</strong>, namun belum memindai QR code paket ujian atau belum memasukkan Token PIN ujian.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-blue-50 border border-blue-200/80 rounded-xl text-xs text-blue-900 space-y-1.5">
+              <div className="font-display font-bold flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                <span>Alur Kerja Siswa di Ponsel (APK):</span>
+              </div>
+              <ol className="list-decimal list-inside text-[11px] text-blue-800 space-y-1 font-sans leading-relaxed">
+                <li>Buka aplikasi ujian di HP siswa.</li>
+                <li>Pindai QR Code paket ujian yang diproyeksikan di layar depan.</li>
+                <li>Ketik 2-3 huruf nama siswa &mdash; NISN dan Kelas akan terisi otomatis.</li>
+                <li>Masukkan 6 digit PIN Token saat guru menginstruksikan mulai ujian.</li>
+              </ol>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full h-10 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-display font-bold transition-colors cursor-pointer"
+            >
+              Tutup
             </button>
           </div>
         ) : (

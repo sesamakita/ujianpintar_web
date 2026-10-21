@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, 
   KeyRound, 
@@ -10,12 +10,15 @@ import {
   Sliders,
   Check,
   Lock,
-  Unlock
+  Unlock,
+  QrCode
 } from 'lucide-react';
 import type { ExamSettings } from '../../types/exam';
 import { TimePickerModal } from './TimePickerModal';
 import { formatScheduleTime } from '../../services/examService';
 import { formatClassName } from '../../utils/formatters';
+import { rosterService } from '../../services/rosterService';
+import { ExamQrProjectorModal } from '../common/ExamQrProjectorModal';
 
 interface ExamSettingsPanelProps {
   settings: ExamSettings;
@@ -29,6 +32,14 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
   onGenerateNewToken,
 }) => {
   const [isTimePickerOpen, setIsTimePickerOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [rosterClasses, setRosterClasses] = useState<string[]>([]);
+
+  useEffect(() => {
+    rosterService.getDistinctClasses().then((classes) => {
+      setRosterClasses(classes);
+    });
+  }, []);
 
   const handleTextChange = (field: keyof ExamSettings, value: any) => {
     onChange({ ...settings, [field]: value });
@@ -73,17 +84,47 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
         </div>
 
         <div>
-          <label htmlFor="esp-2" className="text-xs font-display font-bold text-slate-700 block mb-1.5 uppercase tracking-wider flex items-center gap-1.5">
-            <GraduationCap className="w-3.5 h-3.5 text-slate-400" /> Rombel / Tingkat Kelas
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label htmlFor="esp-2" className="text-xs font-display font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <GraduationCap className="w-3.5 h-3.5 text-slate-400" /> Target Kelas Ujian
+            </label>
+            {rosterClasses.length > 0 && (
+              <span className="text-[10px] text-blue-600 font-bold">
+                {rosterClasses.length} kelas terdaftar
+              </span>
+            )}
+          </div>
           <input id="esp-2"
             type="text"
-            placeholder="Contoh: XI Ips 1, X MIPA 2, dll..."
+            list="esp-roster-classes-list"
+            placeholder="Contoh: X 1, XI IPA 2, dll..."
             value={settings.gradeLevel}
-            onChange={(e) => handleTextChange('gradeLevel', formatClassName(e.target.value, true))}
-            onBlur={(e) => handleTextChange('gradeLevel', formatClassName(e.target.value, false))}
+            onChange={(e) => {
+              const val = formatClassName(e.target.value, true);
+              onChange({
+                ...settings,
+                gradeLevel: val,
+                targetClass: val.trim(),
+              });
+            }}
+            onBlur={(e) => {
+              const val = formatClassName(e.target.value, false);
+              onChange({
+                ...settings,
+                gradeLevel: val,
+                targetClass: val.trim(),
+              });
+            }}
             className="w-full h-10 bg-slate-50 border border-slate-200 rounded-xl px-3.5 text-sm font-sans font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-colors"
           />
+          <datalist id="esp-roster-classes-list">
+            {rosterClasses.map((cls) => (
+              <option key={cls} value={cls} />
+            ))}
+          </datalist>
+          <p className="text-[11px] text-slate-400 font-sans mt-1">
+            Siswa kelas ini otomatis terhubung saat memindai QR code paket ujian.
+          </p>
         </div>
       </div>
 
@@ -307,12 +348,31 @@ export const ExamSettingsPanel: React.FC<ExamSettingsPanelProps> = ({
         </div>
       </div>
 
+      {/* Tombol Tampilkan QR Code & Token Ujian */}
+      <div className="pt-2">
+        <button
+          type="button"
+          onClick={() => setIsQrModalOpen(true)}
+          className="w-full h-11 px-4 bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:via-indigo-700 hover:to-blue-800 text-white rounded-xl text-xs font-display font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <QrCode className="w-4 h-4 text-white" />
+          <span>Tampilkan QR Code &amp; Token Ujian</span>
+        </button>
+      </div>
+
       {/* Interactive Time Picker Modal */}
       <TimePickerModal
         isOpen={isTimePickerOpen}
         onClose={() => setIsTimePickerOpen(false)}
         value={settings.scheduleTime || '08:00'}
         onChange={(newTime) => handleTextChange('scheduleTime', newTime)}
+      />
+
+      {/* Classroom High-Contrast QR Code & Token Projector Modal */}
+      <ExamQrProjectorModal
+        isOpen={isQrModalOpen}
+        onClose={() => setIsQrModalOpen(false)}
+        exam={settings}
       />
     </div>
   );

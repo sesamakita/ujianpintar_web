@@ -14,7 +14,8 @@ import {
   AlertCircle,
   Sparkles,
   Lock,
-  Scale
+  Scale,
+  QrCode
 } from 'lucide-react';
 import type { ExamSettings, Question } from '../../types/exam';
 import { ExamSettingsPanel } from './ExamSettingsPanel';
@@ -24,6 +25,7 @@ import { MobilePreviewModal } from './MobilePreviewModal';
 import { ExamBankList } from './ExamBankList';
 import { AIGeneratorModal } from './AIGeneratorModal';
 import { BulkPointsModal } from './BulkPointsModal';
+import { ExamQrProjectorModal } from '../common/ExamQrProjectorModal';
 import { examService } from '../../services/examService';
 
 import { generateUUID } from '../../services/examService';
@@ -94,6 +96,7 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isAIGeneratorOpen, setIsAIGeneratorOpen] = useState(false);
   const [isBulkPointsModalOpen, setIsBulkPointsModalOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -439,6 +442,16 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
 
           <button
             type="button"
+            onClick={() => setIsQrModalOpen(true)}
+            className="w-full h-8 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-display font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-2xs"
+            title="Tampilkan QR Code Soal & Token untuk Siswa di Layar Proyektor"
+          >
+            <QrCode className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+            <span>Proyektor QR</span>
+          </button>
+
+          <button
+            type="button"
             onClick={handleSaveExam}
             disabled={isSaving}
             className="w-full h-8 px-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-display font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm shadow-blue-500/20"
@@ -708,6 +721,12 @@ export const QuestionBuilder: React.FC<QuestionBuilderProps> = ({
         questions={questions}
         selectedQuestionIds={selectedQuestionIds}
         onApplyPoints={handleApplyBulkPoints}
+      />
+
+      <ExamQrProjectorModal
+        isOpen={isQrModalOpen}
+        onClose={() => setIsQrModalOpen(false)}
+        exam={examSettings}
       />
     </div>
   );

@@ -54,7 +54,7 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
   activeTotalQuestions = 5,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'working' | 'submitted' | 'violation'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'not_started' | 'working' | 'submitted' | 'violation'>('all');
 
   const getEffectiveViolationCount = (student: StudentProctoring) => {
     const exitLogs = (violationLogs || []).filter(
@@ -75,6 +75,7 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
     
     if (!matchSearch) return false;
 
+    if (statusFilter === 'not_started') return s.status === 'not_started';
     if (statusFilter === 'working') return s.status === 'working' || s.status === 'violation_flagged' || s.status === 'ready';
     if (statusFilter === 'submitted') return s.status === 'submitted';
     if (statusFilter === 'violation') return getEffectiveViolationCount(s) > 0;
@@ -131,6 +132,17 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
             }`}
           >
             Semua ({students.length})
+          </button>
+
+          <button type="button"
+            onClick={() => setStatusFilter('not_started')}
+            className={`px-3.5 py-2 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer whitespace-nowrap inline-flex items-center justify-center ${
+              statusFilter === 'not_started'
+                ? 'bg-slate-700 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            Belum Masuk ({students.filter((s) => s.status === 'not_started').length})
           </button>
 
           <button type="button"
@@ -200,11 +212,12 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
               </tr>
             ) : (
               filteredStudents.map((student) => {
+                const isNotStarted = student.status === 'not_started';
                 const isSubmitted = student.status === 'submitted';
                 const totalQ = Math.max(1, (student.totalQuestions && student.totalQuestions > 1) ? student.totalQuestions : (activeTotalQuestions || 5));
-                const currentProg = Math.min(totalQ, Math.max(0, Number(student.progressCount) || 0));
-                const progressPct = Math.min(100, Math.round((currentProg / totalQ) * 100));
-                const effectiveViolationCount = getEffectiveViolationCount(student);
+                const currentProg = isNotStarted ? 0 : Math.min(totalQ, Math.max(0, Number(student.progressCount) || 0));
+                const progressPct = isNotStarted ? 0 : Math.min(100, Math.round((currentProg / totalQ) * 100));
+                const effectiveViolationCount = isNotStarted ? 0 : getEffectiveViolationCount(student);
                 const hasViolation = effectiveViolationCount > 0;
                 const safeName = student.name || 'Siswa';
                 const safeNisn = student.nisn || '-';
@@ -218,6 +231,8 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                         ? 'bg-rose-100/50 hover:bg-rose-100/70 border-l-4 border-l-rose-600'
                         : hasViolation
                         ? 'bg-rose-50/20 hover:bg-blue-50/40'
+                        : isNotStarted
+                        ? 'hover:bg-slate-50/80 opacity-75'
                         : 'hover:bg-blue-50/40'
                     }`}
                   >
@@ -232,6 +247,8 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                               ? 'bg-emerald-100 text-emerald-800'
                               : hasViolation
                               ? 'bg-rose-100 text-rose-800'
+                              : isNotStarted
+                              ? 'bg-slate-100 text-slate-400 border border-slate-200'
                               : 'bg-blue-100 text-blue-800'
                           }`}
                         >
@@ -240,11 +257,15 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                         <div>
                           <div className="flex items-center gap-1.5">
                             <span className="font-display font-bold text-slate-900 text-sm">{safeName}</span>
-                            {student.isAway && (
+                            {isNotStarted ? (
+                              <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 text-[9px] font-display font-semibold rounded uppercase tracking-wider">
+                                Belum Masuk
+                              </span>
+                            ) : student.isAway ? (
                               <span className="px-1.5 py-0.5 bg-rose-600 text-white text-[9px] font-display font-black rounded uppercase tracking-wider animate-pulse">
                                 Di Luar
                               </span>
-                            )}
+                            ) : null}
                           </div>
                           <div className="text-[11px] text-slate-500 font-mono mt-0.5">
                             {safeNisn} • {safeClass}
@@ -257,13 +278,17 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                     <td className="py-3 px-4">
                       <div className="w-32 space-y-1">
                         <div className="flex justify-between text-[11px] font-semibold">
-                          <span className="text-slate-800">{currentProg}/{totalQ} Soal</span>
-                          <span className="text-slate-500 font-mono">{progressPct}%</span>
+                          <span className={isNotStarted ? 'text-slate-400' : 'text-slate-800'}>
+                            {currentProg}/{totalQ} Soal
+                          </span>
+                          <span className="text-slate-400 font-mono">{progressPct}%</span>
                         </div>
                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all duration-500 ${
-                              isSubmitted
+                              isNotStarted
+                                ? 'bg-slate-200'
+                                : isSubmitted
                                 ? 'bg-emerald-500'
                                 : progressPct > 70
                                 ? 'bg-blue-600'
@@ -277,7 +302,12 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
 
                     {/* Remaining Time */}
                     <td className="py-3 px-4">
-                      {isSubmitted ? (
+                      {isNotStarted ? (
+                        <span className="font-mono text-slate-400 text-xs flex items-center gap-1.5 font-medium">
+                          <Clock className="w-3.5 h-3.5 text-slate-300" />
+                          --:--
+                        </span>
+                      ) : isSubmitted ? (
                         <span className="inline-flex items-center gap-1.5 text-emerald-700 font-display font-bold text-xs">
                           <CheckCircle className="w-3.5 h-3.5" /> Selesai
                         </span>
@@ -296,7 +326,12 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
 
                     {/* Connection */}
                     <td className="py-3 px-4">
-                      {student.connectionStatus === 'online' ? (
+                      {isNotStarted ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-slate-100 text-slate-500 rounded-full text-[11px] font-semibold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                          Belum Masuk
+                        </span>
+                      ) : student.connectionStatus === 'online' ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-semibold border border-emerald-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                           Online
@@ -315,7 +350,11 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
 
                     {/* Violation Badge */}
                     <td className="py-3 px-4">
-                      {student.isAway ? (
+                      {isNotStarted ? (
+                        <span className="text-[11px] text-slate-400 font-sans">
+                          -
+                        </span>
+                      ) : student.isAway ? (
                         <LiveAwayBadge leftAt={student.leftAt} />
                       ) : hasViolation ? (
                         <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-rose-100 text-rose-800 rounded-lg text-xs font-display font-bold border border-rose-200">
@@ -338,7 +377,7 @@ export const StudentMonitoringTable: React.FC<StudentMonitoringTableProps> = ({
                         onClick={() => onSelectStudent(student)}
                         className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-xl text-xs font-display font-bold transition-colors inline-flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap shadow-xs"
                       >
-                        <span>Kelola Sesi</span>
+                        <span>{isNotStarted ? 'Detail' : 'Kelola Sesi'}</span>
                         <ChevronRight className="w-3.5 h-3.5 flex-shrink-0" />
                       </button>
                     </td>

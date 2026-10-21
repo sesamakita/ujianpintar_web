@@ -35,6 +35,8 @@ export interface ExamSettings {
   totalPoints?: number;
   createdAt?: string;
   updatedAt?: string;
+  targetClass?: string; // Target class for class-bound QR sync, e.g. 'X 1'
+  qrSyncPayload?: string;
   antiCheat: {
     detectTabSwitch: boolean;
     shuffleQuestions: boolean;
@@ -42,6 +44,27 @@ export interface ExamSettings {
     fullScreenLock: boolean;
     proctorPin?: string;
   };
+}
+
+export interface StudentRosterItem {
+  id: string;
+  teacherId?: string;
+  nisn: string;
+  studentName: string;
+  className: string;
+  gender?: 'L' | 'P';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface QRExamSyncPayload {
+  type: 'UP_EXAM_SYNC';
+  v: number;
+  examId: string;
+  examTitle: string;
+  targetClass: string;
+  token?: string;
+  teacherId?: string;
 }
 
 export interface StudentProctoring {
@@ -60,7 +83,7 @@ export interface StudentProctoring {
     timestamp: string;
     reason: string;
   }[];
-  status: 'ready' | 'working' | 'submitted' | 'violation_flagged' | 'timed_out';
+  status: 'not_started' | 'ready' | 'working' | 'submitted' | 'violation_flagged' | 'timed_out';
   score?: number;
   isAway?: boolean;
   leftAt?: string;

@@ -13,6 +13,7 @@ import { StudentMonitoringTable } from './StudentMonitoringTable';
 import { ViolationFeed } from './ViolationFeed';
 import { StudentActionModal } from './StudentActionModal';
 import { ConfirmModal } from '../common/ConfirmModal';
+import { ExamQrProjectorModal } from '../common/ExamQrProjectorModal';
 import { examService } from '../../services/examService';
 import { isAppExitViolation } from '../../utils/formatters';
 import type { StudentProctoring, ViolationLogItem, ExamSettings } from '../../types/exam';
@@ -450,10 +451,10 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
                 type="button"
                 onClick={() => setShowProjectorModal(true)}
                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 rounded-xl text-xs font-display font-bold transition-colors cursor-pointer border border-slate-200 shadow-xs"
-                title="Tampilkan Token di Layar Proyektor"
+                title="Tampilkan QR Code & Token di Layar Proyektor Kelas"
               >
                 <Tv className="w-3.5 h-3.5 text-blue-600" />
-                <span>Proyektor Token</span>
+                <span>Proyektor QR &amp; Token</span>
               </button>
             )}
 
@@ -622,57 +623,13 @@ export const LiveProctoringDashboard: React.FC<LiveProctoringDashboardProps> = (
         />
       )}
 
-      {/* Modal Proyektor Token Ujian Siswa */}
-      {showProjectorModal && activeExam && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full text-center shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-200">
-            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3 border border-blue-200 shadow-xs">
-              <Tv className="w-6 h-6" />
-            </div>
-
-            <span className="px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[11px] font-display font-bold uppercase tracking-wider">
-              Mode Proyektor Token Ujian
-            </span>
-
-            <h3 className="text-base font-display font-bold text-slate-900 mt-2.5 tracking-tight">
-              {activeExam.title}
-            </h3>
-            <p className="text-xs text-slate-500 mt-0.5 font-sans">
-              Instruksikan siswa di ruang kelas untuk memasukkan 6 digit Token PIN ini.
-            </p>
-
-            {/* Display Big Token */}
-            <div className="my-5 p-6 bg-slate-900 rounded-2xl text-white shadow-inner flex flex-col items-center">
-              <span className="text-[11px] uppercase tracking-widest text-slate-400 font-display font-bold mb-1">
-                TOKEN UJIAN SISWA
-              </span>
-              <div className="text-5xl font-mono font-black tracking-widest text-blue-400 my-1">
-                {activeExam.token}
-              </div>
-              <span className="text-[11px] text-slate-400 font-sans mt-1">
-                {activeExam.subject} • {activeExam.gradeLevel}
-              </span>
-            </div>
-
-            <div className="flex gap-2.5 justify-center">
-              <button
-                type="button"
-                onClick={handleCopyToken}
-                className="h-10 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-display font-bold text-xs transition-colors flex items-center gap-2 shadow-md shadow-blue-500/20 cursor-pointer"
-              >
-                {copiedToken ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedToken ? 'Token Tersalin!' : 'Salin Token Siswa'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowProjectorModal(false)}
-                className="h-10 px-5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-display font-bold text-xs transition-colors cursor-pointer"
-              >
-                Tutup
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Classroom High-Contrast QR Code & Token Projector Modal */}
+      {activeExam && activeExam.id !== 'all' && (
+        <ExamQrProjectorModal
+          isOpen={showProjectorModal}
+          onClose={() => setShowProjectorModal(false)}
+          exam={activeExam}
+        />
       )}
 
       {/* Modern Confirm Lock All Modal */}

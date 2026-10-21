@@ -10,7 +10,7 @@ import type { TeacherSubscription } from '../../types/subscription';
 import { schoolLicenseService } from '../../services/schoolLicenseService';
 
 interface HeaderProps {
-  activeTab: 'builder' | 'proctoring' | 'analytics' | 'media' | 'subscription' | 'settings';
+  activeTab: 'builder' | 'roster' | 'proctoring' | 'analytics' | 'media' | 'subscription' | 'settings';
   examSettings: ExamSettings;
   violationCount: number;
   teacherName?: string;
@@ -18,7 +18,7 @@ interface HeaderProps {
   subscription?: TeacherSubscription;
   isMobileOpen?: boolean;
   onOpenUpgradeModal?: () => void;
-  onNavigateTab?: (tab: 'builder' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription') => void;
+  onNavigateTab?: (tab: 'builder' | 'roster' | 'proctoring' | 'analytics' | 'media' | 'settings' | 'subscription') => void;
   onToggleMobileMenu?: () => void;
 }
 
@@ -58,6 +58,8 @@ export const Header: React.FC<HeaderProps> = ({
     switch (activeTab) {
       case 'builder':
         return 'Question Builder & Jadwal Ujian';
+      case 'roster':
+        return 'Database Siswa & Rombel Kelas';
       case 'media':
         return 'Koleksi Foto & Galeri Soal VPS';
       case 'proctoring':

@@ -24,13 +24,24 @@ import {
   ChevronDown,
   ChevronUp,
   Printer,
-  XCircle
+  XCircle,
+  QrCode,
+  Users
 } from 'lucide-react';
-import type { ExamSettings, Question, StudentProctoring, GradeRecord, ViolationLogItem, StudentPublicExamSummary, StudentAnswerDetailItem } from '../../types/exam';
+import type { 
+  ExamSettings, 
+  Question, 
+  StudentProctoring, 
+  GradeRecord, 
+  ViolationLogItem, 
+  StudentPublicExamSummary, 
+  StudentAnswerDetailItem,
+  StudentRosterItem
+} from '../../types/exam';
 import { MathRenderer } from '../common/MathRenderer';
 import { RustEngineBridge } from '../../wasm/rustEngine';
-import { formatPersonName } from '../../utils/formatters';
 import { examService } from '../../services/examService';
+import { rosterService } from '../../services/rosterService';
 import { PrintableStudentResultCard } from '../portal/PrintableStudentResultCard';
 
 // Default interactive demo questions for simulation preview when accessed from Landing Page or clean editor
@@ -130,11 +141,20 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
     : (isUsingDemo ? 'Simulasi Ujian Pintar Siswa' : 'Ujian Penilaian Tengah Semester');
   const effectiveGrade = examSettings.gradeLevel || (isUsingDemo ? 'Kelas X (Simulasi Interaktif)' : 'Kelas X');
   const effectiveToken = examSettings.token || 'EXAM88';
+  const targetClass = examSettings.targetClass || examSettings.gradeLevel || 'Kelas X';
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [nisn, setNisn] = useState('0082391024');
-  const [name, setName] = useState('Budi Santoso');
-  const [tokenInput, setTokenInput] = useState(effectiveToken);
+  const [nisn, setNisn] = useState('');
+  const [name, setName] = useState('');
+  const [studentClassName, setStudentClassName] = useState(targetClass);
+  const [isQrSynced, setIsQrSynced] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
+  const [classRoster, setClassRoster] = useState<StudentRosterItem[]>([]);
+  const [filteredRoster, setFilteredRoster] = useState<StudentRosterItem[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isRosterSelected, setIsRosterSelected] = useState(false);
+
+  const [tokenInput, setTokenInput] = useState('');
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, string>>({});
   const [shortAnswers, setShortAnswers] = useState<Record<number, string>>({});
@@ -147,6 +167,26 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
   const [simulatedStatus, setSimulatedStatus] = useState<'published' | 'closed'>(
     examSettings.status === 'closed' ? 'closed' : 'published'
   );
+
+  useEffect(() => {
+    let active = true;
+    rosterService.getPublicClassRoster(examSettings.id, targetClass).then((students) => {
+      if (!active) return;
+      if (students && students.length > 0) {
+        setClassRoster(students);
+      } else {
+        const fallbackStudents: StudentRosterItem[] = [
+          { id: 'fb-1', nisn: '0082391024', studentName: 'Ahmad Dahlan', className: targetClass },
+          { id: 'fb-2', nisn: '0082391025', studentName: 'Budi Santoso', className: targetClass },
+          { id: 'fb-3', nisn: '0082391026', studentName: 'Citra Dewi', className: targetClass },
+          { id: 'fb-4', nisn: '0082391027', studentName: 'Dewi Lestari', className: targetClass },
+          { id: 'fb-5', nisn: '0082391028', studentName: 'Eko Prasetyo', className: targetClass },
+        ];
+        setClassRoster(fallbackStudents);
+      }
+    });
+    return () => { active = false; };
+  }, [examSettings.id, targetClass]);
 
   // Check Result State (Dedicated Container in Mobile Simulation)
   const [checkNisn, setCheckNisn] = useState('');
@@ -236,12 +276,6 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
     };
   }, [isOpen, onClose]);
 
-  // Keep token synced if examSettings changes
-  useEffect(() => {
-    if (examSettings.token && (!tokenInput || tokenInput === 'EXAM88')) {
-      setTokenInput(examSettings.token);
-    }
-  }, [examSettings.token, tokenInput]);
 
   if (!isOpen) return null;
 
@@ -272,11 +306,57 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
     setFinalScore(null);
     setShowQuestionGrid(false);
     setTokenError(null);
+    setIsQrSynced(false);
+    setName('');
+    setNisn('');
+    setTokenInput('');
+    setIsRosterSelected(false);
+  };
+
+  const handleSimulateScanQr = () => {
+    setIsQrSynced(true);
+    setStudentClassName(targetClass);
+    setName('');
+    setNisn('');
+    setIsRosterSelected(false);
+    setTokenInput('');
+    setTokenError(null);
+    setSyncNotice(`✓ Berhasil mensinkronkan paket: ${effectiveTitle} (Kelas: ${targetClass})`);
+    setTimeout(() => setSyncNotice(null), 4000);
+    setFilteredRoster(classRoster);
+    setIsDropdownOpen(true);
+  };
+
+  const handleNameInputChange = (val: string) => {
+    setName(val);
+    setIsRosterSelected(false);
+    if (!val.trim()) {
+      setFilteredRoster(classRoster);
+      setIsDropdownOpen(false);
+      return;
+    }
+    const clean = val.toLowerCase();
+    const matches = classRoster.filter((s) => s.studentName.toLowerCase().includes(clean));
+    setFilteredRoster(matches);
+    setIsDropdownOpen(matches.length > 0);
+  };
+
+  const handleSelectRosterStudent = (student: StudentRosterItem) => {
+    setName(student.studentName);
+    setNisn(student.nisn);
+    setStudentClassName(student.className);
+    setIsRosterSelected(true);
+    setIsDropdownOpen(false);
+    if (tokenError) setTokenError(null);
   };
 
   const handleAutoFill = () => {
-    setNisn('0082391024');
-    setName('Budi Santoso');
+    setIsQrSynced(true);
+    const student = classRoster.length > 0 ? classRoster[0] : { studentName: 'Budi Santoso', nisn: '0082391024', className: targetClass };
+    setName(student.studentName);
+    setNisn(student.nisn);
+    setStudentClassName(student.className);
+    setIsRosterSelected(true);
     setTokenInput(effectiveToken);
     setTokenError(null);
     setCopiedNotification(true);
@@ -284,8 +364,16 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
   };
 
   const handleProceedToStep2 = () => {
+    if (!name.trim()) {
+      setTokenError('Harap pilih atau masukkan nama siswa terlebih dahulu.');
+      return;
+    }
+    if (!nisn.trim()) {
+      setTokenError('Nomor NISN siswa belum terisi.');
+      return;
+    }
     if (!tokenInput.trim()) {
-      setTokenError('Harap masukkan 6 digit Token PIN ujian.');
+      setTokenError('Harap masukkan 6 digit Token PIN yang diberikan oleh pengawas ruang.');
       return;
     }
     if (simulatedStatus === 'closed') {
@@ -325,7 +413,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
       id: studentId,
       nisn: nisn || '0082391024',
       name: name || 'Budi Santoso',
-      className: effectiveGrade,
+      className: studentClassName || effectiveGrade,
       progressCount: Object.keys(selectedAnswers).length + Object.keys(shortAnswers).length,
       totalQuestions: questions.length,
       remainingSeconds: examSettings.durationMinutes * 60 - 120,
@@ -341,7 +429,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
       studentId: studentId,
       nisn: nisn || '0082391024',
       name: name || 'Budi Santoso',
-      className: effectiveGrade,
+      className: studentClassName || effectiveGrade,
       score: gradeResult.totalScore,
       maxScore: gradeResult.maxScore || 100,
       submittedAt: nowTimeStr,
@@ -487,16 +575,28 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                 </div>
               )}
 
-              {/* Quick autofill button */}
-              <div className="mt-4 pt-4 border-t border-slate-700/60 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleAutoFill}
-                  className="flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs shadow-blue-500/20"
-                >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>Isi Data Tes Otomatis</span>
-                </button>
+              {/* Quick action buttons */}
+              <div className="mt-4 pt-4 border-t border-slate-700/60 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSimulateScanQr}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs"
+                    title="Simulasikan scan QR code paket soal di HP"
+                  >
+                    <QrCode className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Scan QR Ujian</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleAutoFill}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-xs shadow-blue-500/20"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Isi Cepat</span>
+                  </button>
+                </div>
                 {copiedNotification && (
                   <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1 animate-in fade-in">
                     <Check className="w-3 h-3" /> Terisi ke HP!
@@ -560,7 +660,7 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                   </span>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-xs font-bold text-slate-200">Tahap 1: Quick Entry (Pintu Masuk)</h4>
-                    <p className="text-[11px] text-slate-400 truncate">Input NISN & 6-Digit Token PIN ({effectiveToken})</p>
+                    <p className="text-[11px] text-slate-400 truncate">Scan QR, Nama Siswa, NISN, Kelas &amp; Token PIN</p>
                   </div>
                 </div>
               </div>
@@ -917,41 +1017,198 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                             <h3 className="font-extrabold text-slate-900 text-base">UjianPintar Mobile</h3>
                             <p className="text-[11px] text-slate-500 font-medium mt-0.5">Portal pengerjaan ujian berbasis CBT</p>
 
-                            {/* Inputs */}
-                            <div className="mt-5 space-y-3 text-left">
+                            {/* Notification Berhasil Sinkron QR */}
+                            {syncNotice && (
+                              <div className="mt-3 p-2 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xl text-[10px] font-bold text-left flex items-center gap-1.5 animate-in fade-in">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
+                                <span className="leading-snug">{syncNotice}</span>
+                              </div>
+                            )}
+
+                            {/* 1. FITUR SCAN / PINDAI QR CODE SOAL (PALING ATAS) */}
+                            {!isQrSynced ? (
+                              <div className="mt-3 p-3.5 bg-gradient-to-br from-blue-50 via-indigo-50/40 to-white border-2 border-dashed border-blue-300 rounded-2xl text-center space-y-2 shadow-2xs">
+                                <div className="w-9 h-9 bg-blue-600 text-white rounded-xl flex items-center justify-center mx-auto shadow-xs">
+                                  <QrCode className="w-4 h-4" />
+                                </div>
+                                <div>
+                                  <p className="text-xs font-black text-slate-800">1. Pindai QR Code Paket Soal</p>
+                                  <p className="text-[10px] text-slate-500 leading-snug mt-0.5">
+                                    Pindai QR di layar proyektor untuk sinkronisasi kelas &amp; paket ujian
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleSimulateScanQr}
+                                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+                                >
+                                  <QrCode className="w-3.5 h-3.5" />
+                                  <span>Pindai QR Code Soal</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-1.5 text-left shadow-2xs">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <div className="w-6 h-6 rounded-lg bg-emerald-600 text-white flex items-center justify-center flex-shrink-0">
+                                    <Check className="w-3.5 h-3.5 stroke-[3]" />
+                                  </div>
+                                  <div className="truncate">
+                                    <div className="text-[11px] font-bold text-emerald-950 truncate">
+                                      {effectiveTitle}
+                                    </div>
+                                    <div className="text-[9px] text-emerald-700 font-mono font-semibold">
+                                      Target: Kelas {studentClassName.replace(/^kelas\s*/i, '')}
+                                    </div>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={handleSimulateScanQr}
+                                  className="px-2 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[9px] font-bold transition cursor-pointer flex-shrink-0"
+                                >
+                                  Pindai Ulang
+                                </button>
+                              </div>
+                            )}
+
+                            {/* URUTAN VERTIKAL: NAMA SISWA -> NISN -> KELAS -> TOKEN */}
+                            <div className="mt-3 space-y-2.5 text-left">
+                              
+                              {/* 2. NAMA SISWA (DENGAN AUTOCOMPLETE DARI DATABASE ROMBEL) */}
+                              <div className="relative">
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="preview-name" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                                    Nama Lengkap Siswa
+                                  </label>
+                                  {isRosterSelected ? (
+                                    <span className="text-[9px] font-bold text-emerald-600 flex items-center gap-0.5">
+                                      <Check className="w-3 h-3" /> Terverifikasi Rombel
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] text-slate-400">
+                                      {classRoster.length > 0 ? `${classRoster.length} Siswa Terdaftar` : 'Pilih dari daftar'}
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                <div className="relative">
+                                  <input
+                                    id="preview-name"
+                                    type="text"
+                                    value={name}
+                                    onChange={(e) => handleNameInputChange(e.target.value)}
+                                    onFocus={() => {
+                                      if (classRoster.length > 0 && !name) {
+                                        setFilteredRoster(classRoster);
+                                        setIsDropdownOpen(true);
+                                      } else if (name) {
+                                        handleNameInputChange(name);
+                                      }
+                                    }}
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 pr-8"
+                                    placeholder={isQrSynced ? "Ketik & pilih nama Anda..." : "Pindai QR soal dulu atau ketik nama"}
+                                    autoComplete="off"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFilteredRoster(classRoster);
+                                      setIsDropdownOpen(!isDropdownOpen);
+                                    }}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                  >
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+
+                                {/* Autocomplete Dropdown List */}
+                                {isDropdownOpen && filteredRoster.length > 0 && (
+                                  <>
+                                    <div
+                                      className="fixed inset-0 z-20"
+                                      onClick={() => setIsDropdownOpen(false)}
+                                    />
+                                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-30 max-h-40 overflow-y-auto divide-y divide-slate-100 animate-in fade-in">
+                                      <div className="px-3 py-1.5 bg-slate-50 text-[9px] font-bold text-slate-400 uppercase tracking-wider sticky top-0 flex items-center justify-between border-b border-slate-100">
+                                        <span>Daftar Siswa ({studentClassName})</span>
+                                        <Users className="w-3 h-3 text-slate-400" />
+                                      </div>
+                                      {filteredRoster.map((s) => (
+                                        <div
+                                          key={s.id || s.nisn}
+                                          onClick={() => handleSelectRosterStudent(s)}
+                                          className="p-2 hover:bg-blue-50 cursor-pointer flex items-center justify-between text-xs transition-colors"
+                                        >
+                                          <div className="truncate pr-2">
+                                            <span className="font-bold text-slate-900 block truncate">{s.studentName}</span>
+                                            <span className="text-[10px] text-slate-500 font-mono">NISN: {s.nisn}</span>
+                                          </div>
+                                          <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md flex-shrink-0">
+                                            Pilih
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* 3. NISN (VERTIKAL FULL WIDTH, TERISI OTOMATIS) */}
                               <div>
-                                <label htmlFor="preview-nisn" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
-                                  NISN Peserta
-                                </label>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="preview-nisn" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                                    NISN (Nomor Induk Siswa Nasional)
+                                  </label>
+                                  {isRosterSelected && (
+                                    <span className="text-[9px] font-bold text-emerald-600">
+                                      ✓ Terisi Otomatis
+                                    </span>
+                                  )}
+                                </div>
                                 <input
                                   id="preview-nisn"
                                   type="text"
                                   value={nisn}
                                   onChange={(e) => setNisn(e.target.value)}
-                                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                  placeholder="Masukkan NISN"
+                                  readOnly={isRosterSelected}
+                                  className={`w-full border rounded-xl px-3 py-2 text-xs font-mono font-bold ${
+                                    isRosterSelected
+                                      ? 'bg-slate-100 border-slate-200 text-slate-700 cursor-not-allowed'
+                                      : 'bg-white border-slate-200 text-slate-800'
+                                  }`}
+                                  placeholder="Terisi otomatis setelah nama dipilih"
                                 />
                               </div>
 
+                              {/* 4. KELAS (VERTIKAL FULL WIDTH, TERISI OTOMATIS) */}
                               <div>
-                                <label htmlFor="preview-name" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
-                                  Nama Lengkap Siswa
-                                </label>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                                    Kelas / Rombel
+                                  </label>
+                                  <span className="text-[9px] font-semibold text-slate-500">
+                                    Sesuai Paket Soal
+                                  </span>
+                                </div>
                                 <input
-                                  id="preview-name"
                                   type="text"
-                                  value={name}
-                                  onChange={(e) => setName(formatPersonName(e.target.value))}
-                                  onBlur={() => setName(formatPersonName(name).trim())}
-                                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                                  placeholder="Nama lengkap"
+                                  value={`Kelas ${studentClassName.replace(/^kelas\s*/i, '')}`}
+                                  readOnly
+                                  className="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-700 cursor-not-allowed"
+                                  placeholder="Kelas"
                                 />
                               </div>
 
+                              {/* 5. TOKEN PIN (VERTIKAL FULL WIDTH) */}
                               <div>
-                                <label htmlFor="preview-token" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
-                                  Token PIN (6 Digit)
-                                </label>
+                                <div className="flex items-center justify-between mb-1">
+                                  <label htmlFor="preview-token" className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                                    Token Ujian (PIN 6 Digit)
+                                  </label>
+                                  <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                    Dari Pengawas
+                                  </span>
+                                </div>
                                 <input
                                   id="preview-token"
                                   type="text"
@@ -965,6 +1222,9 @@ export const MobilePreviewModal: React.FC<MobilePreviewModalProps> = ({
                                   className="w-full bg-white border-2 border-blue-500 rounded-xl px-3 py-2 text-center text-base font-mono font-black text-blue-700 tracking-widest shadow-xs"
                                   placeholder="TOKEN"
                                 />
+                                <p className="text-[9px] text-slate-400 font-sans mt-0.5">
+                                  * Masukkan PIN yang diberikan oleh pengawas saat ujian resmi dimulai.
+                                </p>
 
                                 {tokenError && (
                                   <div role="alert" className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] font-medium flex items-start gap-2 animate-in fade-in mt-2">
