@@ -1037,7 +1037,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                       className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs shadow-lg shadow-emerald-600/30 hover:shadow-emerald-600/40 transition-all flex items-center justify-center gap-2 cursor-pointer scale-100 hover:scale-[1.02] active:scale-95"
                     >
                       <Download className="w-4 h-4 shrink-0" />
-                      <span>Unduh APK Siswa Android (30 MB)</span>
+                      <span>Unduh APK Siswa Android (40 MB)</span>
                     </button>
 
                     {/* Teks Pemicu Simulasi di Browser */}
@@ -1196,7 +1196,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     <Check className="w-3 h-3" />
                   </div>
                   <div>
-                    <strong className={isDarkMode ? 'text-white' : 'text-slate-900'}>Hemat Kuota & Ringan:</strong> Ukuran paket aplikasi sekitar 30 MB sehingga sangat lancar di smartphone spesifikasi siswa.
+                    <strong className={isDarkMode ? 'text-white' : 'text-slate-900'}>Hemat Kuota & Ringan:</strong> Ukuran paket aplikasi sekitar 40 MB sehingga sangat lancar di smartphone spesifikasi siswa.
                   </div>
                 </div>
 
@@ -1217,7 +1217,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/25 scale-100 hover:scale-[1.01] active:scale-95"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Unduh APK Siswa Android (30 MB)</span>
+                  <span>Unduh APK Siswa Android (40 MB)</span>
                 </button>
 
                 <button
@@ -1886,7 +1886,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             {[
               {
                 q: "Bagaimana cara siswa mengunduh aplikasi mobile?",
-                a: "Siswa dapat mengunduh file APK resmi yang disediakan oleh sekolah atau melalui tautan instalasi di halaman ujian. Ukuran aplikasinya sangat ringan (sekitar 30 MB) dan tidak membutuhkan gawai berspesifikasi tinggi."
+                a: "Siswa dapat mengunduh file APK resmi yang disediakan oleh sekolah atau melalui tautan instalasi di halaman ujian. Ukuran aplikasinya sangat ringan (sekitar 40 MB) dan tidak membutuhkan gawai berspesifikasi tinggi."
               },
               {
                 q: "Apakah guru harus menginstal aplikasi di laptop?",
