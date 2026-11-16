@@ -594,8 +594,11 @@ Saya telah mentransfer tepat sejumlah *${formatRupiah(transaction.totalAmount)}*
     if (typeof window !== 'undefined' && cleanEmail) {
       localStorage.setItem(`ujianpintar_subscription_${cleanEmail}`, JSON.stringify(updatedSub));
 
-      const historyRaw = localStorage.getItem(`ujianpintar_transactions_${cleanEmail}`);
-      const history: TransactionRecord[] = historyRaw ? JSON.parse(historyRaw) : [];
+      let history: TransactionRecord[] = [];
+      try {
+        const historyRaw = localStorage.getItem(`ujianpintar_transactions_${cleanEmail}`);
+        if (historyRaw) history = JSON.parse(historyRaw);
+      } catch {}
       const completedTrx: TransactionRecord = {
         ...transaction,
         status: 'paid',

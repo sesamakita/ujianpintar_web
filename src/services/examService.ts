@@ -253,7 +253,10 @@ export const examService = {
         localStorage.setItem(`ujianpintar_published_questions_${cleanEmail}`, JSON.stringify(questions));
 
         const listRaw = localStorage.getItem(`ujianpintar_all_exams_${cleanEmail}`);
-        let currentList: ExamSettings[] = listRaw ? JSON.parse(listRaw) : [];
+        let currentList: ExamSettings[] = [];
+        try {
+          if (listRaw) currentList = JSON.parse(listRaw);
+        } catch {}
         const existingIdx = currentList.findIndex((e) => e.id === finalExamId);
         if (existingIdx >= 0) {
           currentList[existingIdx] = updatedExam;
@@ -459,9 +462,11 @@ export const examService = {
       if (typeof window !== 'undefined' && cleanEmail) {
         const listRaw = localStorage.getItem(`ujianpintar_all_exams_${cleanEmail}`);
         if (listRaw) {
-          const list: ExamSettings[] = JSON.parse(listRaw);
-          const filtered = list.filter((e) => e.id !== examId);
-          localStorage.setItem(`ujianpintar_all_exams_${cleanEmail}`, JSON.stringify(filtered));
+          try {
+            const list: ExamSettings[] = JSON.parse(listRaw);
+            const filtered = list.filter((e) => e.id !== examId);
+            localStorage.setItem(`ujianpintar_all_exams_${cleanEmail}`, JSON.stringify(filtered));
+          } catch {}
         }
       }
 
@@ -1775,8 +1780,8 @@ export const examService = {
             .map((a) => ({
               session_id: primarySessionId,
               question_id: a.questionId,
-              selected_option_id: (a.selectedOptionId && isValidUUID(a.selectedOptionId)) ? a.selectedOptionId : null,
-              answer_text: a.answerText || (!isValidUUID(a.selectedOptionId) ? (a.selectedOptionId || null) : null),
+              selected_option_id: a.selectedOptionId ? String(a.selectedOptionId).trim() : null,
+              answer_text: a.answerText || null,
               is_doubt: !!a.isDoubt,
               is_correct: typeof a.isCorrect === 'boolean' ? a.isCorrect : null,
               score_earned: typeof a.scoreEarned === 'number' ? Math.round(a.scoreEarned) : null,

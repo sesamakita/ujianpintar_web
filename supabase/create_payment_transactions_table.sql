@@ -52,6 +52,6 @@ create policy "Allow insert payment transaction" on public.payment_transactions
 create policy "Allow read payment transactions" on public.payment_transactions
   for select using (true);
 
--- Izinkan pembaruan status transaksi (oleh bot telegram atau admin)
-create policy "Allow update payment transactions" on public.payment_transactions
-  for update using (true);
+-- Hanya service_role atau admin terverifikasi yang dapat memperbarui status transaksi (oleh bot telegram atau admin)
+create policy "Only service role can update payment transactions" on public.payment_transactions
+  for update using (auth.role() = 'service_role');

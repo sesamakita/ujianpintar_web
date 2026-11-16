@@ -147,7 +147,7 @@ export const ProctoringKPIHeader: React.FC<ProctoringKPIHeaderProps> = ({
       )}
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3.5">
         {/* Total Siswa */}
         <div className={`p-3.5 rounded-2xl border shadow-xs flex items-center justify-between transition-colors ${
           isCapacityFull ? 'bg-amber-50/70 border-amber-300' : 'bg-white border-slate-200'

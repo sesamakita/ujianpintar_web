@@ -121,6 +121,8 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
             qType = 'true_false';
           } else if (rawType === 'ISIAN' || rawType.includes('SINGKAT') || rawType === 'SHORT_ANSWER') {
             qType = 'short_answer';
+          } else if (rawType === 'ESAI' || rawType === 'URAIAN' || rawType === 'ESSAY' || rawType.includes('URAI') || rawType.includes('ESAI')) {
+            qType = 'essay';
           }
 
           const latexFormula = idxLatex !== -1 && row[idxLatex] ? String(row[idxLatex]).trim() : undefined;
@@ -193,7 +195,7 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
               points
             });
 
-          } else {
+          } else if (qType === 'short_answer') {
             // Short Answer
             questions.push({
               id: questionId,
@@ -204,6 +206,18 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
               imageUrl,
               options: [],
               correctAnswerText: rawKey,
+              points
+            });
+          } else {
+            // Essay / Uraian
+            questions.push({
+              id: questionId,
+              number: qNum,
+              type: 'essay',
+              questionText: qText,
+              latexFormula,
+              imageUrl,
+              options: [],
               points
             });
           }
@@ -420,7 +434,18 @@ export const parseUploadedFile = async (file: File): Promise<ParseResult> => {
 
   if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
     return parseExcelFile(file);
-  } else if (ext === 'txt' || ext === 'docx' || ext === 'doc') {
+  } else if (ext === 'docx' || ext === 'doc') {
+    return {
+      success: false,
+      questions: [],
+      errors: [
+        `File Microsoft Word (.${ext}) tidak dapat diparsing langsung sebagai teks mentah. Silakan gunakan format Excel (.xlsx / .csv) atau teks Aiken (.txt). Anda juga dapat menyalin soal dari Word ke file .txt standar.`,
+      ],
+      warnings: [],
+      totalParsed: 0,
+      filename: file.name,
+    };
+  } else if (ext === 'txt') {
     return parseTextFile(file);
   } else {
     return {

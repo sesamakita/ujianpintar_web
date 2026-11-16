@@ -19,6 +19,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+import { handleDekatiRtReply } from './dekati-rt-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1296,6 +1297,16 @@ async function processIncomingPayload(payload) {
 
   // 5. Abaikan pesan kosong atau non-teks
   if (!text || text.trim().length === 0) return;
+
+  // 5.5. Cek apakah pesan adalah balasan Rekomendasi RT untuk DEKATI (Ketik 1 atau 2)
+  try {
+    const handledByDekati = await handleDekatiRtReply(from, text, sendWhatsAppReply);
+    if (handledByDekati) {
+      return; // Pesan sukses diproses untuk DEKATI, jangan diteruskan ke AI UjianPintar
+    }
+  } catch (dekatiErr) {
+    console.error('[WA-AI] Error checking DEKATI RT handler:', dekatiErr.message);
+  }
 
   // 6. Filter Pesan Pribadi vs Pesan Terkait Platform UjianPintar
   if (!isPlatformRelatedMessage(text, senderPhone)) {

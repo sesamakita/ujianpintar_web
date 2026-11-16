@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Dokumen Flow Transaksi & Customer Journey - UjianPintar (Midtrans)</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 12mm 15mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    body {
+      background-color: #ffffff;
+      color: #1e293b;
+      font-size: 10pt;
+      line-height: 1.5;
+    }
+    .header {
+      border-bottom: 2px solid #2563eb;
+      padding-bottom: 12px;
+      margin-bottom: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .header h1 {
+      font-size: 15pt;
+      color: #0f172a;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .header p {
+      font-size: 9pt;
+      color: #64748b;
+      margin-top: 3px;
+    }
+    .badge {
+      background-color: #eff6ff;
+      color: #1d4ed8;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 8.5pt;
+      font-weight: 700;
+      border: 1px solid #bfdbfe;
+      display: inline-block;
+    }
+    .section-title {
+      font-size: 11pt;
+      font-weight: 700;
+      color: #0f172a;
+      border-left: 4px solid #2563eb;
+      padding-left: 8px;
+      margin-top: 16px;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+    }
+    .meta-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+      font-size: 9.5pt;
+    }
+    .meta-table td {
+      padding: 6px 10px;
+      border: 1px solid #e2e8f0;
+    }
+    .meta-table td.label {
+      background-color: #f8fafc;
+      font-weight: 600;
+      width: 28%;
+      color: #475569;
+    }
+    .flow-chart {
+      background-color: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    .flow-steps {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .flow-step {
+      flex: 1;
+      background: #ffffff;
+      border: 1px solid #2563eb;
+      border-radius: 6px;
+      padding: 8px 6px;
+      text-align: center;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    }
+    .flow-step .num {
+      background: #2563eb;
+      color: #fff;
+      font-size: 8pt;
+      font-weight: 800;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 4px;
+    }
+    .flow-step .title {
+      font-size: 8pt;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+    .flow-arrow {
+      color: #94a3b8;
+      font-weight: 800;
+      font-size: 11pt;
+    }
+    .step-card {
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      background-color: #ffffff;
+      page-break-inside: avoid;
+    }
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+    .step-tag {
+      background-color: #2563eb;
+      color: white;
+      font-size: 8pt;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .step-name {
+      font-size: 10pt;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .step-desc {
+      font-size: 9pt;
+      color: #475569;
+      margin-bottom: 6px;
+    }
+    .wireframe-box {
+      background-color: #f1f5f9;
+      border: 1px dashed #94a3b8;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 8.5pt;
+      color: #334155;
+    }
+    .wireframe-box strong {
+      color: #0f172a;
+    }
+    .policy-box {
+      background-color: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 9pt;
+      color: #166534;
+      margin-top: 10px;
+      page-break-inside: avoid;
+    }
+    .footer {
+      border-top: 1px solid #e2e8f0;
+      margin-top: 16px;
+      padding-top: 8px;
+      text-align: center;
+      font-size: 8pt;
+      color: #94a3b8;
+    }
+    .page-break {
+      page-break-after: always;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <h1>DOKUMEN FLOW TRANSAKSI & CUSTOMER JOURNEY</h1>
+      <p>Lampiran Pendukung Verifikasi Aktivasi Akun Merchant Midtrans Payment Gateway</p>
+    </div>
+    <div>
+      <span class="badge">EDTECH SAAS COMPLIANCE</span>
+    </div>
+  </div>
+
+  <!-- BAGIAN 1: PROFIL MERCHANT -->
+  <div class="section-title">1. Profil Merchant & Karakteristik Layanan SaaS</div>
+  <table class="meta-table">
+    <tr>
+      <td class="label">Nama Platform / Layanan</td>
+      <td><strong>UjianPintar</strong> (Platform Asesmen Digital & Pengawasan Ujian Sekolah Berbasis AI)</td>
+    </tr>
+    <tr>
+      <td class="label">Website / Aplikasi Resmi</td>
+      <td><a href="https://ujianpintar.online" style="color: #2563eb; text-decoration: none;">https://ujianpintar.online</a></td>
+    </tr>
+    <tr>
+      <td class="label">Kategori Industri</td>
+      <td>Pendidikan & Teknologi Digital (EdTech / Software as a Service - SaaS)</td>
+    </tr>
+    <tr>
+      <td class="label">Jenis Produk / Transaksi</td>
+      <td>Langganan Akses Lisensi Software Guru & Sekolah (Subscription Plan Pro / School License)</td>
+    </tr>
+    <tr>
+      <td class="label">Metode Pembayaran Dituju</td>
+      <td>Midtrans Dynamic QRIS & Virtual Account Bank (BCA, Mandiri, BRI, BNI, DANA, GoPay)</td>
+    </tr>
+  </table>
+
+  <!-- BAGIAN 2: DIAGRAM ALUR END-TO-END -->
+  <div class="section-title">2. Diagram Alur Transaksi Pelanggan (Customer Journey)</div>
+  <div class="flow-chart">
+    <div style="font-size: 8.5pt; color: #475569; font-weight: 600; text-align: center; margin-bottom: 6px;">
+      Alur Pembelian Langganan Guru / Sekolah dari Kunjungan hingga Lisensi Software Aktif:
+    </div>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="num">1</div>
+        <div class="title">Buka Website / Portal Guru</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="num">2</div>
+        <div class="title">Pilih Paket Langganan</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="num">3</div>
+        <div class="title">Modal Checkout Tagihan</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="num">4</div>
+        <div class="title">Bayar via Midtrans</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="num">5</div>
+        <div class="title">Verifikasi Webhook</div>
+      </div>
+      <div class="flow-arrow">&rarr;</div>
+      <div class="flow-step">
+        <div class="num">6</div>
+        <div class="title">Lisensi Pro Aktif Otomatis</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BAGIAN 3: RINCIAN TAHAP CUSTOMER JOURNEY -->
+  <div class="section-title">3. Rincian Langkah Demi Langkah Customer Journey</div>
+
+  <!-- STEP 1 -->
+  <div class="step-card">
+    <div class="step-header">
+      <span class="step-tag">LANGKAH 1</span>
+      <span class="step-name">Guru / Sekolah Mengakses Platform UjianPintar</span>
+    </div>
+    <p class="step-desc">
+      Pelanggan (Guru atau Operator Sekolah) membuka website resmi <strong>https://ujianpintar.online</strong>, login ke akun Portal Guru, dan dapat melihat status paket akun yang sedang digunakan saat ini (Free Trial).
+    </p>
+    <div class="wireframe-box">
+      <strong>Tampilan Layar / UI:</strong> Dashboard Portal Guru &bull; Ringkasan Ujian & Pengawasan Live &bull; Status Akun: <em>Paket Gratis (Batas 30 Siswa)</em> &bull; Tombol Utama: <strong>[Tingkatkan ke Guru Pro / Upgrade Paket]</strong>
+    </div>
+  </div>
+
+  <!-- STEP 2 -->
+  <div class="step-card">
+    <div class="step-header">
+      <span class="step-tag">LANGKAH 2</span>
+      <span class="step-name">Pemilihan Paket Langganan & Siklus Penagihan</span>
+    </div>
+    <p class="step-desc">
+      Guru memilih paket langganan yang sesuai dengan kebutuhan sekolah: <strong>Paket Guru Pro</strong> (Rp 35.000/bulan atau Rp 299.000/tahun) dengan fitur kuota siswa tak terbatas, bank soal AI, dan anti-cheat proctoring.
+    </p>
+    <div class="wireframe-box">
+      <strong>Pilihan Paket:</strong> Kartu Paket Guru Pro &bull; Pilihan Siklus: <em>[ ] Bulanan (Rp 35.000) / [x] Tahunan Hemat (Rp 299.000)</em> &bull; Fitur Termasuk: <em>Siswa Unlimited, Bank Soal AI, Ekspor Excel</em> &bull; Tombol: <strong>[Pilih Paket Ini]</strong>
+    </div>
+  </div>
+
+  <!-- STEP 3 -->
+  <div class="step-card">
+    <div class="step-header">
+      <span class="step-tag">LANGKAH 3</span>
+      <span class="step-name">Modal Checkout & Konfirmasi Rincian Tagihan</span>
+    </div>
+    <p class="step-desc">
+      Sistem memunculkan modal checkout tagihan resmi: menampilkan Nomor Invoice/Order ID unik (contoh: <code>INV-PRO-202611-0421</code>), nama guru, nama sekolah/institusi, nomor WhatsApp, serta total nominal yang harus dibayar tanpa biaya tersembunyi.
+    </p>
+    <div class="wireframe-box">
+      <strong>Rincian Modal Checkout:</strong> Invoice: <em>INV-PRO-202611-0421</em> &bull; Item: <em>Langganan UjianPintar Pro (1 Tahun)</em> &bull; Atas Nama: <em>Budi Santoso, S.Pd (SMP Negeri 1)</em> &bull; Total: <strong>Rp 299.000,-</strong> &bull; Tombol: <strong>[Lanjut ke Pembayaran Midtrans]</strong>
+    </div>
+  </div>
+
+  <div class="page-break"></div>
+
+  <!-- STEP 4 -->
+  <div class="step-card">
+    <div class="step-header">
+      <span class="step-tag">LANGKAH 4</span>
+      <span class="step-name">Pembayaran via Midtrans Payment Gateway (QRIS & Virtual Account)</span>
+    </div>
+    <p class="step-desc">
+      Sistem memanggil Midtrans Core API / Snap untuk menerbitkan tagihan resmi. Pelanggan dapat memilih membayar via <strong>Dynamic QRIS</strong> (scan lewat DANA, GoPay, OVO, ShopeePay, BCA Mobile) atau transfer <strong>Virtual Account Bank</strong> (BCA, Mandiri, BRI, BNI) dengan batas waktu pembayaran yang jelas.
+    </p>
+    <div class="wireframe-box">
+      <strong>Tampilan Pembayaran Midtrans:</strong> QRIS Standar Nasional Dinamis &bull; Nomor Virtual Account Bank &bull; Nominal Pas: <em>Rp 299.000,-</em> &bull; Countdown Timer: <em>Masa Berlaku 15:00 Menit</em> &bull; Petunjuk: <em>"Scan QRIS atau transfer ke nomor VA tertera."</em>
+    </div>
+  </div>
+
+  <!-- STEP 5 -->
+  <div class="step-card">
+    <div class="step-header">
+      <span class="step-tag">LANGKAH 5</span>
+      <span class="step-name">Verifikasi Otomatis Webhook (Server-to-Server)</span>
+    </div>
+    <p class="step-desc">
+      Setelah transfer berhasil, server Midtrans secara instan mengirimkan sinyal notifikasi Webhook (HTTP POST) terenkripsi dengan <strong>SHA-512 Signature Hash</strong> ke server UjianPintar. Sistem memvalidasi pembayaran dan mencatat transaksi berstatus <code>settlement</code>.
+    </p>
+    <div class="wireframe-box">
+      <strong>Pemrosesan Sistem:</strong> Status Pembayaran: <em>Settlement / Lunas</em> &bull; Keamanan: <em>Signature Key Valid</em> &bull; Update Database: <em>Masa aktif paket guru diperpanjang 365 hari</em> &bull; Audit Trail: <em>Tercatat di Riwayat Transaksi</em>
+    </div>
+  </div>
+
+  <!-- STEP 6 -->
+  <div class="step-card">
+    <div class="step-header">
+      <span class="step-tag">LANGKAH 6</span>
+      <span class="step-name">Aktivasi Otomatis Lisensi Pro & Pengiriman Bukti Invoice</span>
+    </div>
+    <p class="step-desc">
+      Layar browser guru langsung menampilkan notifikasi sukses tanpa perlu refresh atau konfirmasi manual. Lencana akun guru otomatis berubah menjadi <strong>"GURU PRO (ACTIVE)"</strong>, seluruh batasan fitur terbuka seketika, dan kuitansi pembayaran resmi (PDF Invoice) dapat diunduh langsung.
+    </p>
+    <div class="wireframe-box">
+      <strong>Hasil Akhir Konsumen:</strong> Notifikasi: <em>"Selamat! Akun Anda Telah Aktif Menjadi Guru Pro hingga 14 November 2027"</em> &bull; Status Fitur: <em>Semua Fitur Asesmen AI Aktif</em> &bull; Tombol: <strong>[Unduh Invoice Resmi PDF]</strong>
+    </div>
+  </div>
+
+  <!-- BAGIAN 4: KEBIJAKAN REFUND -->
+  <div class="section-title">4. Kebijakan Pembatalan, Garansi & Pengembalian Dana (Refund Policy)</div>
+  <div class="policy-box">
+    <strong>Ketentuan Jaminan Kepuasan & Perlindungan Konsumen:</strong>
+    <ul style="margin-left: 18px; margin-top: 4px; line-height: 1.6;">
+      <li><strong>Garansi 7 Hari Uang Kembali:</strong> Guru atau pihak sekolah yang merasa layanan tidak sesuai kebutuhan dapat mengajukan permohonan pembatalan dalam waktu 7 hari sejak transaksi, dan dana dikembalikan <strong>100% utuh</strong>.</li>
+      <li><strong>Kendala Sistem / Gangguan Server:</strong> Apabila terjadi kegagalan sistem saat aktivasi lisensi setelah pembayaran berhasil, sistem akan mengaktivasi manual atau mengembalikan dana dalam waktu 1x24 jam kerja.</li>
+      <li><strong>Transparansi Penagihan:</strong> Tidak ada perpanjangan otomatis (*auto-renewal*) tanpa persetujuan eksplisit dari pihak guru/sekolah.</li>
+    </ul>
+  </div>
+
+  <!-- BAGIAN 5: LAYANAN PELANGGAN -->
+  <div class="section-title">5. Saluran Bantuan Pelanggan & Layanan Konsumen (Customer Support)</div>
+  <table class="meta-table" style="margin-bottom: 8px;">
+    <tr>
+      <td class="label">Email Resmi Dukungan</td>
+      <td><strong>support@ujianpintar.online</strong> / <strong>admin@ujianpintar.online</strong></td>
+    </tr>
+    <tr>
+      <td class="label">Layanan WhatsApp Guru</td>
+      <td><strong>0821-9692-9193</strong> (Helpdesk Portal UjianPintar)</td>
+    </tr>
+    <tr>
+      <td class="label">Jam Operasional Layanan</td>
+      <td>Senin – Sabtu: 08:00 – 20:00 WIB</td>
+    </tr>
+    <tr>
+      <td class="label">Pusat Bantuan & Panduan</td>
+      <td>Tersedia menu <em>Bantuan & Panduan Guru</em> langsung di dalam dashboard portal.</td>
+    </tr>
+  </table>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    Dokumen ini disusun resmi untuk memenuhi standar kepatuhan regulasi transaksi Midtrans Payment Gateway. &bull; Hak Cipta &copy; 2026 UjianPintar EdTech SaaS Platform. All rights reserved.
+  </div>
+
+</body>
+</html>

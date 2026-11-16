@@ -1997,6 +1997,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <a href="#fitur" className="hover:text-blue-600 transition-colors">Fitur</a>
               <a href="#harga" className="hover:text-blue-600 transition-colors">Paket & Harga</a>
               <a href="#faq" className="hover:text-blue-600 transition-colors">Bantuan</a>
+              <a href="/privacy" className="hover:text-blue-600 transition-colors font-semibold text-blue-600 dark:text-blue-400">Kebijakan Privasi</a>
             </div>
           </div>
 

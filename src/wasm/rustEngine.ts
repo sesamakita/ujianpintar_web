@@ -54,7 +54,8 @@ export class RustEngineBridge {
     const details: Record<string, { isCorrect: boolean; pointsEarned: number }> = {};
 
     for (const q of questions) {
-      maxScore += q.points || 10;
+      const qPoints = q.points || 10;
+      maxScore += qPoints;
       const ans = answers.find((a) => a.question_id === q.id);
 
       if (q.question_type === 'essay') {
@@ -64,34 +65,37 @@ export class RustEngineBridge {
         continue;
       }
 
-      if (ans) {
-        let isCorrect = false;
+      let isCorrect = false;
 
-        if (q.question_type === 'multiple_choice' || q.question_type === 'true_false') {
+      if (q.question_type === 'multiple_choice' || q.question_type === 'true_false') {
+        objectiveMax += qPoints;
+        if (ans) {
           isCorrect = !!q.correct_option_id && ans.selected_option_id === q.correct_option_id;
           if (isCorrect) {
-            objectiveScore += q.points || 10;
+            objectiveScore += qPoints;
           }
-          objectiveMax += q.points || 10;
-        } else if (q.question_type === 'short_answer') {
-          if (q.correct_answer_text && ans.answer_text) {
-            const cleanC = q.correct_answer_text.trim().toLowerCase().replace(/,/g, '.');
-            const cleanU = ans.answer_text.trim().toLowerCase().replace(/,/g, '.');
-            isCorrect = cleanC === cleanU;
-          }
-          if (isCorrect) {
-            shortAnswerScore += q.points || 10;
-          }
-          shortAnswerMax += q.points || 10;
         }
-
-        if (isCorrect) {
-          totalScore += q.points || 10;
-          correctCount++;
+      } else if (q.question_type === 'short_answer') {
+        shortAnswerMax += qPoints;
+        if (ans && q.correct_answer_text && ans.answer_text) {
+          const cleanC = q.correct_answer_text.trim().toLowerCase().replace(/,/g, '.');
+          const cleanU = ans.answer_text.trim().toLowerCase().replace(/,/g, '.');
+          isCorrect = cleanC === cleanU;
+          if (isCorrect) {
+            shortAnswerScore += qPoints;
+          }
         }
       }
 
-      details[q.id] = { isCorrect: false, pointsEarned: 0 };
+      if (isCorrect) {
+        totalScore += qPoints;
+        correctCount++;
+      }
+
+      details[q.id] = {
+        isCorrect,
+        pointsEarned: isCorrect ? qPoints : 0,
+      };
     }
 
     const percentage = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;

@@ -236,3 +236,32 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+
+-- ==============================================================================
+-- 12. TABLE: apk_downloads (Log Unduhan APK Siswa & Prospek Sekolah)
+-- ==============================================================================
+create table if not exists public.apk_downloads (
+  id uuid primary key default gen_random_uuid(),
+  email text,
+  whatsapp text,
+  user_agent text,
+  created_at timestamptz default now()
+);
+
+alter table public.apk_downloads enable row level security;
+create policy "Anyone can insert apk downloads" on public.apk_downloads for insert with check (true);
+create policy "Anyone can view and manage apk downloads" on public.apk_downloads for all using (true);
+
+-- ==============================================================================
+-- 13. TABLE: bot_settings (Pengaturan Otak Bot WhatsApp AI & WAHA Gateway)
+-- ==============================================================================
+create table if not exists public.bot_settings (
+  key text primary key,
+  value jsonb not null,
+  updated_at timestamptz default now()
+);
+
+alter table public.bot_settings enable row level security;
+create policy "Anyone can view bot settings" on public.bot_settings for select using (true);
+create policy "Only service role can manage bot settings" on public.bot_settings for all using (auth.role() = 'service_role') with check (auth.role() = 'service_role');

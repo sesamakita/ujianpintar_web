@@ -49,7 +49,7 @@ export function hasMath(input?: string): boolean {
   if (
     /\$\$[\s\S]+?\$\$/.test(trimmed) ||
     /\\\[[\s\S]+?\\\]/.test(trimmed) ||
-    /\$[^\$\n]+?\$/.test(trimmed) ||
+    /\$[^$\n]+?\$/.test(trimmed) ||
     /\\\([\s\S]+?\\\)/.test(trimmed)
   ) {
     return true;
@@ -62,7 +62,7 @@ export function hasMath(input?: string): boolean {
   }
 
   // 3. Isolated mathematical expressions like x^2, y_1, 10^{-3}
-  if (/[a-zA-Z0-9]\^[0-9a-zA-Z\{]/.test(trimmed) || /[a-zA-Z]_[0-9a-zA-Z\{]/.test(trimmed)) {
+  if (/[a-zA-Z0-9]\^[0-9a-zA-Z{]/.test(trimmed) || /[a-zA-Z]_[0-9a-zA-Z{]/.test(trimmed)) {
     return true;
   }
 
@@ -88,7 +88,7 @@ export function formatMathAndText(input?: string, forceBlock = false): string {
   }
 
   // 2. Check if the string has math delimiters ($$...$$, $...$, \[...\], \(...\))
-  const mathRegex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^\$\n]+?\$|\\\([\s\S]+?\\\))/g;
+  const mathRegex = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\$[^$\n]+?\$|\\\([\s\S]+?\\\))/g;
 
   // Process text parts outside explicit $ ... $
   function processPlainText(rawText: string): string {
@@ -98,7 +98,7 @@ export function formatMathAndText(input?: string, forceBlock = false): string {
       return renderKatexSafe(rawText.trim(), false);
     }
 
-    const tokenRegex = /(-?\b\d+(?:[\.,]\d+)?\b)/g;
+    const tokenRegex = /(-?\b\d+(?:[.,]\d+)?\b)/g;
     let lastIdx = 0;
     let out = '';
     let m: RegExpExecArray | null;

@@ -1383,4 +1383,64 @@ GRANT SELECT ON public.bot_settings TO anon, authenticated;
       return { success: false, message: err.message || 'Gagal menghubungi server WAHA.' };
     }
   },
+
+  /**
+   * Kirim pesan teks WhatsApp langsung ke nomor tujuan via WAHA Gateway
+   */
+  async sendDirectWhatsAppMessage(phone: string, text: string, sessionName = 'default'): Promise<{ success: boolean; message: string }> {
+    const settings = this.getSettings();
+    const baseUrl = (settings.wahaBaseUrl || 'https://api.ujianpintar.online/waha').replace(/\/+$/, '');
+    const apiKey = (settings.wahaApiKey || 'WahaUjianPintar2026').trim();
+
+    let clean = (phone || '').replace(/[^0-9]/g, '');
+    if (clean.startsWith('0')) clean = '62' + clean.slice(1);
+    if (!clean.startsWith('62')) clean = '62' + clean;
+
+    if (!clean || clean.length < 10) {
+      return { success: false, message: 'Nomor WhatsApp tidak valid (minimal 10 digit).' };
+    }
+    if (!text || !text.trim()) {
+      return { success: false, message: 'Isi pesan tidak boleh kosong.' };
+    }
+
+    const chatId = `${clean}@c.us`;
+
+    try {
+      let res = await fetch(`${baseUrl}/api/sendText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': apiKey,
+        },
+        body: JSON.stringify({
+          chatId,
+          text: text.trim(),
+          session: sessionName,
+        }),
+      });
+
+      if (res.status === 404) {
+        res = await fetch(`${baseUrl}/api/${sessionName}/sendText`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Api-Key': apiKey,
+          },
+          body: JSON.stringify({
+            chatId,
+            text: text.trim(),
+          }),
+        });
+      }
+
+      if (res.ok) {
+        return { success: true, message: `Pesan berhasil dikirim ke nomor WhatsApp ${clean}!` };
+      }
+
+      const data = await res.json().catch(() => ({}));
+      return { success: false, message: data?.message || data?.error || `Gagal mengirim pesan (HTTP ${res.status}). Pastikan sesi WhatsApp di WAHA sudah terhubung/paired.` };
+    } catch (err: any) {
+      return { success: false, message: `Gagal menghubungi server WAHA: ${err.message}` };
+    }
+  },
 };

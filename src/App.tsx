@@ -14,6 +14,7 @@ import { UpgradePromptModal } from './components/subscription/UpgradePromptModal
 import { AuthPage } from './components/auth/AuthPage';
 import { LandingPage } from './components/landing/LandingPage';
 import { StudentResultPortalModal } from './components/portal/StudentResultPortalModal';
+import { PrivacyPolicyPage } from './components/legal/PrivacyPolicyPage';
 import { FloatingWhatsAppButton } from './components/common/FloatingWhatsAppButton';
 import { AppLogoIcon } from './components/common/AppLogo';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -48,6 +49,19 @@ export function App() {
       path.startsWith('/admin') ||
       hash.includes('super-admin') ||
       hash.includes('admin')
+    );
+  });
+
+  // Dedicated Privacy Policy Route (/privacy or /kebijakan-privasi or #/privacy)
+  const [isPrivacyRoute, setIsPrivacyRoute] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    return (
+      path.startsWith('/privacy') ||
+      path.startsWith('/kebijakan-privasi') ||
+      hash.includes('privacy') ||
+      hash.includes('kebijakan-privasi')
     );
   });
 
@@ -87,6 +101,13 @@ export function App() {
         path.startsWith('/admin') ||
         hash.includes('super-admin') ||
         hash.includes('admin')
+      );
+
+      setIsPrivacyRoute(
+        path.startsWith('/privacy') ||
+        path.startsWith('/kebijakan-privasi') ||
+        hash.includes('privacy') ||
+        hash.includes('kebijakan-privasi')
       );
 
       if (path.startsWith('/cek-nilai') || hash.includes('cek-nilai')) {
@@ -483,7 +504,8 @@ export function App() {
             return remoteStudents.map((rs) => {
               const existing = prev.find((p) => p.nisn === rs.nisn);
               if (existing) {
-                const keepLocalTimer = rs.status === 'working' && existing.remainingSeconds > 0 && !!rs.startedAt;
+                const isServerTimeAdded = rs.remainingSeconds > existing.remainingSeconds + 50;
+                const keepLocalTimer = !isServerTimeAdded && rs.status === 'working' && existing.remainingSeconds > 0 && !!rs.startedAt;
                 return {
                   ...rs,
                   remainingSeconds: (rs.status === 'submitted' || rs.status === 'not_started')
@@ -925,6 +947,19 @@ export function App() {
           const latest = await maintenanceService.checkMaintenanceStatus();
           setMaintenanceConfig(latest);
           return latest?.isMaintenance ?? false;
+        }}
+      />
+    );
+  }
+
+  // Dedicated Privacy Policy Route
+  if (isPrivacyRoute) {
+    return (
+      <PrivacyPolicyPage
+        onBackToHome={() => {
+          window.history.pushState(null, '', '/');
+          setIsPrivacyRoute(false);
+          setCurrentView('landing');
         }}
       />
     );

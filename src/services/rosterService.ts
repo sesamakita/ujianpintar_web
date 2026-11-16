@@ -540,19 +540,21 @@ export const rosterService = {
    */
   async getPublicClassRoster(examId: string, className?: string): Promise<StudentRosterItem[]> {
     try {
-      // 1. Dapatkan info exam untuk mengetahui targetClass jika tidak diberikan
+      // 1. Dapatkan info exam untuk mengetahui targetClass dan teacherId
       let targetClass = className?.trim();
       let teacherId = '';
 
-      if (!targetClass && examId) {
+      if (examId) {
         const { data: exData } = await supabase
           .from('exams')
-          .select('*')
+          .select('target_class, grade_level, teacher_id')
           .eq('id', examId)
           .maybeSingle();
 
         if (exData) {
-          targetClass = (exData as any).target_class || (exData as any).grade_level || '';
+          if (!targetClass) {
+            targetClass = (exData as any).target_class || (exData as any).grade_level || '';
+          }
           teacherId = (exData as any).teacher_id || '';
         }
       }

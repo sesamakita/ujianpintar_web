@@ -671,10 +671,7 @@ export const SuperAdminDashboard: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {filteredSchools.map((school) => {
-                    const daysRemaining = Math.max(
-                      0,
-                      Math.ceil((new Date(school.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-                    );
+                    const daysRemaining = schoolLicenseService.calculateDaysRemaining(school.endDate);
                     const isExpiringSoon = daysRemaining < 30;
 
                     return (
@@ -1289,7 +1286,7 @@ export const SuperAdminDashboard: React.FC = () => {
                           dateStyle: 'medium',
                           timeStyle: 'short',
                         });
-                      } catch (_) {}
+                      } catch {}
 
                       // Sederhanakan User-Agent
                       let deviceSummary = item.user_agent || 'Perangkat Android';

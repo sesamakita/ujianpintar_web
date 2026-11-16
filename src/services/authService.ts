@@ -393,8 +393,12 @@ export const authService = {
         const cachedProfileRaw = localStorage.getItem(`ujianpintar_profile_${cleanEmail}`) || localStorage.getItem(`smartexam_profile_${cleanEmail}`);
 
         if (cachedAccountRaw || cachedProfileRaw) {
-          const account = cachedAccountRaw ? JSON.parse(cachedAccountRaw) : null;
-          const profile = cachedProfileRaw ? JSON.parse(cachedProfileRaw) : null;
+          let account: any = null;
+          let profile: any = null;
+          try {
+            if (cachedAccountRaw) account = JSON.parse(cachedAccountRaw);
+            if (cachedProfileRaw) profile = JSON.parse(cachedProfileRaw);
+          } catch {}
           const phone = account?.whatsapp || profile?.whatsapp || account?.phone;
 
           if (phone) {
@@ -530,8 +534,12 @@ export const authService = {
         : null;
 
       if (cachedAccountRaw || cachedProfileRaw) {
-        const account = cachedAccountRaw ? JSON.parse(cachedAccountRaw) : null;
-        const profile = cachedProfileRaw ? JSON.parse(cachedProfileRaw) : null;
+        let account: any = null;
+        let profile: any = null;
+        try {
+          if (cachedAccountRaw) account = JSON.parse(cachedAccountRaw);
+          if (cachedProfileRaw) profile = JSON.parse(cachedProfileRaw);
+        } catch {}
         const savedPhone = (account?.whatsapp || profile?.whatsapp || '').replace(/[^0-9]/g, '');
 
         if (savedPhone && (savedPhone === cleanWhatsapp || savedPhone.endsWith(cleanWhatsapp) || cleanWhatsapp.endsWith(savedPhone))) {

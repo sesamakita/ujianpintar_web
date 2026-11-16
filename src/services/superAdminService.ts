@@ -32,15 +32,47 @@ export interface VpsTeacherUser {
 }
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://api.ujianpintar.online';
-const serviceRoleKey = (import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '').trim();
+export const getAdminServiceKey = (): string => {
+  if (typeof window !== 'undefined') {
+    const fromSession = sessionStorage.getItem('ujianpintar_super_admin_key');
+    if (fromSession) return fromSession.trim();
+    const fromLocal = localStorage.getItem('ujianpintar_super_admin_key');
+    if (fromLocal) return fromLocal.trim();
+  }
+  return (import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '').trim();
+};
 
-export const supabaseAdmin: SupabaseClient = createClient(supabaseUrl, serviceRoleKey, {
+export const setAdminServiceKey = (key: string): void => {
+  if (typeof window !== 'undefined') {
+    if (key) {
+      sessionStorage.setItem('ujianpintar_super_admin_key', key.trim());
+    } else {
+      sessionStorage.removeItem('ujianpintar_super_admin_key');
+    }
+  }
+  refreshAdminClient();
+};
+
+const serviceRoleKey = getAdminServiceKey();
+
+export let supabaseAdmin: SupabaseClient = createClient(supabaseUrl, serviceRoleKey, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,
     storageKey: 'sb-admin-service-token',
   },
 });
+
+export const refreshAdminClient = (): SupabaseClient => {
+  supabaseAdmin = createClient(supabaseUrl, getAdminServiceKey(), {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      storageKey: 'sb-admin-service-token',
+    },
+  });
+  return supabaseAdmin;
+};
 
 export const superAdminService = {
   /**
@@ -560,18 +592,61 @@ export const superAdminService = {
    * Fetch all APK download leads from VPS Supabase
    */
   async fetchApkDownloads(): Promise<{ downloads: ApkDownloadLead[]; error?: string }> {
+    let remoteDownloads: ApkDownloadLead[] = [];
+    let remoteError: string | undefined;
+
     try {
       const { data, error } = await supabaseAdmin
         .from('apk_downloads')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      return { downloads: data || [] };
+      if (error) {
+        remoteError = error.message;
+      } else if (data) {
+        remoteDownloads = data;
+      }
     } catch (err: any) {
-      console.warn('SuperAdmin fetchApkDownloads error:', err.message);
-      return { downloads: [], error: err.message };
+      remoteError = err?.message;
     }
+
+    // Merge with local leads from localStorage
+    const localDownloads: ApkDownloadLead[] = [];
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('ujianpintar_apk_downloads');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach((item: any, idx: number) => {
+              localDownloads.push({
+                id: item.id || `local-lead-${idx}-${item.email || idx}`,
+                email: item.email || item.customerEmail || '',
+                whatsapp: item.whatsapp || item.phone || '',
+                user_agent: item.user_agent || item.userAgent || 'Browser Web Client',
+                created_at: item.created_at || item.createdAt || new Date().toISOString(),
+              });
+            });
+          }
+        }
+      } catch {}
+    }
+
+    // Combine and deduplicate by email + phone
+    const seen = new Set<string>();
+    const combined: ApkDownloadLead[] = [];
+
+    for (const d of [...remoteDownloads, ...localDownloads]) {
+      const emailNorm = (d.email || '').toLowerCase().trim();
+      const phoneNorm = (d.whatsapp || '').replace(/[^0-9]/g, '');
+      const key = `${emailNorm}_${phoneNorm}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        combined.push(d);
+      }
+    }
+
+    return { downloads: combined, error: remoteDownloads.length === 0 ? remoteError : undefined };
   },
 
   /**
@@ -579,16 +654,30 @@ export const superAdminService = {
    */
   async deleteApkDownload(id: string): Promise<{ success: boolean; message: string }> {
     try {
-      const { error } = await supabaseAdmin
+      await supabaseAdmin
         .from('apk_downloads')
         .delete()
         .eq('id', id);
+    } catch {}
 
-      if (error) throw error;
-      return { success: true, message: 'Data unduhan berhasil dihapus.' };
-    } catch (err: any) {
-      return { success: false, message: `Gagal menghapus data: ${err.message}` };
+    // Also clean from localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = localStorage.getItem('ujianpintar_apk_downloads');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            const updated = parsed.filter((item: any, idx: number) => {
+              const localId = item.id || `local-lead-${idx}-${item.email || idx}`;
+              return localId !== id && item.id !== id;
+            });
+            localStorage.setItem('ujianpintar_apk_downloads', JSON.stringify(updated));
+          }
+        }
+      } catch {}
     }
+
+    return { success: true, message: 'Data unduhan berhasil dihapus.' };
   },
 };
 

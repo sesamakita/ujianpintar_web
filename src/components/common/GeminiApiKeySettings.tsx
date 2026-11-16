@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Key,
   ShieldCheck,
@@ -41,9 +41,11 @@ export const GeminiApiKeySettings: React.FC<GeminiApiKeySettingsProps> = ({
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isConfirmRemove, setIsConfirmRemove] = useState(false);
 
-  useEffect(() => {
+  const [prevKey, setPrevKey] = useState(currentKey);
+  if (currentKey !== prevKey) {
+    setPrevKey(currentKey);
     setApiKeyInput(currentKey);
-  }, [currentKey]);
+  }
 
   const handleSaveAndTest = useCallback(async () => {
     const clean = apiKeyInput.trim();
