@@ -1196,10 +1196,20 @@ GRANT SELECT ON public.bot_settings TO anon, authenticated;
         };
       }
 
-      const data = await res.json();
-      if (data?.data) {
-        const mime = data.mimetype || 'image/png';
-        const dataUrl = data.data.startsWith('data:') ? data.data : `data:${mime};base64,${data.data}`;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        if (data?.data) {
+          const mime = data.mimetype || 'image/png';
+          const dataUrl = data.data.startsWith('data:') ? data.data : `data:${mime};base64,${data.data}`;
+          return {
+            success: true,
+            qrDataUrl: dataUrl,
+          };
+        }
+      } else if (contentType.includes('image/')) {
+        const blob = await res.blob();
+        const dataUrl = URL.createObjectURL(blob);
         return {
           success: true,
           qrDataUrl: dataUrl,
@@ -1270,7 +1280,7 @@ GRANT SELECT ON public.bot_settings TO anon, authenticated;
   },
 
   /**
-   * Restart sesi WAHA (Stop kemudian Start untuk pemulihan dari status FAILED)
+   * Restart sesi WAHA (Otomatis Logout & Pembersihan Kredensial untuk Pemulihan Bersih)
    */
   async restartWahaSession(sessionName = 'default'): Promise<{ success: boolean; message: string }> {
     const settings = this.getSettings();
@@ -1278,7 +1288,21 @@ GRANT SELECT ON public.bot_settings TO anon, authenticated;
     const apiKey = (settings.wahaApiKey || 'WahaUjianPintar2026').trim();
 
     try {
-      // 1. Coba hentikan sesi terlebih dahulu
+      // 1. Coba logout sesi terlebih dahulu agar kredensial rusak/kedaluwarsa dibersihkan secara total
+      const logoutRes = await fetch(`${baseUrl}/api/sessions/${sessionName}/logout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': apiKey,
+        },
+      }).catch(() => null);
+
+      if (logoutRes && (logoutRes.ok || logoutRes.status === 201)) {
+        await new Promise(r => setTimeout(r, 2000));
+        return { success: true, message: 'Sesi WhatsApp berhasil dibersihkan dan dipulihkan. QR Code & Kode Pairing baru telah siap.' };
+      }
+
+      // 2. Jika logout tidak merespons, coba stop lalu start
       await fetch(`${baseUrl}/api/sessions/${sessionName}/stop`, {
         method: 'POST',
         headers: {
@@ -1287,10 +1311,8 @@ GRANT SELECT ON public.bot_settings TO anon, authenticated;
         },
       }).catch(() => {});
 
-      // Tunggu 1.5 detik agar Chromium/WEBJS tertutup bersih
       await new Promise(r => setTimeout(r, 1500));
 
-      // 2. Jalankan kembali sesi
       const res = await fetch(`${baseUrl}/api/sessions/${sessionName}/start`, {
         method: 'POST',
         headers: {

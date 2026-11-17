@@ -801,15 +801,17 @@ export const WhatsAppBotSettingsTab: React.FC<WhatsAppBotSettingsTabProps> = ({ 
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleRestartWaha}
-              disabled={isLoadingWaha}
-              className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer flex-shrink-0 disabled:opacity-60 shadow-xs"
-            >
-              <RotateCcw className={`w-4 h-4 ${isLoadingWaha ? 'animate-spin' : ''}`} />
-              <span>{isLoadingWaha ? 'Memulihkan Sesi...' : 'Pulihkan & Muat Ulang Sesi Sekarang'}</span>
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleRestartWaha}
+                disabled={isLoadingWaha}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer flex-shrink-0 disabled:opacity-60 shadow-xs"
+              >
+                <RotateCcw className={`w-4 h-4 ${isLoadingWaha ? 'animate-spin' : ''}`} />
+                <span>{isLoadingWaha ? 'Mereset Sesi...' : 'Reset Sesi & Buat QR Code Baru'}</span>
+              </button>
+            </div>
           </div>
         )}
 
