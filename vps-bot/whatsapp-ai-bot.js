@@ -19,15 +19,6 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
-// Dynamic import fail-safe agar bot tidak crash jika berkas dekati-rt-service.js belum ada di VPS
-let handleDekatiRtReply = null;
-import('./dekati-rt-service.js')
-  .then((mod) => {
-    handleDekatiRtReply = mod.handleDekatiRtReply;
-  })
-  .catch(() => {
-    // dekati-rt-service.js opsional, jika tidak ada di VPS maka diabaikan dengan aman
-  });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1355,18 +1346,6 @@ async function processIncomingPayload(payload) {
 
   // 5. Abaikan pesan kosong atau non-teks
   if (!text || text.trim().length === 0) return;
-
-  // 5.5. Cek apakah pesan adalah balasan Rekomendasi RT untuk DEKATI (Ketik 1 atau 2)
-  if (typeof handleDekatiRtReply === 'function') {
-    try {
-      const handledByDekati = await handleDekatiRtReply(from, text, sendWhatsAppReply);
-      if (handledByDekati) {
-        return; // Pesan sukses diproses untuk DEKATI, jangan diteruskan ke AI UjianPintar
-      }
-    } catch (dekatiErr) {
-      console.error('[WA-AI] Error checking DEKATI RT handler:', dekatiErr.message);
-    }
-  }
 
   // 6. Filter Pesan Pribadi vs Pesan Terkait Platform UjianPintar
   if (!isPlatformRelatedMessage(text, senderPhone)) {
