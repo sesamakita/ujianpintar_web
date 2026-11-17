@@ -205,6 +205,7 @@ function loadDynamicSettings() {
     isAutoReplyEnabled: merged.isAutoReplyEnabled !== false,
     cooldownSeconds: merged.cooldownSeconds || 3,
     humanHandoverMinutes: merged.humanHandoverMinutes || 30,
+    filterPersonalChats: merged.filterPersonalChats !== false,
   };
 }
 
@@ -426,12 +427,22 @@ function isPlatformRelatedMessage(rawText, senderPhone) {
     .replace(/6️⃣|6\uFE0F\u20E3/g, '6')
     .trim();
 
-  // A. Pintu Masuk Resmi 1: Teks pembuka resmi dari tombol WhatsApp di website
+  // 1. Jika filter chat pribadi dimatikan (false), jawab seluruh pesan masuk
+  if (botConfig.filterPersonalChats === false) {
+    return true;
+  }
+
+  // 2. Salam & Pesan Tes Umum (Paling sering diketik orang saat mencoba bot)
+  const isGreetingOrTest = 
+    /^(halo|hai|hi|hey|p|tes|test|testing|cek|assalamu['a-z]*|selamat\s+(pagi|siang|sore|malam)|permisi|bantuan|menu|help|info|admin)[\s\.\?!]*$/i.test(clean) ||
+    /^(halo|hai|assalamu['a-z]*|selamat\s+(pagi|siang|sore|malam))/i.test(clean);
+
+  // 3. Pintu Masuk Resmi Website: Teks pembuka dari tombol WhatsApp di portal
   const isWebButtonTrigger = 
     clean.includes('halo admin ujianpintar') ||
     clean.includes('seputar platform ujianpintar');
 
-  // B. Pintu Masuk Resmi 2: Eksplisit menyebutkan nama platform / website / aplikasi
+  // 4. Sebutan Eksplisit Brand / Website
   const isExplicitBrandMention = 
     clean.includes('ujianpintar') ||
     clean.includes('ujian pintar') ||
@@ -439,30 +450,37 @@ function isPlatformRelatedMessage(rawText, senderPhone) {
     clean.includes('guru hebat') ||
     clean.includes('ujianpintar.online');
 
-  // Jika pesan mengandung salah satu Pintu Masuk Resmi -> 100% Valid pesan UjianPintar!
-  if (isWebButtonTrigger || isExplicitBrandMention) {
+  // 5. Kata Kunci Asesmen / CBT / Pendidikan / Pertanyaan Fitur
+  const isEducationalKeyword = [
+    'ujian', 'soal', 'cbt', 'siswa', 'guru', 'sekolah', 'nilai', 'token', 'pin',
+    'proctoring', 'curang', 'nisn', 'esai', 'essay', 'daftar', 'harga', 'biaya',
+    'langganan', 'paket', 'pro', 'basic', 'lisensi', 'mou', 'dinas', 'aplikasi',
+    'apk', 'android', 'laptop', 'komputer', 'rekap', 'excel', 'word', 'docx', 'xlsx',
+    'koreksi', 'rubrik', 'jadwal', 'pengawas', 'proktor', 'fitur', 'bantuan', 'kontak'
+  ].some(kw => clean.includes(kw));
+
+  // 6. Angka Pilihan Menu (1 - 6)
+  const isMenuChoiceNumber = /^[1-6]$/.test(clean) || /^[1-6][\.\)\s]/.test(clean);
+
+  // Jika pesan cocok dengan salah satu di atas -> 100% Valid pesan UjianPintar!
+  if (isGreetingOrTest || isWebButtonTrigger || isExplicitBrandMention || isEducationalKeyword || isMenuChoiceNumber) {
     return true;
   }
 
-  // C. Jika TIDAK menyebut nama UjianPintar, periksa apakah kontak ini sedang dalam Sesi Aktif Sah
+  // 7. Jika tidak menyebut kata kunci, periksa apakah kontak ini sedang dalam Sesi Aktif
   const sessionExpire = activeBotSessions.get(senderPhone);
   const isSessionActive = sessionExpire && Date.now() < sessionExpire;
 
   if (isSessionActive) {
-    // Pengguna sedang dalam sesi tanya-jawab aktif yang sah.
-    // Jika pengguna pamit / mengucapkan terima kasih, akhiri sesi setelah ini:
     const isClosingWord = /(terima\s*kasih|makasih|terimakasih|makasi|cukup\s*jelas|cukup\s*paham|thank\s*you|thanks)/i.test(clean);
     if (isClosingWord) {
       activeBotSessions.delete(senderPhone);
-      return true; // Tetap izinkan diproses agar bot bisa membalas salam penutup dengan ramah
+      return true;
     }
-
-    // Izinkan navigasi menu 1-6 atau pertanyaan lanjutan selama sesi masih aktif
     return true;
   }
 
-  // D. Jika BUKAN dari tombol web, TIDAK menyebut "UjianPintar", dan TIDAK ada sesi aktif:
-  // INI ADALAH CHAT PRIBADI! Bot DIHARUSKAN DIAM SERIBU BAHASA (tidak ikut campur urusan pribadi).
+  // D. Chat murni personal tanpa salam atau kata kunci pendidikan
   return false;
 }
 
@@ -1166,14 +1184,18 @@ async function generateAIAnswer(userQuery, phone) {
       clearTimeout(timeoutId);
 
       const aiDuration = Date.now() - aiCallStart;
-      if (res.ok) {
-        const data = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const textSample = await res.text().catch(() => '');
+        console.warn(`[WA-AI] ⚠️ Custom AI mengembalikan non-JSON (${res.status}, ${contentType}): ${textSample.slice(0, 80)}... Menggunakan fallback materi.`);
+      } else if (res.ok) {
+        const data = await res.json().catch(() => null);
         const text = data?.choices?.[0]?.message?.content;
         if (text && text.trim().length > 0) {
           console.log(`[WA-AI] ✨ Berhasil mendapatkan respon dari Custom AI (${modelName}) dalam ${aiDuration}ms.`);
           return postProcessHumanistReply(text.trim());
         } else {
-          console.warn(`[WA-AI] ⚠️ Custom AI 200 OK tetapi teks kosong (finish_reason: ${data?.choices?.[0]?.finish_reason}, tokens: ${data?.usage?.completion_tokens}).`);
+          console.warn(`[WA-AI] ⚠️ Custom AI 200 OK tetapi teks kosong.`);
         }
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -1197,22 +1219,50 @@ async function sendWhatsAppReply(chatId, text) {
 
     const sanitizedText = postProcessHumanistReply(text);
 
+    // Normalisasi format chatId untuk WAHA NOWEB
+    let targetChatId = chatId;
+    if (!targetChatId.includes('@')) {
+      targetChatId = `${cleanPhone}@c.us`;
+    } else if (targetChatId.endsWith('@s.whatsapp.net')) {
+      targetChatId = `${cleanPhone}@c.us`;
+    }
+
+    const payload = {
+      chatId: targetChatId,
+      text: sanitizedText,
+      session: 'default'
+    };
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
 
-    const res = await fetch(`${botConfig.wahaBaseUrl}/api/sendText`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': botConfig.wahaApiKey
-      },
-      body: JSON.stringify({
-        chatId: chatId,
-        text: sanitizedText,
-        session: 'default'
-      }),
-      signal: controller.signal
-    });
+    let res = null;
+    try {
+      res = await fetch(`${botConfig.wahaBaseUrl}/api/sendText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': botConfig.wahaApiKey
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+    } catch (netErr) {
+      // Jika fetch ke URL publik gagal (misal loopback VPS), coba port lokal 3080
+      if (!botConfig.wahaBaseUrl.includes('localhost') && !botConfig.wahaBaseUrl.includes('127.0.0.1')) {
+        try {
+          res = await fetch('http://127.0.0.1:3080/api/sendText', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Api-Key': botConfig.wahaApiKey
+            },
+            body: JSON.stringify(payload)
+          });
+        } catch (_) {}
+      }
+      if (!res) throw netErr;
+    }
     clearTimeout(timeout);
 
     const data = await res.json().catch(() => ({}));
@@ -1281,11 +1331,11 @@ async function processIncomingPayload(payload) {
   const senderPhone = from.replace(/[^0-9]/g, '');
   const pauseUntil = adminActiveSessions.get(senderPhone);
 
-  // Jika pengguna memilih angka menu (1-6) atau kata 'menu', batalkan jeda agar dilayani langsung
+  // Jika pengguna memilih angka menu (1-6), kata 'menu', atau salam/tes, batalkan jeda agar dilayani langsung
   const isMenuChoice = /^[1-6]$/.test(text.trim()) ||
     /^[1-6][\.\)\s]/.test(text.trim()) ||
     /^(no|nomor|pilih|menu)?\s*[1-6](\b|$)/i.test(text.trim()) ||
-    /^(menu|bantuan|help|fitur|pilihan|daftar)(\s+menu)?$/i.test(text.trim()) ||
+    /^(menu|bantuan|help|fitur|pilihan|daftar|tes|test|halo|hai)(\s+menu)?$/i.test(text.trim()) ||
     text.toLowerCase().includes('halo admin ujianpintar');
 
   if (isMenuChoice) {
@@ -1487,6 +1537,42 @@ function startWahaWebSocket() {
   };
 }
 
+// 9. Pendaftaran Otomatis Webhook ke WAHA (Fail-safe ganda selain WebSocket)
+async function registerWahaWebhook() {
+  const possibleUrls = [
+    botConfig.wahaBaseUrl,
+    'http://127.0.0.1:3080',
+    'http://localhost:3080'
+  ];
+
+  for (const baseUrl of possibleUrls) {
+    try {
+      const cleanUrl = baseUrl.replace(/\/+$/, '');
+      const res = await fetch(`${cleanUrl}/api/sessions/default`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': botConfig.wahaApiKey
+        },
+        body: JSON.stringify({
+          config: {
+            webhooks: [
+              {
+                url: `http://localhost:${botConfig.botPort}/webhook`,
+                events: ['message', 'message.any']
+              }
+            ]
+          }
+        })
+      });
+      if (res.ok) {
+        console.log(`[WA-AI] 🔗 Webhook fail-safe otomatis terdaftar di WAHA (${cleanUrl})!`);
+        break;
+      }
+    } catch (_) {}
+  }
+}
+
 server.listen(botConfig.botPort, '0.0.0.0', () => {
   console.log('================================================================');
   console.log(`🤖 UjianPintar WhatsApp AI Bot Service Running on Port ${botConfig.botPort}`);
@@ -1501,6 +1587,9 @@ server.listen(botConfig.botPort, '0.0.0.0', () => {
   console.log(`🌐 Webhook Listener: http://localhost:${botConfig.botPort}/webhook`);
   console.log('================================================================');
 
-  // Mulai koneksi WebSocket real-time ke WAHA
+  // 1. Daftarkan webhook HTTP fail-safe ke WAHA
+  registerWahaWebhook().catch(() => {});
+
+  // 2. Mulai koneksi WebSocket real-time ke WAHA
   startWahaWebSocket();
 });
