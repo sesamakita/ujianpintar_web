@@ -1324,6 +1324,40 @@ GRANT SELECT ON public.bot_settings TO anon, authenticated;
       if (res.ok) {
         return { success: true, message: 'Sesi WhatsApp berhasil dipulihkan & dijalankan ulang. QR Code baru telah aktif.' };
       }
+
+      // 3. Fallback pembersihan total jika sesi macet/rusak: Delete session lama & buat sesi baru
+      await fetch(`${baseUrl}/api/sessions/${sessionName}`, {
+        method: 'DELETE',
+        headers: { 'X-Api-Key': apiKey },
+      }).catch(() => {});
+
+      await fetch(`${baseUrl}/api/sessions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': apiKey,
+        },
+        body: JSON.stringify({
+          name: sessionName,
+          config: {
+            webhooks: [{ url: 'http://localhost:3099/webhook', events: ['message', 'message.any'] }]
+          }
+        }),
+      }).catch(() => {});
+
+      const finalStart = await fetch(`${baseUrl}/api/sessions/${sessionName}/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': apiKey,
+        },
+      });
+
+      if (finalStart.ok) {
+        await new Promise(r => setTimeout(r, 2000));
+        return { success: true, message: 'Sesi WhatsApp berhasil dibuat ulang secara bersih. QR Code baru telah siap.' };
+      }
+
       return { success: false, message: `Gagal menjalankan ulang sesi (HTTP ${res.status})` };
     } catch (err: any) {
       return { success: false, message: err.message || 'Gagal menghubungi server WAHA.' };
