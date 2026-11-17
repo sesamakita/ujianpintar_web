@@ -12,6 +12,7 @@
   "adminName": "Admin UjianPintar",
   "adminPhone": "081234567890",
   "isAutoReplyEnabled": true,
+  "filterPersonalChats": false,
   "cooldownSeconds": 3,
   "humanHandoverMinutes": 30,
   "wahaBaseUrl": "http://localhost:3080",
