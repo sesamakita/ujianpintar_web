@@ -19,7 +19,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
-import { handleDekatiRtReply } from './dekati-rt-service.js';
+// Dynamic import fail-safe agar bot tidak crash jika berkas dekati-rt-service.js belum ada di VPS
+let handleDekatiRtReply = null;
+import('./dekati-rt-service.js')
+  .then((mod) => {
+    handleDekatiRtReply = mod.handleDekatiRtReply;
+  })
+  .catch(() => {
+    // dekati-rt-service.js opsional, jika tidak ada di VPS maka diabaikan dengan aman
+  });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1349,13 +1357,15 @@ async function processIncomingPayload(payload) {
   if (!text || text.trim().length === 0) return;
 
   // 5.5. Cek apakah pesan adalah balasan Rekomendasi RT untuk DEKATI (Ketik 1 atau 2)
-  try {
-    const handledByDekati = await handleDekatiRtReply(from, text, sendWhatsAppReply);
-    if (handledByDekati) {
-      return; // Pesan sukses diproses untuk DEKATI, jangan diteruskan ke AI UjianPintar
+  if (typeof handleDekatiRtReply === 'function') {
+    try {
+      const handledByDekati = await handleDekatiRtReply(from, text, sendWhatsAppReply);
+      if (handledByDekati) {
+        return; // Pesan sukses diproses untuk DEKATI, jangan diteruskan ke AI UjianPintar
+      }
+    } catch (dekatiErr) {
+      console.error('[WA-AI] Error checking DEKATI RT handler:', dekatiErr.message);
     }
-  } catch (dekatiErr) {
-    console.error('[WA-AI] Error checking DEKATI RT handler:', dekatiErr.message);
   }
 
   // 6. Filter Pesan Pribadi vs Pesan Terkait Platform UjianPintar
@@ -1492,10 +1502,18 @@ const server = http.createServer(async (req, res) => {
   res.end();
 });
 
-// 8. WebSocket Receiver (Koneksi Langsung Real-time ke WAHA)
+// 8. WebSocket Receiver (Koneksi Langsung Real-time ke WAHA dengan Multi-Endpoint Failover)
+let wsCandidateIdx = 0;
 function startWahaWebSocket() {
-  const wahaBase = (botConfig.wahaBaseUrl || 'https://api.ujianpintar.online/waha').replace(/\/+$/, '');
-  const wsUrl = wahaBase.replace(/^http/, 'ws') + `/ws?x-api-key=${encodeURIComponent(botConfig.wahaApiKey)}&session=default&events=message&events=message.any`;
+  const candidates = [];
+  if (process.platform === 'linux') {
+    candidates.push('ws://127.0.0.1:3080');
+    candidates.push('ws://localhost:3080');
+  }
+  candidates.push((botConfig.wahaBaseUrl || 'https://api.ujianpintar.online/waha').replace(/\/+$/, '').replace(/^http/, 'ws'));
+  
+  const currentBase = candidates[wsCandidateIdx % candidates.length];
+  const wsUrl = `${currentBase}/ws?x-api-key=${encodeURIComponent(botConfig.wahaApiKey)}&session=default&events=message&events=message.any`;
 
   console.log(`[WA-WS] 🔌 Menghubungkan WebSocket ke WAHA: ${wsUrl}`);
   
@@ -1503,13 +1521,14 @@ function startWahaWebSocket() {
   try {
     ws = new WebSocket(wsUrl);
   } catch (err) {
-    console.error('[WA-WS] Gagal inisialisasi WebSocket:', err.message);
+    console.error(`[WA-WS] Gagal inisialisasi WebSocket (${currentBase}):`, err.message);
+    wsCandidateIdx++;
     setTimeout(startWahaWebSocket, 5000);
     return;
   }
 
   ws.onopen = () => {
-    console.log('[WA-WS] ⚡ Terhubung langsung ke WAHA via WebSocket! Siap menerima chat realtime tanpa kendala port/docker.');
+    console.log(`[WA-WS] ⚡ Terhubung langsung ke WAHA via WebSocket (${currentBase})! Siap menerima chat realtime.`);
   };
 
   ws.onmessage = async (event) => {
@@ -1528,11 +1547,12 @@ function startWahaWebSocket() {
   };
 
   ws.onerror = (err) => {
-    console.warn('[WA-WS] WebSocket error:', err.message || err);
+    console.warn(`[WA-WS] WebSocket warning (${currentBase}):`, err.message || err);
   };
 
   ws.onclose = () => {
-    console.warn('[WA-WS] ⚠️ WebSocket terputus. Mencoba reconnect otomatis dalam 5 detik...');
+    console.warn(`[WA-WS] ⚠️ WebSocket terputus dari ${currentBase}. Mencoba endpoint berikutnya dalam 5 detik...`);
+    wsCandidateIdx++;
     setTimeout(startWahaWebSocket, 5000);
   };
 }
