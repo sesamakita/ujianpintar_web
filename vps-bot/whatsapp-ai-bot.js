@@ -203,8 +203,9 @@ function loadDynamicSettings() {
     systemPrompt: merged.systemPrompt || DEFAULT_SYSTEM_PROMPT,
     isAutoReplyEnabled: merged.isAutoReplyEnabled !== false,
     cooldownSeconds: merged.cooldownSeconds || 3,
-    humanHandoverMinutes: merged.humanHandoverMinutes || 30,
-    filterPersonalChats: merged.filterPersonalChats === true, // Default false: selalu balas ramah tanpa memblokir pesan masuk
+    humanHandoverMinutes: merged.humanHandoverMinutes !== undefined ? Number(merged.humanHandoverMinutes) : 10080, // Default 7 hari (10080 menit) agar chat pribadi aman
+    filterPersonalChats: merged.filterPersonalChats !== false, // Default true: saring chat pribadi, bot hanya respon topik UjianPintar / tombol web
+    ignoredNumbers: Array.isArray(merged.ignoredNumbers) ? merged.ignoredNumbers : [],
   };
 }
 
@@ -239,6 +240,73 @@ const userHistories = new Map(); // phone -> array of { role, content }
 const activeBotSessions = new Map(); // phone -> timestamp (sesi chat bot aktif)
 const botRecentReplies = new Map(); // phone -> timestamp (cegah self-echo memicu handover)
 const botSentMessageIds = new Set(); // ID pesan yang dikirim bot sendiri
+
+// Helper normalisasi digit nomor HP
+function normalizePhoneDigits(phone) {
+  if (!phone) return '';
+  return String(phone).replace(/[^0-9]/g, '');
+}
+
+// Cek apakah nomor ada di daftar Ignored Numbers (Blacklist Kontak Pribadi)
+function isPhoneIgnored(phone, ignoredList = []) {
+  if (!phone || !Array.isArray(ignoredList) || ignoredList.length === 0) return false;
+  const cleanPhone = normalizePhoneDigits(phone);
+  if (!cleanPhone) return false;
+
+  return ignoredList.some(item => {
+    const cleanItem = normalizePhoneDigits(item);
+    if (!cleanItem) return false;
+    if (cleanPhone === cleanItem) return true;
+    // Bandingkan 8-10 digit terakhir untuk mengatasi variasi awalan 08xxx vs 628xxx
+    const len = Math.min(cleanPhone.length, cleanItem.length, 10);
+    if (len >= 8) {
+      return cleanPhone.slice(-len) === cleanItem.slice(-len);
+    }
+    return false;
+  });
+}
+
+// Persistent Storage untuk Sesi Handover (Tahan Restart PM2)
+const HANDOVER_FILE_PATH = path.join(__dirname, 'handover-sessions.json');
+
+function loadHandoverSessions() {
+  try {
+    if (fs.existsSync(HANDOVER_FILE_PATH)) {
+      const data = JSON.parse(fs.readFileSync(HANDOVER_FILE_PATH, 'utf8'));
+      const now = Date.now();
+      let count = 0;
+      for (const [phone, expire] of Object.entries(data)) {
+        if (typeof expire === 'number' && expire > now) {
+          adminActiveSessions.set(phone, expire);
+          count++;
+        }
+      }
+      if (count > 0) {
+        console.log(`[WA-AI] 📂 Memuat ${count} sesi jeda manual admin dari disk (tahan restart).`);
+      }
+    }
+  } catch (err) {
+    console.warn('[WA-AI] Gagal membaca handover-sessions.json:', err.message);
+  }
+}
+
+function saveHandoverSessions() {
+  try {
+    const now = Date.now();
+    const obj = {};
+    for (const [phone, expire] of adminActiveSessions.entries()) {
+      if (typeof expire === 'number' && expire > now) {
+        obj[phone] = expire;
+      }
+    }
+    fs.writeFileSync(HANDOVER_FILE_PATH, JSON.stringify(obj, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[WA-AI] Gagal menyimpan handover-sessions.json:', err.message);
+  }
+}
+
+// Muat sesi jeda saat pertama kali jalan
+loadHandoverSessions();
 
 
 
@@ -407,11 +475,12 @@ Silakan hubungi:
 Admin kami akan segera membalas pesan Anda langsung di room chat ini. Terima kasih!`
 };
 
-// 5. Filter Super Ketat (Opsi 1): Memisahkan Chat Pribadi vs Chat Terkait Platform UjianPintar
+// 5. Filter Super Ketat: Memisahkan Chat Pribadi vs Chat Terkait Platform UjianPintar
 // Bot HANYA BOLEH merespons jika:
 // 1. Pesan diawali dari tombol web resmi (ada kalimat default: "halo admin ujianpintar", "seputar platform ujianpintar")
 // 2. ATAU pesan secara eksplisit menyebut merek/nama platform: "ujianpintar", "ujian pintar", "guruhebat", "guru hebat", "ujianpintar.online"
-// 3. ATAU kontak tersebut SEDANG BERADA DALAM SESI AKTIF (sudah lolos verifikasi nomor 1 / 2 dalam 30 menit terakhir)
+// 3. ATAU pesan menyebut kata kunci asesmen/CBT/pendidikan/fitur
+// 4. ATAU kontak tersebut SEDANG BERADA DALAM SESI AKTIF (sudah lolos verifikasi nomor 1 / 2 dalam 30 menit terakhir)
 function isPlatformRelatedMessage(rawText, senderPhone) {
   if (!rawText) return false;
 
@@ -426,22 +495,12 @@ function isPlatformRelatedMessage(rawText, senderPhone) {
     .replace(/6️⃣|6\uFE0F\u20E3/g, '6')
     .trim();
 
-  // 1. Jika filter chat pribadi dimatikan (false), jawab seluruh pesan masuk
-  if (botConfig.filterPersonalChats === false) {
-    return true;
-  }
-
-  // 2. Salam & Pesan Tes Umum (Paling sering diketik orang saat mencoba bot)
-  const isGreetingOrTest = 
-    /^(halo|hai|hi|hey|p|tes|test|testing|cek|assalamu['a-z]*|selamat\s+(pagi|siang|sore|malam)|permisi|bantuan|menu|help|info|admin)[\s\.\?!]*$/i.test(clean) ||
-    /^(halo|hai|assalamu['a-z]*|selamat\s+(pagi|siang|sore|malam))/i.test(clean);
-
-  // 3. Pintu Masuk Resmi Website: Teks pembuka dari tombol WhatsApp di portal
+  // 1. Pintu Masuk Resmi Website: Teks pembuka dari tombol WhatsApp di portal
   const isWebButtonTrigger = 
     clean.includes('halo admin ujianpintar') ||
     clean.includes('seputar platform ujianpintar');
 
-  // 4. Sebutan Eksplisit Brand / Website
+  // 2. Sebutan Eksplisit Brand / Website
   const isExplicitBrandMention = 
     clean.includes('ujianpintar') ||
     clean.includes('ujian pintar') ||
@@ -449,7 +508,7 @@ function isPlatformRelatedMessage(rawText, senderPhone) {
     clean.includes('guru hebat') ||
     clean.includes('ujianpintar.online');
 
-  // 5. Kata Kunci Asesmen / CBT / Pendidikan / Pertanyaan Fitur
+  // 3. Kata Kunci Asesmen / CBT / Pendidikan / Pertanyaan Fitur
   const isEducationalKeyword = [
     'ujian', 'soal', 'cbt', 'siswa', 'guru', 'sekolah', 'nilai', 'token', 'pin',
     'proctoring', 'curang', 'nisn', 'esai', 'essay', 'daftar', 'harga', 'biaya',
@@ -458,15 +517,15 @@ function isPlatformRelatedMessage(rawText, senderPhone) {
     'koreksi', 'rubrik', 'jadwal', 'pengawas', 'proktor', 'fitur', 'bantuan', 'kontak'
   ].some(kw => clean.includes(kw));
 
-  // 6. Angka Pilihan Menu (1 - 6)
+  // 4. Angka Pilihan Menu (1 - 6)
   const isMenuChoiceNumber = /^[1-6]$/.test(clean) || /^[1-6][\.\)\s]/.test(clean);
 
-  // Jika pesan cocok dengan salah satu di atas -> 100% Valid pesan UjianPintar!
-  if (isGreetingOrTest || isWebButtonTrigger || isExplicitBrandMention || isEducationalKeyword || isMenuChoiceNumber) {
+  // Jika pesan cocok dengan kata kunci resmi platform -> 100% Valid pesan UjianPintar!
+  if (isWebButtonTrigger || isExplicitBrandMention || isEducationalKeyword || isMenuChoiceNumber) {
     return true;
   }
 
-  // 7. Jika tidak menyebut kata kunci, periksa apakah kontak ini sedang dalam Sesi Aktif
+  // 5. Jika tidak menyebut kata kunci, periksa apakah kontak ini sedang dalam Sesi Aktif
   const sessionExpire = activeBotSessions.get(senderPhone);
   const isSessionActive = sessionExpire && Date.now() < sessionExpire;
 
@@ -479,7 +538,15 @@ function isPlatformRelatedMessage(rawText, senderPhone) {
     return true;
   }
 
-  // D. Chat murni personal tanpa salam atau kata kunci pendidikan
+  // 6. Jika filter chat pribadi dimatikan (false), barulah salam umum dijawab
+  if (botConfig.filterPersonalChats === false) {
+    const isGreetingOrTest = 
+      /^(halo|hai|hi|hey|p|tes|test|testing|cek|assalamu['a-z]*|selamat\s+(pagi|siang|sore|malam)|permisi|bantuan|menu|help|info|admin)[\s\.\?!]*$/i.test(clean) ||
+      /^(halo|hai|assalamu['a-z]*|selamat\s+(pagi|siang|sore|malam))/i.test(clean);
+    return isGreetingOrTest;
+  }
+
+  // Default saat filter pribadi aktif (true): Chat umum/pribadi tanpa kata kunci UjianPintar didiamkan
   return false;
 }
 
@@ -1301,6 +1368,32 @@ async function processIncomingPayload(payload) {
   // 2. Deteksi Pesan dari Nomor Sendiri / Human Handover
   if (fromMe) {
     const recipientPhone = to.replace(/[^0-9]/g, '');
+    const cleanCmd = text.toLowerCase().trim();
+
+    // Perintah Chat dari Admin via HP WhatsApp untuk Mute / Matikan Bot pada Kontak ini
+    if (cleanCmd === '#bot off' || cleanCmd === '#mute' || cleanCmd === '#stopbot') {
+      const currentList = Array.isArray(botConfig.ignoredNumbers) ? [...botConfig.ignoredNumbers] : [];
+      if (!isPhoneIgnored(recipientPhone, currentList)) {
+        currentList.push(recipientPhone);
+        botConfig.ignoredNumbers = currentList;
+        updateBotConfig({ ignoredNumbers: currentList });
+      }
+      adminActiveSessions.set(recipientPhone, Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 tahun
+      saveHandoverSessions();
+      console.log(`[WA-AI] 🛑 Admin mengirim "${text}" ke ${recipientPhone}. Kontak ini masuk ke Ignored Numbers / Mute Permanen.`);
+      return;
+    }
+
+    if (cleanCmd === '#bot on' || cleanCmd === '#unmute') {
+      const currentList = (botConfig.ignoredNumbers || []).filter(num => !isPhoneIgnored(recipientPhone, [num]));
+      botConfig.ignoredNumbers = currentList;
+      adminActiveSessions.delete(recipientPhone);
+      saveHandoverSessions();
+      updateBotConfig({ ignoredNumbers: currentList });
+      console.log(`[WA-AI] 🟢 Admin mengirim "${text}" ke ${recipientPhone}. Kontak ini dikeluarkan dari Ignored Numbers, bot kembali aktif.`);
+      return;
+    }
+
     const msgId = payload.id || payload._data?.id?._serialized || payload?.key?.id;
 
     // Cek apakah ini gema event dari balasan yang baru saja dikirim oleh bot sendiri
@@ -1315,7 +1408,8 @@ async function processIncomingPayload(payload) {
     if (recipientPhone && botConfig.humanHandoverMinutes > 0) {
       const handoverMs = botConfig.humanHandoverMinutes * 60 * 1000;
       adminActiveSessions.set(recipientPhone, Date.now() + handoverMs);
-      console.log(`[WA-AI] 👤 Admin membalas manual dari HP ke ${recipientPhone}. Bot dijeda ${botConfig.humanHandoverMinutes} menit untuk kontak ini.`);
+      saveHandoverSessions();
+      console.log(`[WA-AI] 👤 Admin membalas manual dari HP ke ${recipientPhone}. Bot dijeda ${botConfig.humanHandoverMinutes} menit untuk kontak ini (tersimpan di disk).`);
     }
     return;
   }
@@ -1326,28 +1420,37 @@ async function processIncomingPayload(payload) {
     return;
   }
 
-  // 4. Cek apakah kontak ini sedang dalam jeda Human Handover
   const senderPhone = from.replace(/[^0-9]/g, '');
-  const pauseUntil = adminActiveSessions.get(senderPhone);
 
-  // Jika pengguna memilih angka menu (1-6), kata 'menu', atau salam/tes, batalkan jeda agar dilayani langsung
-  const isMenuChoice = /^[1-6]$/.test(text.trim()) ||
-    /^[1-6][\.\)\s]/.test(text.trim()) ||
-    /^(no|nomor|pilih|menu)?\s*[1-6](\b|$)/i.test(text.trim()) ||
-    /^(menu|bantuan|help|fitur|pilihan|daftar|tes|test|halo|hai)(\s+menu)?$/i.test(text.trim()) ||
-    text.toLowerCase().includes('halo admin ujianpintar');
-
-  if (isMenuChoice) {
-    adminActiveSessions.delete(senderPhone);
-  } else if (pauseUntil && Date.now() < pauseUntil) {
-    console.log(`[WA-AI] ⏸️ Mengabaikan pesan dari ${senderPhone} (sedang dilayani manual oleh admin).`);
+  // 4. CEK DAFTAR NOMOR DIABAIKAN (Blacklist Kontak Pribadi Permanen)
+  if (isPhoneIgnored(senderPhone, botConfig.ignoredNumbers)) {
+    console.log(`[WA-AI] 🚫 Mengabaikan pesan dari ${senderPhone} (Terdaftar dalam Ignored Numbers / Kontak Pribadi). Bot diam.`);
     return;
   }
 
-  // 5. Abaikan pesan kosong atau non-teks
+  // 5. Cek apakah kontak ini sedang dalam jeda Human Handover (obrolan manual admin)
+  const pauseUntil = adminActiveSessions.get(senderPhone);
+  if (pauseUntil && Date.now() < pauseUntil) {
+    // Hanya batalkan jika pesan sangat eksplisit menekan link resmi website atau mengetik nomor menu CBT
+    const isExplicitPlatformCommand = 
+      /^[1-6]$/.test(text.trim()) ||
+      text.toLowerCase().includes('halo admin ujianpintar') ||
+      text.toLowerCase().includes('seputar platform ujianpintar');
+
+    if (isExplicitPlatformCommand) {
+      adminActiveSessions.delete(senderPhone);
+      saveHandoverSessions();
+      console.log(`[WA-AI] 🔄 Pengguna ${senderPhone} memilih menu/link platform resmi. Jeda manual dibatalkan.`);
+    } else {
+      console.log(`[WA-AI] ⏸️ Mengabaikan pesan dari ${senderPhone} (sedang dilayani manual oleh admin hingga ${new Date(pauseUntil).toLocaleString('id-ID')}). Bot diam.`);
+      return;
+    }
+  }
+
+  // 6. Abaikan pesan kosong atau non-teks
   if (!text || text.trim().length === 0) return;
 
-  // 6. Filter Pesan Pribadi vs Pesan Terkait Platform UjianPintar
+  // 7. Filter Pesan Pribadi vs Pesan Terkait Platform UjianPintar
   if (!isPlatformRelatedMessage(text, senderPhone)) {
     console.log(`[WA-AI] ⏭️ Pesan dari ${senderPhone} diabaikan (terdeteksi sebagai chat pribadi, tidak mengandung kata kunci UjianPintar). Bot diam.`);
     return;
