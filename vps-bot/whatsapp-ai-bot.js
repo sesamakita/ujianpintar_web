@@ -204,7 +204,7 @@ function loadDynamicSettings() {
     isAutoReplyEnabled: merged.isAutoReplyEnabled !== false,
     cooldownSeconds: merged.cooldownSeconds || 3,
     humanHandoverMinutes: merged.humanHandoverMinutes !== undefined ? Number(merged.humanHandoverMinutes) : 10080, // Default 7 hari (10080 menit) agar chat pribadi aman
-    filterPersonalChats: merged.filterPersonalChats !== false, // Default true: saring chat pribadi, bot hanya respon topik UjianPintar / tombol web
+    filterPersonalChats: merged.allowUnfilteredAll === true ? false : true, // Selalu aktifkan perlindungan chat pribadi (default true)
     ignoredNumbers: Array.isArray(merged.ignoredNumbers) ? merged.ignoredNumbers : [],
   };
 }
@@ -251,15 +251,15 @@ function normalizePhoneDigits(phone) {
 function isPhoneIgnored(phone, ignoredList = []) {
   if (!phone || !Array.isArray(ignoredList) || ignoredList.length === 0) return false;
   const cleanPhone = normalizePhoneDigits(phone);
-  if (!cleanPhone) return false;
+  if (!cleanPhone || cleanPhone.length < 5) return false;
 
   return ignoredList.some(item => {
     const cleanItem = normalizePhoneDigits(item);
-    if (!cleanItem) return false;
+    if (!cleanItem || cleanItem.length < 5) return false;
     if (cleanPhone === cleanItem) return true;
-    // Bandingkan 8-10 digit terakhir untuk mengatasi variasi awalan 08xxx vs 628xxx
+    // Bandingkan 7-10 digit terakhir untuk mengatasi variasi awalan 08xxx vs 628xxx
     const len = Math.min(cleanPhone.length, cleanItem.length, 10);
-    if (len >= 8) {
+    if (len >= 7) {
       return cleanPhone.slice(-len) === cleanItem.slice(-len);
     }
     return false;
@@ -1345,91 +1345,152 @@ async function sendWhatsAppReply(chatId, text) {
   }
 }
 
+// Ekstrak ID Room Chat dan Nomor Telepon Lawan Bicara secara Universal (Mendukung WAHA WEBJS, NOWEB, Baileys, GOWS)
+function getRemoteChat(payload) {
+  if (!payload) return { jid: '', phone: '' };
+
+  const fromMe = Boolean(payload.fromMe !== undefined ? payload.fromMe : payload._data?.fromMe);
+  let jid = '';
+
+  // 1. Standar Utama WAHA: chatId
+  if (payload.chatId && typeof payload.chatId === 'string' && !payload.chatId.includes('@broadcast')) {
+    jid = payload.chatId;
+  } else if (payload._data?.chatId && typeof payload._data.chatId === 'string' && !payload._data.chatId.includes('@broadcast')) {
+    jid = payload._data.chatId;
+  }
+
+  // 2. Jika fromMe = true (Pesan keluar dari HP kita)
+  if (fromMe) {
+    if (!jid) {
+      if (payload.to && typeof payload.to === 'string') jid = payload.to;
+      else if (payload._data?.to && typeof payload._data.to === 'string') jid = payload._data.to;
+      else if (payload._data?.id?.remote && typeof payload._data.id.remote === 'string') jid = payload._data.id.remote;
+      else if (payload.key?.remoteJid && typeof payload.key.remoteJid === 'string') jid = payload.key.remoteJid;
+      else if (typeof payload.id === 'string' && payload.id.includes('@')) {
+        const parts = payload.id.split('_');
+        const jPart = parts.find(p => p.includes('@') && !p.includes('@broadcast'));
+        if (jPart) jid = jPart;
+      }
+    }
+  } else {
+    // 3. Jika pesan masuk dari lawan bicara
+    if (!jid) {
+      if (payload.from && typeof payload.from === 'string') jid = payload.from;
+      else if (payload._data?.from && typeof payload._data.from === 'string') jid = payload._data.from;
+      else if (payload.key?.remoteJid && typeof payload.key.remoteJid === 'string') jid = payload.key.remoteJid;
+      else if (payload.to && typeof payload.to === 'string') jid = payload.to;
+    }
+  }
+
+  const phone = normalizePhoneDigits(jid);
+  return { jid, phone };
+}
+
 // 7. Pemrosesan Pesan Masuk (Digunakan oleh Webhook & WebSocket)
 async function processIncomingPayload(payload) {
   if (!payload) return;
 
-  const rawFrom = payload.from || payload._data?.from || '';
-  const from = typeof rawFrom === 'string' ? rawFrom : (rawFrom?._serialized || rawFrom?.id || String(rawFrom));
-  const rawTo = payload.to || payload._data?.to || '';
-  const to = typeof rawTo === 'string' ? rawTo : (rawTo?._serialized || rawTo?.id || String(rawTo));
   const fromMe = Boolean(payload.fromMe !== undefined ? payload.fromMe : payload._data?.fromMe);
   const text = (payload.body || payload.text || payload._data?.body || '').trim();
 
-  // Reload setelan dinamis dari bot-settings.json & Supabase agar update dari Super Admin langsung aktif
+  // Ekstrak room lawan bicara & nomor HP
+  const { jid: remoteJid, phone: remotePhone } = getRemoteChat(payload);
+
+  // Reload setelan dinamis dari bot-settings.json & Supabase agar update langsung sinkron
   syncSettingsFromSupabase().catch(() => {});
   botConfig = loadDynamicSettings();
 
   // 1. Abaikan jika pesan berasal dari Grup (@g.us) atau Status (@broadcast)
-  if (from.includes('@g.us') || from.includes('@broadcast') || to.includes('@g.us')) {
+  if (remoteJid.includes('@g.us') || remoteJid.includes('@broadcast')) {
     return;
   }
 
-  // 2. Deteksi Pesan dari Nomor Sendiri / Human Handover
-  if (fromMe) {
-    const recipientPhone = to.replace(/[^0-9]/g, '');
-    const cleanCmd = text.toLowerCase().trim();
+  // 2. Deteksi Perintah Khusus (#bot off, #bot on, #bot list, #mute, #unmute)
+  const cleanCmd = text.toLowerCase().trim();
+  const isMuteCmd = cleanCmd.startsWith('#bot off') || cleanCmd.startsWith('#mute') || cleanCmd.startsWith('#stopbot');
+  const isUnmuteCmd = cleanCmd.startsWith('#bot on') || cleanCmd.startsWith('#unmute');
+  const isListCmd = cleanCmd === '#bot list' || cleanCmd === '#bot status';
 
-    // Perintah Chat dari Admin via HP WhatsApp untuk Mute / Matikan Bot pada Kontak ini
-    if (cleanCmd === '#bot off' || cleanCmd === '#mute' || cleanCmd === '#stopbot') {
-      const currentList = Array.isArray(botConfig.ignoredNumbers) ? [...botConfig.ignoredNumbers] : [];
-      if (!isPhoneIgnored(recipientPhone, currentList)) {
-        currentList.push(recipientPhone);
-        botConfig.ignoredNumbers = currentList;
-        updateBotConfig({ ignoredNumbers: currentList });
-      }
-      adminActiveSessions.set(recipientPhone, Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 tahun
-      saveHandoverSessions();
-      console.log(`[WA-AI] 🛑 Admin mengirim "${text}" ke ${recipientPhone}. Kontak ini masuk ke Ignored Numbers / Mute Permanen.`);
-      return;
-    }
+  // Ekstrak nomor spesifik jika disertakan di dalam teks perintah (misal: "#bot off 08123456789")
+  const numMatches = cleanCmd.replace(/[^0-9]/g, '');
+  const specifiedTarget = numMatches.length >= 7 ? numMatches : '';
+  const targetPhone = specifiedTarget || remotePhone;
 
-    if (cleanCmd === '#bot on' || cleanCmd === '#unmute') {
-      const currentList = (botConfig.ignoredNumbers || []).filter(num => !isPhoneIgnored(recipientPhone, [num]));
+  // A. Perintah #bot off / #mute
+  if (isMuteCmd && targetPhone && targetPhone.length >= 7) {
+    const currentList = Array.isArray(botConfig.ignoredNumbers) ? [...botConfig.ignoredNumbers] : [];
+    if (!isPhoneIgnored(targetPhone, currentList)) {
+      currentList.push(targetPhone);
       botConfig.ignoredNumbers = currentList;
-      adminActiveSessions.delete(recipientPhone);
-      saveHandoverSessions();
       updateBotConfig({ ignoredNumbers: currentList });
-      console.log(`[WA-AI] 🟢 Admin mengirim "${text}" ke ${recipientPhone}. Kontak ini dikeluarkan dari Ignored Numbers, bot kembali aktif.`);
-      return;
     }
+    adminActiveSessions.set(targetPhone, Date.now() + 365 * 24 * 60 * 60 * 1000); // Jeda 1 tahun
+    saveHandoverSessions();
+    console.log(`[WA-AI] 🛑 Bot DIMATIKAN permanen untuk nomor ${targetPhone} via perintah WhatsApp.`);
+    
+    // Kirim notifikasi konfirmasi langsung ke chat
+    sendWhatsAppReply(remoteJid || targetPhone, `🛑 *[UjianPintar AI Bot]*\nNomor *${targetPhone}* berhasil *DIMATIKAN PERMANEN* dari balasan bot.\n\nBot tidak akan pernah membalas chat pada nomor ini lagi. Untuk mengaktifkan kembali, ketik *#bot on*.`).catch(() => {});
+    return;
+  }
 
+  // B. Perintah #bot on / #unmute
+  if (isUnmuteCmd && targetPhone && targetPhone.length >= 7) {
+    const currentList = (botConfig.ignoredNumbers || []).filter(num => !isPhoneIgnored(targetPhone, [num]));
+    botConfig.ignoredNumbers = currentList;
+    adminActiveSessions.delete(targetPhone);
+    saveHandoverSessions();
+    updateBotConfig({ ignoredNumbers: currentList });
+    console.log(`[WA-AI] 🟢 Bot DIAKTIFKAN kembali untuk nomor ${targetPhone} via perintah WhatsApp.`);
+    
+    sendWhatsAppReply(remoteJid || targetPhone, `🟢 *[UjianPintar AI Bot]*\nBot telah *DIAKTIFKAN KEMBALI* untuk nomor ${targetPhone}.`).catch(() => {});
+    return;
+  }
+
+  // C. Perintah #bot list
+  if (isListCmd && fromMe) {
+    const list = (botConfig.ignoredNumbers || []).filter(Boolean);
+    const replyText = list.length > 0 
+      ? `📋 *[Daftar Nomor Pribadi / Mute]* (${list.length} nomor):\n` + list.map((n, i) => `${i + 1}. ${n}`).join('\n')
+      : `📋 *[Daftar Nomor Pribadi / Mute]*: Belum ada nomor yang diblacklist.`;
+    sendWhatsAppReply(remoteJid || remotePhone, replyText).catch(() => {});
+    return;
+  }
+
+  // 3. Jika pesan berasal dari Admin HP kita sendiri (fromMe: true) yang bukan perintah:
+  if (fromMe) {
     const msgId = payload.id || payload._data?.id?._serialized || payload?.key?.id;
 
     // Cek apakah ini gema event dari balasan yang baru saja dikirim oleh bot sendiri
     const isBotEcho = (msgId && botSentMessageIds.has(msgId)) ||
-      (Date.now() - (botRecentReplies.get(recipientPhone) || 0) < 15000);
+      (Date.now() - (botRecentReplies.get(remotePhone) || 0) < 15000);
 
     if (isBotEcho) {
-      // Ini balasan bot sendiri yang sukses terkirim, abaikan agar tidak menjeda bot
       return;
     }
 
-    if (recipientPhone && botConfig.humanHandoverMinutes > 0) {
+    if (remotePhone && botConfig.humanHandoverMinutes > 0) {
       const handoverMs = botConfig.humanHandoverMinutes * 60 * 1000;
-      adminActiveSessions.set(recipientPhone, Date.now() + handoverMs);
+      adminActiveSessions.set(remotePhone, Date.now() + handoverMs);
       saveHandoverSessions();
-      console.log(`[WA-AI] 👤 Admin membalas manual dari HP ke ${recipientPhone}. Bot dijeda ${botConfig.humanHandoverMinutes} menit untuk kontak ini (tersimpan di disk).`);
+      console.log(`[WA-AI] 👤 Admin membalas manual dari HP ke ${remotePhone}. Bot dijeda ${botConfig.humanHandoverMinutes} menit untuk kontak ini (tersimpan di disk).`);
     }
     return;
   }
 
-  // 3. Cek apakah Master Switch Auto-Reply diaktifkan
+  // 4. Cek apakah Master Switch Auto-Reply diaktifkan
   if (!botConfig.isAutoReplyEnabled) {
     console.log(`[WA-AI] ⏸️ Auto-reply dinonaktifkan dari Super Admin. Mengabaikan pesan.`);
     return;
   }
 
-  const senderPhone = from.replace(/[^0-9]/g, '');
-
-  // 4. CEK DAFTAR NOMOR DIABAIKAN (Blacklist Kontak Pribadi Permanen)
-  if (isPhoneIgnored(senderPhone, botConfig.ignoredNumbers)) {
-    console.log(`[WA-AI] 🚫 Mengabaikan pesan dari ${senderPhone} (Terdaftar dalam Ignored Numbers / Kontak Pribadi). Bot diam.`);
+  // 5. CEK DAFTAR NOMOR DIABAIKAN (Blacklist Kontak Pribadi Permanen)
+  if (isPhoneIgnored(remotePhone, botConfig.ignoredNumbers)) {
+    console.log(`[WA-AI] 🚫 Mengabaikan pesan dari ${remotePhone} (Terdaftar dalam Ignored Numbers / Kontak Pribadi). Bot diam.`);
     return;
   }
 
-  // 5. Cek apakah kontak ini sedang dalam jeda Human Handover (obrolan manual admin)
-  const pauseUntil = adminActiveSessions.get(senderPhone);
+  // 6. Cek apakah kontak ini sedang dalam jeda Human Handover (obrolan manual admin)
+  const pauseUntil = adminActiveSessions.get(remotePhone);
   if (pauseUntil && Date.now() < pauseUntil) {
     // Hanya batalkan jika pesan sangat eksplisit menekan link resmi website atau mengetik nomor menu CBT
     const isExplicitPlatformCommand = 
@@ -1438,61 +1499,61 @@ async function processIncomingPayload(payload) {
       text.toLowerCase().includes('seputar platform ujianpintar');
 
     if (isExplicitPlatformCommand) {
-      adminActiveSessions.delete(senderPhone);
+      adminActiveSessions.delete(remotePhone);
       saveHandoverSessions();
-      console.log(`[WA-AI] 🔄 Pengguna ${senderPhone} memilih menu/link platform resmi. Jeda manual dibatalkan.`);
+      console.log(`[WA-AI] 🔄 Pengguna ${remotePhone} memilih menu/link platform resmi. Jeda manual dibatalkan.`);
     } else {
-      console.log(`[WA-AI] ⏸️ Mengabaikan pesan dari ${senderPhone} (sedang dilayani manual oleh admin hingga ${new Date(pauseUntil).toLocaleString('id-ID')}). Bot diam.`);
+      console.log(`[WA-AI] ⏸️ Mengabaikan pesan dari ${remotePhone} (sedang dilayani manual oleh admin hingga ${new Date(pauseUntil).toLocaleString('id-ID')}). Bot diam.`);
       return;
     }
   }
 
-  // 6. Abaikan pesan kosong atau non-teks
+  // 7. Abaikan pesan kosong atau non-teks
   if (!text || text.trim().length === 0) return;
 
-  // 7. Filter Pesan Pribadi vs Pesan Terkait Platform UjianPintar
-  if (!isPlatformRelatedMessage(text, senderPhone)) {
-    console.log(`[WA-AI] ⏭️ Pesan dari ${senderPhone} diabaikan (terdeteksi sebagai chat pribadi, tidak mengandung kata kunci UjianPintar). Bot diam.`);
+  // 8. Filter Pesan Pribadi vs Pesan Terkait Platform UjianPintar
+  if (!isPlatformRelatedMessage(text, remotePhone)) {
+    console.log(`[WA-AI] ⏭️ Pesan dari ${remotePhone} diabaikan (terdeteksi sebagai chat pribadi, tidak mengandung kata kunci UjianPintar). Bot diam.`);
     return;
   }
 
-  // 7. Kelola masa aktif sesi bot:
+  // 9. Kelola masa aktif sesi bot:
   // Jika pesan adalah ucapan terima kasih / pamit, hapus sesi agar chat pribadi setelah ini tidak disambar bot.
   // Jika bukan pamit, perpanjang sesi 30 menit untuk memberi waktu guru membaca dan bertanya lanjutan.
   const isClosing = /(terima\s*kasih|makasih|terimakasih|makasi|cukup\s*jelas|cukup\s*paham|thank\s*you|thanks)/i.test(text.toLowerCase());
   if (isClosing) {
-    activeBotSessions.delete(senderPhone);
+    activeBotSessions.delete(remotePhone);
   } else {
-    activeBotSessions.set(senderPhone, Date.now() + 30 * 60 * 1000);
+    activeBotSessions.set(remotePhone, Date.now() + 30 * 60 * 1000);
   }
 
-  // 8. Anti-Spam Cooldown
+  // 10. Anti-Spam Cooldown
   const cooldownMs = (botConfig.cooldownSeconds || 3) * 1000;
-  const lastChatTime = userCooldowns.get(senderPhone) || 0;
+  const lastChatTime = userCooldowns.get(remotePhone) || 0;
   if (Date.now() - lastChatTime < cooldownMs) {
-    console.log(`[WA-AI] ⏳ Cooldown aktif untuk ${senderPhone}, mengabaikan spam.`);
+    console.log(`[WA-AI] ⏳ Cooldown aktif untuk ${remotePhone}, mengabaikan spam.`);
     return;
   }
-  userCooldowns.set(senderPhone, Date.now());
+  userCooldowns.set(remotePhone, Date.now());
 
-  console.log(`\n[WA-AI] 📩 Pesan Masuk (Platform) dari ${senderPhone}: "${text}"`);
+  console.log(`\n[WA-AI] 📩 Pesan Masuk (Platform) dari ${remotePhone}: "${text}"`);
 
-  // 7. Dapatkan Jawaban Cerdas dari AI / Knowledge Base
+  // 11. Dapatkan Jawaban Cerdas dari AI / Knowledge Base
   const startTime = Date.now();
-  const aiAnswer = await generateAIAnswer(text, senderPhone);
+  const aiAnswer = await generateAIAnswer(text, remotePhone);
   const durationMs = Date.now() - startTime;
 
   // Simpan riwayat percakapan (maksimal 6 riwayat terakhir)
-  const history = userHistories.get(senderPhone) || [];
+  const history = userHistories.get(remotePhone) || [];
   history.push({ role: 'user', content: text });
   history.push({ role: 'assistant', content: aiAnswer });
   if (history.length > 6) history.splice(0, history.length - 6);
-  userHistories.set(senderPhone, history);
+  userHistories.set(remotePhone, history);
 
-  // 8. Kirim Jawaban ke WhatsApp Pengguna via WAHA
-  const sendResult = await sendWhatsAppReply(from, aiAnswer);
+  // 12. Kirim Jawaban ke WhatsApp Pengguna via WAHA
+  const sendResult = await sendWhatsAppReply(remoteJid || remotePhone, aiAnswer);
   if (sendResult.success) {
-    console.log(`[WA-AI] ✅ Berhasil membalas ke ${senderPhone} dalam ${durationMs}ms:`);
+    console.log(`[WA-AI] ✅ Berhasil membalas ke ${remotePhone} dalam ${durationMs}ms:`);
     console.log(`----------------------------------------\n${aiAnswer}\n----------------------------------------`);
   }
 }
