@@ -205,7 +205,7 @@ function loadDynamicSettings() {
     isAutoReplyEnabled: merged.isAutoReplyEnabled !== false,
     cooldownSeconds: merged.cooldownSeconds || 3,
     humanHandoverMinutes: merged.humanHandoverMinutes || 30,
-    filterPersonalChats: merged.filterPersonalChats !== false,
+    filterPersonalChats: merged.filterPersonalChats === true, // Default false: selalu balas ramah tanpa memblokir pesan masuk
   };
 }
 
