@@ -40,6 +40,44 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
     isOver: boolean;
   }>({ hours: 0, minutes: 0, seconds: 0, isOver: false });
 
+  // Format jadwal dinamis
+  const formattedSchedule = React.useMemo(() => {
+    if (!config.estimatedEndTime) {
+      return 'Jadwal: Pemeliharaan & Optimalisasi Rutin Sedang Berlangsung';
+    }
+    try {
+      const target = new Date(config.estimatedEndTime);
+      if (isNaN(target.getTime())) {
+        return 'Jadwal: Pemeliharaan & Optimalisasi Rutin Sedang Berlangsung';
+      }
+      return `Target Selesai: ${target.toLocaleDateString('id-ID', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })} • Pukul ${target.toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })} WIB`;
+    } catch {
+      return 'Jadwal: Pemeliharaan & Optimalisasi Rutin Sedang Berlangsung';
+    }
+  }, [config.estimatedEndTime]);
+
+  const formattedEndTime = React.useMemo(() => {
+    if (!config.estimatedEndTime) return 'Segera';
+    try {
+      const target = new Date(config.estimatedEndTime);
+      if (isNaN(target.getTime())) return 'Segera';
+      return `Pukul ${target.toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })} WIB`;
+    } catch {
+      return 'Segera';
+    }
+  }, [config.estimatedEndTime]);
+
   useEffect(() => {
     if (!config.estimatedEndTime) return;
 
@@ -153,7 +191,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
                 {config.title || 'Pemeliharaan Berkala Server & Basis Data'}
               </h1>
               <p className="text-xs text-slate-500 mt-1">
-                Jadwal: Minggu, 18 Oktober 2026 • Pukul 06:00 – 09:00 WIB
+                {formattedSchedule}
               </p>
             </div>
             <div className="shrink-0">
@@ -167,6 +205,22 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
             {config.message ||
               'Saat ini platform UjianPintar sedang menjalani optimalisasi infrastruktur cloud untuk meningkatkan kecepatan akses ujian dan stabilitas koneksi ribuan siswa secara serentak. Selama periode ini, portal ujian dan dashboard guru untuk sementara tidak dapat diakses.'}
           </p>
+
+          {/* Progress Bar (Jika Disetel di Config) */}
+          {config.progressPercent !== undefined && config.progressPercent > 0 && (
+            <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200/80">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="font-semibold text-slate-700">{config.progressStatus || 'Progres Pemeliharaan'}</span>
+                <span className="font-bold text-blue-600">{config.progressPercent}%</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                <div 
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${Math.min(100, Math.max(0, config.progressPercent))}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Jaminan Keamanan Data */}
           <div className="mt-4 p-3.5 bg-slate-50 rounded-lg border border-slate-200/80 flex items-start gap-3">
@@ -183,7 +237,7 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
               <div className="flex items-center gap-2 text-slate-500">
                 <Clock className="w-4 h-4 text-blue-600 shrink-0" />
                 <span>Perkiraan Selesai:</span>
-                <strong className="text-slate-800">Hari ini, Pukul 09:00 WIB</strong>
+                <strong className="text-slate-800">{formattedEndTime}</strong>
               </div>
 
               {!timeLeft.isOver ? (
@@ -275,16 +329,16 @@ export const MaintenanceScreen: React.FC<MaintenanceScreenProps> = ({
           <div className="space-y-4 border-l-2 border-slate-200 pl-4 ml-1">
             <div className="relative">
               <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-blue-600 ring-4 ring-white" />
-              <div className="text-xs text-slate-400 font-mono">06:30 WIB</div>
-              <p className="text-xs font-semibold text-slate-800 mt-0.5">Optimasi indeks tabel & sinkronisasi cluster server</p>
-              <p className="text-xs text-slate-500 mt-0.5">Pencadangan database 100% selesai. Saat ini sedang pengujian beban latensi pengerjaan ujian.</p>
+              <div className="text-[11px] text-blue-600 font-semibold uppercase tracking-wider">Tahap Aktif</div>
+              <p className="text-xs font-semibold text-slate-800 mt-0.5">{config.progressStatus || 'Optimalisasi Infrastruktur & Sinkronisasi Cluster Server'}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Pembaruan performa dan pengujian beban latensi pengerjaan ujian siswa.</p>
             </div>
 
             <div className="relative">
-              <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-slate-300 ring-4 ring-white" />
-              <div className="text-xs text-slate-400 font-mono">06:00 WIB</div>
-              <p className="text-xs font-semibold text-slate-800 mt-0.5">Pemeliharaan dimulai sesuai jadwal</p>
-              <p className="text-xs text-slate-500 mt-0.5">Akses publik dinonaktifkan sementara dan cadangan sistem berhasil dibuat.</p>
+              <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-4 ring-white" />
+              <div className="text-[11px] text-emerald-600 font-semibold uppercase tracking-wider">Selesai</div>
+              <p className="text-xs font-semibold text-slate-800 mt-0.5">Pencadangan Sistem & Proteksi Integritas Data</p>
+              <p className="text-xs text-slate-500 mt-0.5">Seluruh bank soal, konfigurasi kelas, sesi ujian, dan riwayat nilai aman tercadangkan.</p>
             </div>
           </div>
         </div>
